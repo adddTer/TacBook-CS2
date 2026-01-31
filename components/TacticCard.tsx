@@ -1,7 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Tactic } from '../types';
 import { ActionList } from './ActionList';
+import { calculateLoadoutCost } from '../utils/economyHelper';
 
 interface TacticCardProps {
   tactic: Tactic;
@@ -11,6 +12,16 @@ interface TacticCardProps {
 export const TacticCard: React.FC<TacticCardProps> = ({ tactic, highlightRole }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMapZoomed, setIsMapZoomed] = useState(false);
+
+  // Calculate costs
+  const { loadoutCosts, totalTeamCost } = useMemo(() => {
+      if (!tactic.loadout) return { loadoutCosts: [], totalTeamCost: 0 };
+      
+      const costs = tactic.loadout.map(item => calculateLoadoutCost(item.equipment));
+      const total = costs.reduce((a, b) => a + b, 0);
+      
+      return { loadoutCosts: costs, totalTeamCost: total };
+  }, [tactic.loadout]);
 
   return (
     <div className={`
@@ -35,6 +46,12 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, highlightRole })
                 {tag.label}
               </span>
             ))}
+            {/* Price Tag Preview if loadout exists */}
+            {totalTeamCost > 0 && !isOpen && (
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700">
+                    ${totalTeamCost}
+                </span>
+            )}
           </div>
           <h3 className={`text-lg font-bold leading-tight transition-colors 
             ${isOpen ? 'text-neutral-900 dark:text-white' : 'text-neutral-700 dark:text-neutral-300'}
@@ -82,18 +99,26 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, highlightRole })
             {/* Loadout Section */}
             {tactic.loadout && tactic.loadout.length > 0 && (
                 <div className="mb-6 bg-neutral-50 dark:bg-neutral-950/50 rounded-2xl border border-neutral-100 dark:border-neutral-800 p-4">
-                     <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
-                        配装分配
-                     </h4>
+                     <div className="flex justify-between items-center mb-3">
+                        <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-2">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                            配装分配
+                        </h4>
+                        <div className="text-xs font-mono font-bold text-neutral-500">
+                            Team: <span className="text-neutral-900 dark:text-white">${totalTeamCost}</span>
+                        </div>
+                     </div>
                      <div className="space-y-2">
                         {tactic.loadout.map((item, idx) => (
-                            <div key={idx} className="flex items-start text-xs">
-                                <span className={`font-bold w-20 shrink-0 ${highlightRole === item.role ? 'text-blue-500' : 'text-neutral-600 dark:text-neutral-400'}`}>
+                            <div key={idx} className="flex items-start text-xs relative">
+                                <span className={`font-bold w-16 shrink-0 ${highlightRole === item.role ? 'text-blue-500' : 'text-neutral-600 dark:text-neutral-400'}`}>
                                     {item.role}
                                 </span>
-                                <span className="text-neutral-800 dark:text-neutral-300 font-mono">
+                                <span className="text-neutral-800 dark:text-neutral-300 font-mono flex-1 mr-12">
                                     {item.equipment}
+                                </span>
+                                <span className="absolute right-0 top-0 font-mono text-[10px] text-neutral-400 font-bold bg-neutral-200 dark:bg-neutral-800 px-1 rounded min-w-[36px] text-center">
+                                    ${loadoutCosts[idx]}
                                 </span>
                             </div>
                         ))}
