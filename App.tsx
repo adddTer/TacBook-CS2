@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { TacticCard } from './components/TacticCard';
 import { UtilityCard } from './components/UtilityCard';
@@ -5,6 +6,7 @@ import { Header } from './components/Header';
 import { FilterPanel } from './components/FilterPanel';
 import { TacticEditor } from './components/TacticEditor';
 import { UtilityEditor } from './components/UtilityEditor';
+import { ArsenalView } from './components/ArsenalView';
 import { useTactics } from './hooks/useTactics';
 import { Side, MapId, Tactic, Tag } from './types';
 import { ALL_TACTICS } from './data/tactics';
@@ -14,7 +16,7 @@ const App: React.FC = () => {
   const [side, setSide] = useState<Side>('T');
   const [currentMap, setCurrentMap] = useState<MapId>('mirage');
   const [isDark, setIsDark] = useState(true);
-  const [viewMode, setViewMode] = useState<'tactics' | 'utilities'>('tactics');
+  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons'>('tactics');
   
   // Panel States
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -200,6 +202,11 @@ const App: React.FC = () => {
                     <p className="text-sm font-medium">暂无道具</p>
                 </div>
              )
+        )}
+
+        {/* Arsenal (Weapons) View */}
+        {viewMode === 'weapons' && (
+            <ArsenalView />
         )}
       </main>
 

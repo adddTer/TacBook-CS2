@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { Site, Tag, TagCategory } from '../types';
 import { ROLES_T, ROLES_CT_MIRAGE, ROLES_CT_GENERAL } from '../constants/roles';
@@ -14,8 +15,8 @@ interface FilterPanelProps {
   onUpdate: (key: any, value: any) => void;
   currentSide: 'T' | 'CT';
   currentMapId: string;
-  viewMode: 'tactics' | 'utilities';
-  onViewModeChange: (mode: 'tactics' | 'utilities') => void;
+  viewMode: 'tactics' | 'utilities' | 'weapons';
+  onViewModeChange: (mode: 'tactics' | 'utilities' | 'weapons') => void;
 }
 
 export const FilterPanel: React.FC<FilterPanelProps> = ({ 
@@ -91,79 +92,90 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
             >
                 道具库
             </button>
+             <button 
+                onClick={() => onViewModeChange('weapons')}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'weapons' ? 'bg-white dark:bg-neutral-800 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+            >
+                武器库
+            </button>
         </div>
 
-        {/* Site Filter */}
-        <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">区域</label>
-            <div className="flex gap-2">
-                {['All', 'A', 'Mid', 'B'].map((site) => (
-                    <button
-                        key={site}
-                        onClick={() => onUpdate('site', site)}
-                        className={`
-                            flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border
-                            ${filterState.site === site 
-                                ? 'bg-neutral-900 dark:bg-neutral-100 border-transparent text-white dark:text-black shadow-md' 
-                                : 'bg-transparent border-neutral-200 dark:border-neutral-800 text-neutral-500'}
-                        `}
-                    >
-                        {site === 'All' ? '全部' : site}
-                    </button>
-                ))}
-            </div>
-        </div>
+        {/* Filters are only for Tactics and Utilities */}
+        {viewMode !== 'weapons' && (
+            <>
+                {/* Site Filter */}
+                <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">区域</label>
+                    <div className="flex gap-2">
+                        {['All', 'A', 'Mid', 'B'].map((site) => (
+                            <button
+                                key={site}
+                                onClick={() => onUpdate('site', site)}
+                                className={`
+                                    flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border
+                                    ${filterState.site === site 
+                                        ? 'bg-neutral-900 dark:bg-neutral-100 border-transparent text-white dark:text-black shadow-md' 
+                                        : 'bg-transparent border-neutral-200 dark:border-neutral-800 text-neutral-500'}
+                                `}
+                            >
+                                {site === 'All' ? '全部' : site}
+                            </button>
+                        ))}
+                    </div>
+                </div>
 
-        {/* Dynamic Tags */}
-        <div className="flex flex-wrap gap-x-6 gap-y-3">
-            {(viewMode === 'tactics' ? tacticCategories : utilityCategories).map(cat => {
-                const tags = tagsByCategory[cat.key];
-                if (!tags || tags.length === 0) return null;
+                {/* Dynamic Tags */}
+                <div className="flex flex-wrap gap-x-6 gap-y-3">
+                    {(viewMode === 'tactics' ? tacticCategories : utilityCategories).map(cat => {
+                        const tags = tagsByCategory[cat.key];
+                        if (!tags || tags.length === 0) return null;
 
-                return (
-                    <div key={cat.key} className="space-y-1.5 flex-1 min-w-[100px]">
-                        <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">{cat.label}</label>
-                        <div className="flex flex-wrap gap-1.5">
-                            {tags.map(tag => {
-                                const isSelected = filterState.selectedTags.includes(tag.label);
-                                return (
-                                    <button
-                                        key={tag.label}
-                                        onClick={() => toggleTag(tag.label)}
-                                        className={`
-                                            px-2.5 py-1 rounded-md text-[10px] font-bold border transition-all
-                                            ${isSelected
-                                                ? 'bg-blue-600 border-blue-600 text-white'
-                                                : 'bg-neutral-50 dark:bg-neutral-900/50 border-neutral-200 dark:border-neutral-800 text-neutral-500'}
-                                        `}
-                                    >
-                                        {tag.label}
-                                    </button>
-                                );
-                            })}
+                        return (
+                            <div key={cat.key} className="space-y-1.5 flex-1 min-w-[100px]">
+                                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">{cat.label}</label>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {tags.map(tag => {
+                                        const isSelected = filterState.selectedTags.includes(tag.label);
+                                        return (
+                                            <button
+                                                key={tag.label}
+                                                onClick={() => toggleTag(tag.label)}
+                                                className={`
+                                                    px-2.5 py-1 rounded-md text-[10px] font-bold border transition-all
+                                                    ${isSelected
+                                                        ? 'bg-blue-600 border-blue-600 text-white'
+                                                        : 'bg-neutral-50 dark:bg-neutral-900/50 border-neutral-200 dark:border-neutral-800 text-neutral-500'}
+                                                `}
+                                            >
+                                                {tag.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Role Filter (Only for Tactics) */}
+                {viewMode === 'tactics' && (
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">职能高亮</label>
+                        <div className="relative">
+                            <select
+                                value={filterState.specificRole || ''}
+                                onChange={(e) => onUpdate('specificRole', e.target.value || undefined)}
+                                className="w-full appearance-none bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl text-sm py-2.5 px-3 dark:text-neutral-200 focus:outline-none focus:border-blue-500"
+                            >
+                                <option value="">无</option>
+                                {availableRoles.map(role => (
+                                    <option key={role} value={role}>{role}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
-                );
-            })}
-        </div>
-
-        {/* Role Filter (Only for Tactics) */}
-        {viewMode === 'tactics' && (
-            <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">职能高亮</label>
-                <div className="relative">
-                    <select
-                        value={filterState.specificRole || ''}
-                        onChange={(e) => onUpdate('specificRole', e.target.value || undefined)}
-                        className="w-full appearance-none bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl text-sm py-2.5 px-3 dark:text-neutral-200 focus:outline-none focus:border-blue-500"
-                    >
-                        <option value="">无</option>
-                        {availableRoles.map(role => (
-                            <option key={role} value={role}>{role}</option>
-                        ))}
-                    </select>
-                </div>
-            </div>
+                )}
+            </>
         )}
       </div>
     </div>

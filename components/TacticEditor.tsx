@@ -328,7 +328,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                 <div>
                     <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">标签</label>
                     <div className="space-y-3">
-                        {Object.entries(tagsByCategory).map(([cat, tags]) => {
+                        {(Object.entries(tagsByCategory) as [string, Tag[]][]).map(([cat, tags]) => {
                             if (tags.length === 0) return null;
                             return (
                                 <div key={cat} className="flex flex-wrap gap-2">

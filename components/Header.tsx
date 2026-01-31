@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { MapId, Side, MapInfo } from '../types';
 import { MAPS } from '../constants';
@@ -13,7 +14,7 @@ interface HeaderProps {
   isDark: boolean;
   searchQuery: string;
   onSearchUpdate: (q: string) => void;
-  viewMode: 'tactics' | 'utilities';
+  viewMode: 'tactics' | 'utilities' | 'weapons';
   isFilterOpen: boolean;
   toggleFilter: () => void;
   isSettingsOpen: boolean;
@@ -42,6 +43,12 @@ export const Header: React.FC<HeaderProps> = ({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const currentMap = MAPS.find(m => m.id === currentMapId) || MAPS[0];
 
+  const getPlaceholder = () => {
+      if (viewMode === 'tactics') return "搜索战术...";
+      if (viewMode === 'utilities') return "搜索道具...";
+      return "搜索武器...";
+  };
+
   return (
     <header 
       className={`
@@ -63,41 +70,47 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Search Input (Expandable) */}
-        <div className="flex-1 relative group transition-all duration-300">
-             {/* Map Context Badge */}
-             <div className="absolute inset-y-0 left-1.5 flex items-center pointer-events-none z-10">
-                <div className={`
-                    flex items-center gap-1.5 px-2 py-1 rounded-md bg-neutral-200/50 dark:bg-neutral-800/50 border border-neutral-200/50 dark:border-neutral-700/50 backdrop-blur-sm transition-all duration-200
-                    ${isSearchFocused || searchQuery ? 'opacity-30 grayscale' : 'opacity-100'}
-                `}>
-                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-300 whitespace-nowrap">{currentMap.name}</span>
-                    <div className={`w-1.5 h-1.5 rounded-full ${currentSide === 'T' ? 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]' : 'bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.5)]'}`}></div>
+        {viewMode !== 'weapons' ? (
+            <div className="flex-1 relative group transition-all duration-300">
+                {/* Map Context Badge */}
+                <div className="absolute inset-y-0 left-1.5 flex items-center pointer-events-none z-10">
+                    <div className={`
+                        flex items-center gap-1.5 px-2 py-1 rounded-md bg-neutral-200/50 dark:bg-neutral-800/50 border border-neutral-200/50 dark:border-neutral-700/50 backdrop-blur-sm transition-all duration-200
+                        ${isSearchFocused || searchQuery ? 'opacity-30 grayscale' : 'opacity-100'}
+                    `}>
+                        <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-300 whitespace-nowrap">{currentMap.name}</span>
+                        <div className={`w-1.5 h-1.5 rounded-full ${currentSide === 'T' ? 'bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.5)]' : 'bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.5)]'}`}></div>
+                    </div>
                 </div>
-            </div>
 
-            <input
-                type="text"
-                value={searchQuery}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
-                onChange={(e) => onSearchUpdate(e.target.value)}
-                placeholder={isSearchFocused ? (viewMode === 'tactics' ? "搜索战术..." : "搜索道具...") : ""} 
-                className={`
-                    block w-full py-2 bg-neutral-100 dark:bg-neutral-900 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/50 dark:text-white transition-all font-medium
-                    pl-[90px] /* Reserve space for badge */
-                `}
-            />
-            
-            {/* Clear Button (only when has query) */}
-            {searchQuery && (
-                <button 
-                    onClick={() => onSearchUpdate('')}
-                    className="absolute inset-y-0 right-2 flex items-center text-neutral-400 hover:text-neutral-600"
-                >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
-                </button>
-            )}
-        </div>
+                <input
+                    type="text"
+                    value={searchQuery}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setIsSearchFocused(false)}
+                    onChange={(e) => onSearchUpdate(e.target.value)}
+                    placeholder={isSearchFocused ? getPlaceholder() : ""} 
+                    className={`
+                        block w-full py-2 bg-neutral-100 dark:bg-neutral-900 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/50 dark:text-white transition-all font-medium
+                        pl-[90px] /* Reserve space for badge */
+                    `}
+                />
+                
+                {/* Clear Button (only when has query) */}
+                {searchQuery && (
+                    <button 
+                        onClick={() => onSearchUpdate('')}
+                        className="absolute inset-y-0 right-2 flex items-center text-neutral-400 hover:text-neutral-600"
+                    >
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                    </button>
+                )}
+            </div>
+        ) : (
+            <div className="flex-1 flex items-center justify-center text-sm font-bold text-neutral-400">
+                武器装备库
+            </div>
+        )}
 
         {/* Action Icons */}
         <div className="flex items-center gap-1 shrink-0">

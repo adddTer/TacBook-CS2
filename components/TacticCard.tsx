@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Tactic } from '../types';
 import { ActionList } from './ActionList';
@@ -77,6 +78,29 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, highlightRole })
         ${isOpen ? 'max-h-[1500px] opacity-100' : 'max-h-0 opacity-0'}`}
       >
         <div className="p-5 pt-0">
+            
+            {/* Loadout Section */}
+            {tactic.loadout && tactic.loadout.length > 0 && (
+                <div className="mb-6 bg-neutral-50 dark:bg-neutral-950/50 rounded-2xl border border-neutral-100 dark:border-neutral-800 p-4">
+                     <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                        配装分配
+                     </h4>
+                     <div className="space-y-2">
+                        {tactic.loadout.map((item, idx) => (
+                            <div key={idx} className="flex items-start text-xs">
+                                <span className={`font-bold w-20 shrink-0 ${highlightRole === item.role ? 'text-blue-500' : 'text-neutral-600 dark:text-neutral-400'}`}>
+                                    {item.role}
+                                </span>
+                                <span className="text-neutral-800 dark:text-neutral-300 font-mono">
+                                    {item.equipment}
+                                </span>
+                            </div>
+                        ))}
+                     </div>
+                </div>
+            )}
+
             {/* Map Visual - Only render if map_visual is present */}
             {tactic.map_visual && (
               <div className="relative mb-6 mt-2 rounded-2xl overflow-hidden bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800">

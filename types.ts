@@ -1,14 +1,15 @@
+
 export type Side = 'T' | 'CT';
 export type Site = 'A' | 'Mid' | 'B' | 'All';
 export type MapId = 'mirage' | 'inferno' | 'dust2' | 'ancient' | 'anubis' | 'overpass' | 'nuke';
 export type Theme = 'light' | 'dark' | 'system';
 
-export type TagCategory = 'economy' | 'playstyle' | 'utility' | 'difficulty' | 'type'; // Added 'type' for Utility filters
+export type TagCategory = 'economy' | 'playstyle' | 'utility' | 'difficulty' | 'type';
 
 export interface Tag {
   label: string;
   category: TagCategory;
-  value?: string; // Optional value for mapping back to internal types (e.g., label "烟雾" -> value "smoke")
+  value?: string;
 }
 
 export interface MapInfo {
@@ -26,6 +27,11 @@ export interface Action {
   type?: 'movement' | 'utility' | 'frag' | 'hold';
 }
 
+export interface LoadoutItem {
+  role: string;
+  equipment: string;
+}
+
 export interface TacticMetadata {
   author: string;
   lastUpdated: string;
@@ -40,6 +46,7 @@ export interface Tactic {
   site: Site;
   tags: Tag[];
   map_visual: string;
+  loadout?: LoadoutItem[]; // New field for equipment distribution
   actions: Action[];
   metadata: TacticMetadata;
   description?: string;
@@ -67,4 +74,22 @@ export interface FilterState {
   selectedTags: string[]; 
   timePhase?: 'early' | 'mid' | 'late';
   specificRole?: string;
+}
+
+// Weaponry Types
+export type WeaponCategory = 'pistol' | 'mid-tier' | 'rifle' | 'grenade' | 'gear';
+
+export interface Weapon {
+  id: string;
+  name: string;
+  category: WeaponCategory;
+  price: number;
+  killAward?: number;
+  side: 'T' | 'CT' | 'Both';
+  desc?: string;
+}
+
+export interface EconomyRule {
+  title: string;
+  values: { label: string; value: string }[];
 }
