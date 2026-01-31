@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Tactic, Action, Side, Site, MapId, Tag, TagCategory, Utility } from '../types';
 import { generateId } from '../utils/idGenerator';
@@ -20,7 +21,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
   currentSide
 }) => {
   const [formData, setFormData] = useState<Partial<Tactic>>({
-    id: generateId('tactic'),
+    id: generateId(),
     mapId: currentMapId,
     side: currentSide,
     site: 'A',
@@ -66,7 +67,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
 
   const addAction = () => {
     const newAction: Action = {
-        id: generateId('act'),
+        id: generateId(),
         who: availableRoles[0],
         time: '',
         content: '',
@@ -134,6 +135,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
               const prefix = action.content ? action.content + " " : "";
               updateAction(showUtilityModal, 'content', `${prefix}投掷[${util.title}]。${util.content}`);
               updateAction(showUtilityModal, 'type', 'utility');
+              updateAction(showUtilityModal, 'utilityId', util.id);
           }
           setShowUtilityModal(null);
       }

@@ -2,8 +2,9 @@
 import { Utility } from '../../types';
 
 export const mirageUtilities: Utility[] = [
+  // --- Mid Split Utilities ---
   {
-    id: 'util_mir_mid_arch',
+    id: '200001',
     mapId: 'mirage',
     side: 'T',
     site: 'Mid',
@@ -11,10 +12,10 @@ export const mirageUtilities: Utility[] = [
     type: 'smoke',
     content: '在T出生点下水道口附近，瞄准天线顶端投掷。用于遮挡连接/拱门视野。',
     metadata: { author: 'Admin' },
-    image: 'https://files.catbox.moe/dummy_arch_smoke.jpg' // Placeholder, in real app user uploads this
+    image: 'https://files.catbox.moe/dummy_arch_smoke.jpg'
   },
   {
-    id: 'util_mir_mid_window',
+    id: '200002',
     mapId: 'mirage',
     side: 'T',
     site: 'Mid',
@@ -24,7 +25,7 @@ export const mirageUtilities: Utility[] = [
     metadata: { author: 'Admin' }
   },
   {
-    id: 'util_mir_b_short_pop',
+    id: '200003',
     mapId: 'mirage',
     side: 'T',
     site: 'B',
@@ -34,13 +35,35 @@ export const mirageUtilities: Utility[] = [
     metadata: { author: 'Admin' }
   },
   {
-    id: 'util_mir_b_apps_flash',
+    id: '200004',
     mapId: 'mirage',
     side: 'T',
     site: 'B',
     title: 'B二楼-掩护闪',
     type: 'flash',
     content: '从二楼窗口/门缝投掷，致盲B包点及白车敌人，掩护队友跳出二楼。',
+    metadata: { author: 'Admin' }
+  },
+
+  // --- A Exec Utilities ---
+  {
+    id: '200005',
+    mapId: 'mirage',
+    side: 'T',
+    site: 'A',
+    title: 'A区-过点烟',
+    type: 'smoke',
+    content: '后点（T出生点附近）跳投，落在警家与跳台之间，封锁CT回防视野。',
+    metadata: { author: 'Admin' }
+  },
+  {
+    id: '200006',
+    mapId: 'mirage',
+    side: 'T',
+    site: 'A',
+    title: 'A区-跳台火',
+    type: 'molotov',
+    content: '后点投掷，覆盖跳台（Ticket）及楼梯下区域，逼退架枪CT。',
     metadata: { author: 'Admin' }
   }
 ];

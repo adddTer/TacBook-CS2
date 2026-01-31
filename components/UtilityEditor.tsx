@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Utility, Side, Site, MapId } from '../types';
 import { generateId } from '../utils/idGenerator';
@@ -15,7 +16,7 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
   currentSide
 }) => {
   const [formData, setFormData] = useState<Utility>({
-    id: generateId('util'),
+    id: generateId(),
     mapId: currentMapId,
     side: currentSide,
     site: 'A',

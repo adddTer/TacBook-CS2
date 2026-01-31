@@ -1,8 +1,10 @@
 
 import { Tactic } from '../types';
-import { mirageTactics } from './tactics/mirage';
+import { mirageMidTactics } from './tactics/mirage_pistol_mid';
+import { mirageATactics } from './tactics/mirage_pistol_a';
 
 // Export aggregated tactics
 export const ALL_TACTICS: Tactic[] = [
-  ...mirageTactics,
+  ...mirageMidTactics,
+  ...mirageATactics,
 ];
