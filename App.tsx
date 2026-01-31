@@ -113,7 +113,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700 pt-[60px]">
       
       <Header 
         currentMapId={currentMap}
@@ -161,15 +161,6 @@ const App: React.FC = () => {
                             tactic={tactic} 
                             highlightRole={filter.specificRole}
                         />
-                        <button 
-                            onClick={() => { setEditingTactic(tactic); setActiveEditor('tactic'); }}
-                            className="absolute top-4 right-4 p-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity"
-                            title="Export / Edit Copy"
-                        >
-                            <svg className="w-4 h-4 text-neutral-600 dark:text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                        </button>
                     </div>
                     ))}
                 </div>

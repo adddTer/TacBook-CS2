@@ -25,6 +25,7 @@ export interface Action {
   content: string;
   image?: string;
   type?: 'movement' | 'utility' | 'frag' | 'hold';
+  utilityId?: string; // Link to a utility item
 }
 
 export interface LoadoutItem {
@@ -46,7 +47,7 @@ export interface Tactic {
   site: Site;
   tags: Tag[];
   map_visual: string;
-  loadout?: LoadoutItem[]; // New field for equipment distribution
+  loadout?: LoadoutItem[];
   actions: Action[];
   metadata: TacticMetadata;
   description?: string;

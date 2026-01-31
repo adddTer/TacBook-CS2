@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Action } from '../types';
 import { sortActions } from '../utils/timeHelper';
+import { UTILITIES } from '../data/utilities';
 
 interface ActionListProps {
   actions: Action[];
@@ -25,6 +26,9 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
         // Highlight logic: Match specific role OR match "全员"
         const isHighlighted = highlightRole && (action.who === highlightRole || action.who === '全员');
         
+        // Find linked utility
+        const linkedUtility = action.utilityId ? UTILITIES.find(u => u.id === action.utilityId) : null;
+
         return (
             <div 
             key={action.id}
@@ -60,11 +64,38 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
             </div>
 
             {/* Content */}
-            <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
+            <div className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
                 {action.content}
-            </p>
+                {/* Utility Link Badge */}
+                {linkedUtility && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if(linkedUtility.image) setExpandedImg(linkedUtility.image);
+                        }}
+                        className={`
+                            ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold align-middle transition-colors
+                            ${linkedUtility.type === 'smoke' ? 'bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300' :
+                              linkedUtility.type === 'flash' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400' :
+                              linkedUtility.type === 'molotov' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' :
+                              'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'}
+                            hover:opacity-80
+                        `}
+                    >
+                        {linkedUtility.type === 'smoke' && <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>}
+                        {linkedUtility.type === 'flash' && <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>}
+                        {linkedUtility.title}
+                        {linkedUtility.image && (
+                            <svg className="w-2.5 h-2.5 opacity-50 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                        )}
+                    </button>
+                )}
+            </div>
 
-            {/* Optional Image Thumbnail */}
+            {/* Optional Image Thumbnail (Action specific) */}
             {action.image && (
                 <div className="mt-2">
                 <button 
@@ -91,15 +122,18 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
       {/* Image Modal */}
       {expandedImg && (
         <div 
-            className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+            className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
             onClick={(e) => { e.stopPropagation(); setExpandedImg(null); }}
         >
             <img src={expandedImg} className="max-w-full max-h-full rounded shadow-2xl" alt="Full size" />
-            <button className="absolute top-8 right-8 text-white bg-neutral-800/50 p-2 rounded-full">
+            <button className="absolute top-8 right-8 text-white bg-neutral-800/50 p-2 rounded-full hover:bg-neutral-800 transition-colors">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
+            <div className="absolute bottom-8 left-0 right-0 text-center pointer-events-none">
+                 <span className="bg-black/50 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md">点击任意处关闭</span>
+            </div>
         </div>
       )}
     </div>
