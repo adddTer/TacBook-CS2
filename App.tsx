@@ -9,7 +9,6 @@ import { UtilityEditor } from './components/UtilityEditor';
 import { ArsenalView } from './components/ArsenalView';
 import { useTactics } from './hooks/useTactics';
 import { Side, MapId, Tactic, Tag } from './types';
-import { ALL_TACTICS } from './data/tactics';
 import { UTILITIES } from './data/utilities';
 
 const App: React.FC = () => {
@@ -22,13 +21,11 @@ const App: React.FC = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
-  const allTactics = ALL_TACTICS;
-
   const [activeEditor, setActiveEditor] = useState<'tactic' | 'utility' | null>(null);
   const [editingTactic, setEditingTactic] = useState<Tactic | undefined>(undefined);
 
   // Hook for Tactics filtering
-  const { availableTags: tacticTags, filter, updateFilter } = useTactics(currentMap, side); 
+  const { availableTags: tacticTags, filter, updateFilter, tactics: filteredTactics } = useTactics(currentMap, side); 
 
   // --- Utility Filtering Logic ---
   const utilityTags: Tag[] = useMemo(() => [
@@ -60,26 +57,6 @@ const App: React.FC = () => {
           return true;
       });
   }, [currentMap, side, filter, utilityTags]);
-  
-  const filteredTactics = useMemo(() => {
-      return allTactics.filter(t => {
-        if (t.mapId !== currentMap || t.side !== side) return false;
-        if (filter.site !== 'All' && t.site !== filter.site) return false;
-        if (filter.selectedTags.length > 0) {
-            const tacticTagLabels = t.tags.map(tag => tag.label);
-            if (!filter.selectedTags.every(st => tacticTagLabels.includes(st))) return false;
-        }
-        
-        if (filter.searchQuery) {
-            const q = filter.searchQuery.toLowerCase();
-            return t.title.toLowerCase().includes(q) || 
-                   t.id.toLowerCase().includes(q) || 
-                   t.tags.some(tag => tag.label.toLowerCase().includes(q)) ||
-                   t.actions.some(a => a.content.toLowerCase().includes(q) || a.who.toLowerCase().includes(q));
-        }
-        return true;
-      });
-  }, [allTactics, currentMap, side, filter]);
 
   useEffect(() => {
     if (isDark) {

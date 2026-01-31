@@ -2,13 +2,22 @@
 import React, { useState } from 'react';
 import { Utility, Side, Site, MapId } from '../types';
 import { generateId } from '../utils/idGenerator';
-import JSZip from 'jszip';
 
 interface UtilityEditorProps {
   onCancel: () => void;
   currentMapId: MapId;
   currentSide: Side;
 }
+
+// Helper to convert File to Base64
+const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = error => reject(error);
+    });
+};
 
 export const UtilityEditor: React.FC<UtilityEditorProps> = ({
   onCancel,
@@ -36,33 +45,28 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
       setImageFile(file);
       const url = URL.createObjectURL(file);
       setImagePreview(url);
-      setFormData(prev => ({ ...prev, image: `[上传中] ${file.name}` }));
+      setFormData(prev => ({ ...prev, image: `[Base64] ${file.name}` }));
   };
 
-  const handleDownloadZip = async () => {
+  const handleExportJSON = async () => {
     if (!formData.title || !formData.content) {
         alert("请填写标题和描述");
         return;
     }
 
-    const zip = new JSZip();
     const finalData = JSON.parse(JSON.stringify(formData));
 
     if (imageFile) {
-        const ext = imageFile.name.split('.').pop() || 'png';
-        const fileName = `util_${formData.id}.${ext}`;
-        zip.folder("images")?.file(fileName, imageFile);
-        finalData.image = `./images/${fileName}`;
+        finalData.image = await fileToBase64(imageFile);
     }
 
-    zip.file("data.json", JSON.stringify(finalData, null, 2));
-
-    const content = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(content);
+    const jsonString = JSON.stringify(finalData, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
 
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", url);
-    downloadAnchorNode.setAttribute("download", `UTIL_${formData.mapId}_${formData.type}_${formData.title}.zip`);
+    downloadAnchorNode.setAttribute("download", `UTIL_${formData.mapId}_${formData.type}_${formData.title}.json`);
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
@@ -78,13 +82,13 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
                 新建道具 (本地)
             </h2>
             <button 
-                onClick={handleDownloadZip}
+                onClick={handleExportJSON}
                 className="bg-blue-600 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg shadow-blue-500/20 flex items-center gap-2"
             >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                导出 ZIP
+                导出 JSON
             </button>
         </div>
 
@@ -183,7 +187,7 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
                  <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-200 dark:border-blue-800/30">
                     <h4 className="text-xs font-bold text-blue-700 dark:text-blue-500 mb-1">打包说明</h4>
                     <p className="text-xs text-blue-600 dark:text-blue-400/70">
-                        将生成包含数据和图片的 .zip 文件。请解压到项目目录中以发布。
+                        将生成单体 JSON 文件（包含内嵌图片）。请放入 <code>data/local/</code> 文件夹中。
                     </p>
                 </div>
             </div>

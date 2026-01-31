@@ -96,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
                     `}
                 />
                 
-                {/* Clear Button (only when has query) */}
+                {/* Clear Button */}
                 {searchQuery && (
                     <button 
                         onClick={() => onSearchUpdate('')}
@@ -107,7 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
             </div>
         ) : (
-            <div className="flex-1 flex items-center justify-center text-sm font-bold text-neutral-400">
+             <div className="flex-1 flex items-center justify-center text-sm font-bold text-neutral-400">
                 武器装备库
             </div>
         )}
@@ -121,7 +121,7 @@ export const Header: React.FC<HeaderProps> = ({
                     p-2 rounded-xl transition-all active:scale-95 relative
                     ${isFilterOpen 
                         ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' 
-                        : 'bg-transparent text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'}
+                        : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800'}
                 `}
             >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -129,78 +129,69 @@ export const Header: React.FC<HeaderProps> = ({
                 </svg>
             </button>
 
-            {/* Settings/Menu Toggle */}
+            {/* Settings Toggle */}
             <button 
                 onClick={toggleSettings}
                 className={`
-                    p-2 rounded-xl transition-all active:scale-95
+                    p-2 rounded-xl transition-all active:scale-95 relative
                     ${isSettingsOpen
-                        ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-900 dark:text-white' 
-                        : 'bg-transparent text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'}
+                        ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-black rotate-90' 
+                        : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800'}
                 `}
             >
-                 <svg 
-                    className={`w-5 h-5 transition-transform duration-300 ${isSettingsOpen ? 'rotate-180' : ''}`} 
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                 >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                 </svg>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
             </button>
         </div>
       </div>
 
-      {/* 2. Expanded Control Panel (Settings + Create) */}
+      {/* 2. Expanded Settings Panel */}
       <div 
         className={`
             overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
-            ${isSettingsOpen ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0'}
+            ${isSettingsOpen ? 'max-h-[400px] opacity-100 border-t border-neutral-100 dark:border-neutral-800' : 'max-h-0 opacity-0'}
         `}
       >
-        <div className="pb-4 space-y-4">
-            
-            {/* Map Selector */}
-            <div className="pt-2">
+        <div className="p-4 space-y-5">
+            {/* Row 1: Map Selector */}
+            <div>
+                <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2 px-1">选择地图</div>
                 <MapSelector currentMap={currentMapId} onChange={onMapChange} />
             </div>
 
-            {/* Bottom Row: Controls */}
-            <div className="px-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">阵营</span>
+            {/* Row 2: Side & Actions */}
+            <div className="flex items-center justify-between gap-4">
+                 <div className="flex items-center gap-4">
                     <Switch side={currentSide} onChange={onSideChange} />
-                </div>
-                
-                <button 
-                    onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 text-xs font-bold text-neutral-600 dark:text-neutral-300"
-                >
-                    {isDark ? '🌙 Dark' : '☀️ Light'}
-                </button>
+                    <button 
+                        onClick={toggleTheme}
+                        className="p-2 bg-neutral-100 dark:bg-neutral-800 rounded-full text-neutral-600 dark:text-neutral-400"
+                    >
+                         {isDark ? (
+                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                         ) : (
+                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                         )}
+                    </button>
+                 </div>
             </div>
 
-            {/* Create Actions */}
-            <div className="px-4 pt-2 border-t border-dashed border-neutral-200 dark:border-neutral-800 flex gap-2">
+            {/* Row 3: Editor Entry Points */}
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-dashed border-neutral-200 dark:border-neutral-800">
                 <button 
-                    onClick={() => { toggleSettings(); onCreateTactic(); }}
-                    className="flex-1 py-2.5 rounded-xl bg-blue-600/10 text-blue-600 dark:text-blue-400 hover:bg-blue-600/20 text-xs font-bold transition-all flex items-center justify-center gap-2"
+                    onClick={onCreateTactic}
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-800 text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors"
                 >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    新建战术
+                    <span className="text-lg">+</span> 新建战术
                 </button>
                 <button 
-                    onClick={() => { toggleSettings(); onCreateUtility(); }}
-                    className="flex-1 py-2.5 rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600/20 text-xs font-bold transition-all flex items-center justify-center gap-2"
+                    onClick={onCreateUtility}
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-800 text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors"
                 >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    新建道具
+                    <span className="text-lg">+</span> 新建道具
                 </button>
             </div>
-            
-            <div className="h-2"></div>
         </div>
       </div>
     </header>

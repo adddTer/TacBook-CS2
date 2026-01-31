@@ -5,7 +5,6 @@ import { generateId } from '../utils/idGenerator';
 import { getRoles } from '../constants/roles';
 import { ALL_TAGS } from '../constants/tags';
 import { UTILITIES } from '../data/utilities';
-import JSZip from 'jszip';
 
 interface TacticEditorProps {
   initialTactic?: Tactic;
@@ -13,6 +12,16 @@ interface TacticEditorProps {
   currentMapId: MapId;
   currentSide: Side;
 }
+
+// Helper to convert File to Base64
+const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = error => reject(error);
+    });
+};
 
 export const TacticEditor: React.FC<TacticEditorProps> = ({
   initialTactic,
@@ -51,8 +60,6 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
   useEffect(() => {
     if (initialTactic) {
       setFormData(initialTactic);
-      // Note: We cannot restore File objects from URLs easily in web browser security context
-      // without re-fetching blobs. For now, editing assumes existing URLs remain unless replaced.
       if (initialTactic.map_visual) setMapImagePreview(initialTactic.map_visual);
       
       const newActionPreviews: Record<string, string> = {};
@@ -107,15 +114,15 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
       // 2. Create Preview
       const url = URL.createObjectURL(file);
       setActionImagePreviews(prev => ({ ...prev, [id]: url }));
-      // 3. Update Text Field (Visual indicator only, will be overwritten by zip path on save)
-      updateAction(id, 'image', `[上传中] ${file.name}`);
+      // 3. Update Text Field (Visual indicator only)
+      updateAction(id, 'image', `[Base64] ${file.name}`);
   };
 
   const handleMapImageUpload = (file: File) => {
       setMapImageFile(file);
       const url = URL.createObjectURL(file);
       setMapImagePreview(url);
-      setFormData(prev => ({ ...prev, map_visual: `[上传中] ${file.name}` }));
+      setFormData(prev => ({ ...prev, map_visual: `[Base64] ${file.name}` }));
   };
 
   const toggleTag = (tag: Tag) => {
@@ -141,41 +148,43 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
       }
   };
 
-  const handleDownloadZip = async () => {
+  const handleExportJSON = async () => {
     if (!formData.title) {
         alert("请输入战术名称");
         return;
     }
 
-    const zip = new JSZip();
+    // Deep copy
     const finalData = JSON.parse(JSON.stringify(formData));
     
+    // Embed Map Image
     if (mapImageFile) {
-        const ext = mapImageFile.name.split('.').pop() || 'png';
-        const fileName = `map_visual.${ext}`;
-        zip.folder("images")?.file(fileName, mapImageFile);
-        finalData.map_visual = `./images/${fileName}`;
+        finalData.map_visual = await fileToBase64(mapImageFile);
+    } else if (mapImagePreview && mapImagePreview.startsWith('data:')) {
+        // Keep existing base64 if editing
+        finalData.map_visual = mapImagePreview;
     }
 
-    finalData.actions = finalData.actions.map((action: Action) => {
-        const file = actionImageFiles[action.id];
-        if (file) {
-            const ext = file.name.split('.').pop() || 'png';
-            const fileName = `action_${action.id}.${ext}`;
-            zip.folder("images")?.file(fileName, file);
-            return { ...action, image: `./images/${fileName}` };
+    // Embed Action Images
+    if (finalData.actions) {
+        for (const action of finalData.actions) {
+            const file = actionImageFiles[action.id];
+            if (file) {
+                action.image = await fileToBase64(file);
+            } else if (actionImagePreviews[action.id] && actionImagePreviews[action.id].startsWith('data:')) {
+                action.image = actionImagePreviews[action.id];
+            }
         }
-        return action;
-    });
+    }
 
-    zip.file("data.json", JSON.stringify(finalData, null, 2));
-
-    const content = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(content);
+    // Create JSON blob
+    const jsonString = JSON.stringify(finalData, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
     
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", url);
-    downloadAnchorNode.setAttribute("download", `TAC_${formData.mapId}_${formData.side}_${formData.title}.zip`);
+    downloadAnchorNode.setAttribute("download", `TAC_${formData.mapId}_${formData.title}.json`);
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
@@ -218,13 +227,13 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                 {initialTactic ? '编辑战术' : '新建战术'}
             </h2>
             <button 
-                onClick={handleDownloadZip}
+                onClick={handleExportJSON}
                 className="bg-blue-600 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg shadow-blue-500/20 flex items-center gap-2"
             >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                导出 ZIP
+                导出 JSON
             </button>
         </div>
 
@@ -406,7 +415,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                                         引用道具
                                     </button>
 
-                                    {/* Image Upload for Step - Compact when empty */}
+                                    {/* Image Upload for Step */}
                                     <label className={`
                                         block w-full border-2 border-dashed border-neutral-200 dark:border-neutral-800 rounded bg-white dark:bg-neutral-950 flex flex-col items-center justify-center cursor-pointer relative overflow-hidden group/upload transition-all
                                         ${actionImagePreviews[action.id] ? 'aspect-square' : 'h-8 border-neutral-300 dark:border-neutral-700'}
