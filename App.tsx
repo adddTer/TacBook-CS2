@@ -7,6 +7,7 @@ import { FilterPanel } from './components/FilterPanel';
 import { TacticEditor } from './components/TacticEditor';
 import { UtilityEditor } from './components/UtilityEditor';
 import { ArsenalView } from './components/ArsenalView';
+import { TBTVView } from './components/TBTVView'; // Import new component
 import { useTactics } from './hooks/useTactics';
 import { Side, MapId, Tactic, Tag } from './types';
 import { UTILITIES } from './data/utilities';
@@ -15,7 +16,7 @@ const App: React.FC = () => {
   const [side, setSide] = useState<Side>('T');
   const [currentMap, setCurrentMap] = useState<MapId>('mirage');
   const [isDark, setIsDark] = useState(true);
-  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons'>('tactics');
+  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'tbtv'>('tactics');
   
   // Panel States
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -108,7 +109,7 @@ const App: React.FC = () => {
         isDark={isDark}
         searchQuery={filter.searchQuery}
         onSearchUpdate={(val) => updateFilter('searchQuery', val)}
-        viewMode={viewMode}
+        viewMode={viewMode as any}
         isFilterOpen={isFilterOpen}
         toggleFilter={handleToggleFilter}
         isSettingsOpen={isSettingsOpen}
@@ -191,6 +192,11 @@ const App: React.FC = () => {
         {/* Arsenal (Weapons) View */}
         {viewMode === 'weapons' && (
             <ArsenalView />
+        )}
+
+        {/* TBTV View */}
+        {viewMode === 'tbtv' && (
+            <TBTVView />
         )}
       </main>
 

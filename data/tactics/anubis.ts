@@ -17,21 +17,22 @@ export const anubisTactics: Tactic[] = [
       difficulty: "Medium"
     },
     loadout: [
-      { role: "B外组", equipment: "步枪, C4, 烟闪" },
-      { role: "B外组", equipment: "步枪, 烟闪" },
-      { role: "中路组", equipment: "燃烧瓶, 手雷, 烟雾" },
-      { role: "中路组", equipment: "燃烧瓶, 手雷" },
-      { role: "中路组", equipment: "步枪, 闪光" },
+      { role: "突破手", equipment: "步枪, C4, 烟闪 (去B外)" },
+      { role: "补枪辅助", equipment: "步枪, 烟闪 (去B外)" },
+      { role: "道具辅助", equipment: "燃烧瓶, 手雷, 烟雾 (去中路)" },
+      { role: "狙击手", equipment: "大狙, 燃烧瓶 (去中路)" },
+      { role: "自由人", equipment: "步枪, 闪光 (去中路)" },
     ],
     map_visual: "", 
     actions: [
-      { id: generateId(), time: "Freeze", who: "全员", content: "2人去B外（带包），3人去中路集合。" },
-      { id: generateId(), time: "1:45", who: "中路组", content: "投掷狗洞火或双雷套餐，防止CT前压。", type: 'utility', utilityId: '400001' },
-      { id: generateId(), time: "1:45", who: "中路组", content: "同步投掷中路火，压制桥下区域。", type: 'utility', utilityId: '400002' },
-      { id: generateId(), time: "1:40", who: "中路组", content: "沿着火焰边缘快速推进，控制中路水下。", type: 'movement' },
-      { id: generateId(), time: "1:35", who: "中路组", content: "推进时时刻留意A包点/A连接方向，防止侧身被偷。", type: 'hold' },
-      { id: generateId(), time: "1:30", who: "B外组", content: "听到中路交火或就位信号后，爆弹施压B门。", type: 'utility' },
+      { id: generateId(), time: "Freeze", who: "全员", content: "2人（突破/补枪）去B外控图，3人（道具/狙击/自由人）去中路集合。" },
+      { id: generateId(), time: "1:45", who: "道具辅助", content: "在匪桥投掷狗洞火（或双雷套餐），防止CT前压。", type: 'utility', utilityId: '400001' },
+      { id: generateId(), time: "1:45", who: "狙击手", content: "同步投掷中路火，压制桥下区域，随后架枪掩护。", type: 'utility', utilityId: '400002' },
+      { id: generateId(), time: "1:40", who: "自由人", content: "沿着火焰边缘快速推进，控制中路水下。", type: 'movement' },
+      { id: generateId(), time: "1:35", who: "自由人", content: "推进时时刻留意A包点/A连接方向，防止侧身被偷。", type: 'hold' },
+      { id: generateId(), time: "1:30", who: "突破手", content: "听到中路交火或就位信号后，B外爆弹施压B门。", type: 'utility' },
       { id: generateId(), time: "Exec", who: "全员", content: "中路组走连接/黑屋，B外组进B门，同步夹击B包点。", type: 'frag' },
+      { id: generateId(), time: "Post", who: "补枪辅助", content: "负责携带并安放C4，建议下在死点或安全位。", type: 'movement' },
     ]
   }
 ];

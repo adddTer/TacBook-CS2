@@ -15,8 +15,8 @@ interface FilterPanelProps {
   onUpdate: (key: any, value: any) => void;
   currentSide: 'T' | 'CT';
   currentMapId: string;
-  viewMode: 'tactics' | 'utilities' | 'weapons';
-  onViewModeChange: (mode: 'tactics' | 'utilities' | 'weapons') => void;
+  viewMode: 'tactics' | 'utilities' | 'weapons' | 'tbtv';
+  onViewModeChange: (mode: 'tactics' | 'utilities' | 'weapons' | 'tbtv') => void;
 }
 
 export const FilterPanel: React.FC<FilterPanelProps> = ({ 
@@ -79,29 +79,35 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
       <div className="px-4 py-4 space-y-4">
         
         {/* View Mode Toggle */}
-        <div className="flex bg-neutral-100 dark:bg-neutral-950 p-1 rounded-xl">
+        <div className="flex bg-neutral-100 dark:bg-neutral-950 p-1 rounded-xl overflow-x-auto no-scrollbar">
             <button 
                 onClick={() => onViewModeChange('tactics')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'tactics' ? 'bg-white dark:bg-neutral-800 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                className={`flex-1 min-w-[70px] py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'tactics' ? 'bg-white dark:bg-neutral-800 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
             >
                 战术手册
             </button>
             <button 
                 onClick={() => onViewModeChange('utilities')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'utilities' ? 'bg-white dark:bg-neutral-800 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                className={`flex-1 min-w-[70px] py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'utilities' ? 'bg-white dark:bg-neutral-800 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
             >
                 道具库
             </button>
              <button 
                 onClick={() => onViewModeChange('weapons')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'weapons' ? 'bg-white dark:bg-neutral-800 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                className={`flex-1 min-w-[70px] py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'weapons' ? 'bg-white dark:bg-neutral-800 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
             >
                 武器库
+            </button>
+            <button 
+                onClick={() => onViewModeChange('tbtv')}
+                className={`flex-1 min-w-[70px] py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${viewMode === 'tbtv' ? 'bg-red-600 text-white shadow-sm shadow-red-500/20' : 'text-neutral-500'}`}
+            >
+                TBTV
             </button>
         </div>
 
         {/* Filters are only for Tactics and Utilities */}
-        {viewMode !== 'weapons' && (
+        {(viewMode === 'tactics' || viewMode === 'utilities') && (
             <>
                 {/* Site Filter */}
                 <div className="space-y-1.5">

@@ -94,3 +94,48 @@ export interface EconomyRule {
   title: string;
   values: { label: string; value: string }[];
 }
+
+// --- TBTV Types ---
+
+export type RosterPlayerId = 'Ser1EN' | 'Sanatio' | 'FuNct1on' | 'F1oyd' | 'addd';
+// Added ++ ranks for Gold styling
+export type Rank = 'S' | 'A++' | 'A+' | 'A' | 'A-' | 'B++' | 'B+' | 'B' | 'B-' | 'C++' | 'C+' | 'C' | 'C-' | 'D' | '?' ;
+
+export interface PlayerProfile {
+  id: RosterPlayerId;
+  name: string;
+  role: string;
+  roleType: string; // Internal mapping for tactic logic
+  avatar?: string;
+}
+
+export interface PlayerMatchStats {
+  playerId: string; // Changed from PlayerId to string to accommodate enemies
+  rank: Rank;
+  kills: number;
+  deaths: number;
+  assists: number;
+  adr: number;
+  hsRate: number; // percentage 0-100
+  rating: number; // HLTV 2.0
+  we: number; // Win Effect
+}
+
+export interface Match {
+  id: string;
+  date: string; // ISO string (Time included)
+  mapId: MapId;
+  rank: Rank; // Lobby average rank
+  result: 'WIN' | 'LOSS' | 'DRAW';
+  startingSide: Side; // To color code halftime scores
+  score: {
+      us: number;
+      them: number;
+      half1_us: number;
+      half1_them: number;
+      half2_us: number;
+      half2_them: number;
+  };
+  players: PlayerMatchStats[]; // Our Team
+  enemyPlayers: PlayerMatchStats[]; // Opponent Team
+}

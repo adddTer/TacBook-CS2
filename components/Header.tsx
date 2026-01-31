@@ -14,7 +14,7 @@ interface HeaderProps {
   isDark: boolean;
   searchQuery: string;
   onSearchUpdate: (q: string) => void;
-  viewMode: 'tactics' | 'utilities' | 'weapons';
+  viewMode: 'tactics' | 'utilities' | 'weapons' | 'tbtv';
   isFilterOpen: boolean;
   toggleFilter: () => void;
   isSettingsOpen: boolean;
@@ -46,7 +46,8 @@ export const Header: React.FC<HeaderProps> = ({
   const getPlaceholder = () => {
       if (viewMode === 'tactics') return "搜索战术...";
       if (viewMode === 'utilities') return "搜索道具...";
-      return "搜索武器...";
+      if (viewMode === 'weapons') return "搜索武器...";
+      return "搜索比赛/队员...";
   };
 
   return (
@@ -70,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Search Input (Expandable) */}
-        {viewMode !== 'weapons' ? (
+        {viewMode !== 'weapons' && viewMode !== 'tbtv' ? (
             <div className="flex-1 relative group transition-all duration-300">
                 {/* Map Context Badge */}
                 <div className="absolute inset-y-0 left-1.5 flex items-center pointer-events-none z-10">
@@ -108,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
         ) : (
              <div className="flex-1 flex items-center justify-center text-sm font-bold text-neutral-400">
-                武器装备库
+                {viewMode === 'tbtv' ? 'Team Battle TV' : '武器装备库'}
             </div>
         )}
 
