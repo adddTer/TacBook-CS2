@@ -133,7 +133,8 @@ const App: React.FC = () => {
         onCreateUtility={() => setActiveEditor('utility')}
       />
 
-      <div className="pt-[60px]">
+      {/* Sticky Filter Panel - sits just below the fixed header */}
+      <div className="sticky top-[60px] z-40 w-full shadow-sm">
         <FilterPanel 
             isOpen={isFilterOpen}
             availableTags={viewMode === 'tactics' ? tacticTags : utilityTags}

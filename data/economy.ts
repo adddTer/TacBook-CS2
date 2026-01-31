@@ -10,6 +10,7 @@ export const ECONOMY_RULES: EconomyRule[] = [
       { label: "3连败", value: "$2400" },
       { label: "4连败", value: "$2900" },
       { label: "5连败 (最大)", value: "$3400" },
+      { label: "注意", value: "胜利会使连败等级降低2级。" }
     ]
   },
   {
@@ -24,17 +25,19 @@ export const ECONOMY_RULES: EconomyRule[] = [
   {
     title: "目标奖励 (Objectives)",
     values: [
-      { label: "安装C4 (全队)", value: "+$800 (输赢皆有)" },
+      { label: "安装C4 (全队)", value: "+$600 (输赢皆有)" },
       { label: "安装C4 (个人)", value: "+$300" },
       { label: "拆除C4 (个人)", value: "+$300" },
+      { label: "刀杀奖励", value: "+$1500" },
     ]
   },
   {
-    title: "特殊惩罚与奖励",
+    title: "特殊规则",
     values: [
+      { label: "手枪局战败", value: "无论CT/T，手枪局输掉固定获得$1900" },
       { label: "CT全队奖励", value: "回合结束时每击杀1名T +$50" },
-      { label: "时间耗尽存活 (T)", value: "$0 (无收入)" },
-      { label: "自杀/TK", value: "-$300 (下局无收入)" },
+      { label: "自杀", value: "对手获得击杀补偿" },
+      { label: "队友误杀 (TK)", value: "-$300" },
     ]
   }
 ];

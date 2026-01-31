@@ -2,10 +2,11 @@
 import React, { useState } from 'react';
 import { WEAPONS } from '../data/weapons';
 import { ECONOMY_RULES } from '../data/economy';
-import { WeaponCategory } from '../types';
+import { WeaponCategory, Side } from '../types';
 
 export const ArsenalView: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<WeaponCategory | 'all'>('all');
+  const [activeSide, setActiveSide] = useState<Side | 'Both'>('Both');
 
   const categories: { id: WeaponCategory | 'all', label: string }[] = [
     { id: 'all', label: '全部' },
@@ -16,9 +17,16 @@ export const ArsenalView: React.FC = () => {
     { id: 'gear', label: '装备' },
   ];
 
-  const filteredWeapons = activeCategory === 'all' 
-    ? WEAPONS 
-    : WEAPONS.filter(w => w.category === activeCategory);
+  const filteredWeapons = WEAPONS.filter(w => {
+      // 1. Filter by Category
+      if (activeCategory !== 'all' && w.category !== activeCategory) return false;
+      
+      // 2. Filter by Side
+      if (activeSide !== 'Both') {
+          if (w.side !== 'Both' && w.side !== activeSide) return false;
+      }
+      return true;
+  });
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -50,21 +58,45 @@ export const ArsenalView: React.FC = () => {
 
       {/* Weapons Section */}
       <section className="space-y-4">
-        <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
-            {categories.map(cat => (
-                <button
-                    key={cat.id}
-                    onClick={() => setActiveCategory(cat.id)}
-                    className={`
-                        px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border
-                        ${activeCategory === cat.id 
-                            ? 'bg-neutral-900 dark:bg-white text-white dark:text-black border-transparent' 
-                            : 'bg-white dark:bg-neutral-900 text-neutral-500 dark:text-neutral-400 border-neutral-200 dark:border-neutral-800'}
-                    `}
-                >
-                    {cat.label}
-                </button>
-            ))}
+        {/* Controls Row */}
+        <div className="flex flex-col gap-3">
+             {/* Side Selector */}
+            <div className="flex gap-2">
+                {(['Both', 'T', 'CT'] as const).map(s => (
+                    <button
+                        key={s}
+                        onClick={() => setActiveSide(s)}
+                        className={`
+                            flex-1 py-1.5 rounded-lg text-xs font-bold transition-all border
+                            ${activeSide === s 
+                                ? s === 'T' ? 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-400 dark:border-yellow-800' 
+                                : s === 'CT' ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800'
+                                : 'bg-neutral-800 text-white border-transparent dark:bg-neutral-200 dark:text-black'
+                                : 'bg-white dark:bg-neutral-900 text-neutral-500 border-neutral-200 dark:border-neutral-800'}
+                        `}
+                    >
+                        {s === 'Both' ? '全部阵营' : s}
+                    </button>
+                ))}
+            </div>
+
+            {/* Category Selector */}
+            <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1">
+                {categories.map(cat => (
+                    <button
+                        key={cat.id}
+                        onClick={() => setActiveCategory(cat.id)}
+                        className={`
+                            px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border
+                            ${activeCategory === cat.id 
+                                ? 'bg-neutral-900 dark:bg-white text-white dark:text-black border-transparent' 
+                                : 'bg-white dark:bg-neutral-900 text-neutral-500 dark:text-neutral-400 border-neutral-200 dark:border-neutral-800'}
+                        `}
+                    >
+                        {cat.label}
+                    </button>
+                ))}
+            </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

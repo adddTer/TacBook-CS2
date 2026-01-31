@@ -19,8 +19,8 @@ export const WEAPONS: Weapon[] = [
   { id: 'mp9', name: 'MP9', category: 'mid-tier', price: 1250, killAward: 600, side: 'CT' },
   { id: 'ump45', name: 'UMP-45', category: 'mid-tier', price: 1200, killAward: 600, side: 'Both' },
   { id: 'mp7', name: 'MP7', category: 'mid-tier', price: 1400, killAward: 600, side: 'Both' },
-  { id: 'mp5sd', name: 'MP5-SD', category: 'mid-tier', price: 1500, killAward: 600, side: 'Both' },
-  { id: 'bizon', name: 'PP-野牛', category: 'mid-tier', price: 1400, killAward: 600, side: 'Both' },
+  { id: 'mp5sd', name: 'MP5-SD', category: 'mid-tier', price: 1400, killAward: 600, side: 'Both' },
+  { id: 'bizon', name: 'PP-野牛', category: 'mid-tier', price: 1300, killAward: 600, side: 'Both' },
   { id: 'p90', name: 'P90', category: 'mid-tier', price: 2350, killAward: 300, side: 'Both' },
   
   { id: 'nova', name: '新星', category: 'mid-tier', price: 1050, killAward: 900, side: 'Both' },
@@ -49,7 +49,7 @@ export const WEAPONS: Weapon[] = [
   { id: 'smoke', name: '烟雾弹', category: 'grenade', price: 300, side: 'Both', desc: '持续18秒，用于隔断视线和灭火。' },
   { id: 'he', name: '高爆手雷', category: 'grenade', price: 300, side: 'Both', desc: '对无甲敌人造成巨大伤害。' },
   { id: 'molotov', name: '燃烧瓶', category: 'grenade', price: 400, side: 'T', desc: '持续7秒，随时间增加伤害。' },
-  { id: 'incendiary', name: '燃烧弹', category: 'grenade', price: 600, side: 'CT', desc: '持续7秒，效果同燃烧瓶。' },
+  { id: 'incendiary', name: '燃烧弹', category: 'grenade', price: 500, side: 'CT', desc: '价格更贵，范围和持续时间略小于燃烧瓶。' },
   { id: 'decoy', name: '诱饵弹', category: 'grenade', price: 50, side: 'Both', desc: '模拟主武器枪声，并在结束时爆炸。' },
 
   // --- Gear (装备) ---

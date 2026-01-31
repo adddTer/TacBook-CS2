@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Action } from '../types';
 import { sortActions } from '../utils/timeHelper';
@@ -21,7 +22,8 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
       <div className="absolute left-[7px] top-2 bottom-2 w-[2px] bg-neutral-100 dark:bg-neutral-800"></div>
 
       {sortedActions.map((action, index) => {
-        const isHighlighted = highlightRole && action.who === highlightRole;
+        // Highlight logic: Match specific role OR match "全员"
+        const isHighlighted = highlightRole && (action.who === highlightRole || action.who === '全员');
         
         return (
             <div 
