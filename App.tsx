@@ -1,0 +1,228 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { TacticCard } from './components/TacticCard';
+import { UtilityCard } from './components/UtilityCard';
+import { Header } from './components/Header';
+import { FilterPanel } from './components/FilterPanel';
+import { TacticEditor } from './components/TacticEditor';
+import { UtilityEditor } from './components/UtilityEditor';
+import { useTactics } from './hooks/useTactics';
+import { Side, MapId, Tactic, Tag } from './types';
+import { ALL_TACTICS } from './data/tactics';
+import { UTILITIES } from './data/utilities';
+
+const App: React.FC = () => {
+  const [side, setSide] = useState<Side>('T');
+  const [currentMap, setCurrentMap] = useState<MapId>('mirage');
+  const [isDark, setIsDark] = useState(true);
+  const [viewMode, setViewMode] = useState<'tactics' | 'utilities'>('tactics');
+  
+  // Panel States
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
+  const allTactics = ALL_TACTICS;
+
+  const [activeEditor, setActiveEditor] = useState<'tactic' | 'utility' | null>(null);
+  const [editingTactic, setEditingTactic] = useState<Tactic | undefined>(undefined);
+
+  // Hook for Tactics filtering
+  const { availableTags: tacticTags, filter, updateFilter } = useTactics(currentMap, side); 
+
+  // --- Utility Filtering Logic ---
+  const utilityTags: Tag[] = useMemo(() => [
+      { label: '烟雾', value: 'smoke', category: 'type' },
+      { label: '闪光', value: 'flash', category: 'type' },
+      { label: '燃烧', value: 'molotov', category: 'type' },
+      { label: '手雷', value: 'grenade', category: 'type' },
+  ], []);
+
+  const filteredUtilities = useMemo(() => {
+      return UTILITIES.filter(u => {
+          if (u.mapId !== currentMap || u.side !== side) return false;
+          if (filter.site !== 'All' && u.site !== filter.site) return false;
+          
+          if (filter.selectedTags.length > 0) {
+              const selectedTypes = utilityTags
+                  .filter(tag => filter.selectedTags.includes(tag.label))
+                  .map(tag => tag.value);
+              
+              if (selectedTypes.length > 0 && !selectedTypes.includes(u.type)) return false;
+          }
+
+          if (filter.searchQuery) {
+              const q = filter.searchQuery.toLowerCase();
+              return u.title.toLowerCase().includes(q) || 
+                     u.content.toLowerCase().includes(q) ||
+                     u.id.toLowerCase().includes(q); 
+          }
+          return true;
+      });
+  }, [currentMap, side, filter, utilityTags]);
+  
+  const filteredTactics = useMemo(() => {
+      return allTactics.filter(t => {
+        if (t.mapId !== currentMap || t.side !== side) return false;
+        if (filter.site !== 'All' && t.site !== filter.site) return false;
+        if (filter.selectedTags.length > 0) {
+            const tacticTagLabels = t.tags.map(tag => tag.label);
+            if (!filter.selectedTags.every(st => tacticTagLabels.includes(st))) return false;
+        }
+        
+        if (filter.searchQuery) {
+            const q = filter.searchQuery.toLowerCase();
+            return t.title.toLowerCase().includes(q) || 
+                   t.id.toLowerCase().includes(q) || 
+                   t.tags.some(tag => tag.label.toLowerCase().includes(q)) ||
+                   t.actions.some(a => a.content.toLowerCase().includes(q) || a.who.toLowerCase().includes(q));
+        }
+        return true;
+      });
+  }, [allTactics, currentMap, side, filter]);
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDark]);
+
+  const toggleTheme = () => setIsDark(!isDark);
+
+  // Reset filter when switching modes
+  useEffect(() => {
+      updateFilter('selectedTags', []);
+      updateFilter('searchQuery', '');
+  }, [viewMode]);
+
+  // Mutual exclusion handlers
+  const handleToggleFilter = () => {
+    if (!isFilterOpen) {
+      setIsSettingsOpen(false);
+    }
+    setIsFilterOpen(!isFilterOpen);
+  };
+
+  const handleToggleSettings = () => {
+    if (!isSettingsOpen) {
+      setIsFilterOpen(false);
+    }
+    setIsSettingsOpen(!isSettingsOpen);
+  };
+
+  return (
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700">
+      
+      <Header 
+        currentMapId={currentMap}
+        currentSide={side}
+        onMapChange={setCurrentMap}
+        onSideChange={setSide}
+        toggleTheme={toggleTheme}
+        isDark={isDark}
+        searchQuery={filter.searchQuery}
+        onSearchUpdate={(val) => updateFilter('searchQuery', val)}
+        viewMode={viewMode}
+        isFilterOpen={isFilterOpen}
+        toggleFilter={handleToggleFilter}
+        isSettingsOpen={isSettingsOpen}
+        toggleSettings={handleToggleSettings}
+        onCreateTactic={() => { setEditingTactic(undefined); setActiveEditor('tactic'); }}
+        onCreateUtility={() => setActiveEditor('utility')}
+      />
+
+      <div className="pt-[60px]">
+        <FilterPanel 
+            isOpen={isFilterOpen}
+            availableTags={viewMode === 'tactics' ? tacticTags : utilityTags}
+            filterState={filter}
+            onUpdate={updateFilter}
+            currentSide={side}
+            currentMapId={currentMap}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+        />
+      </div>
+
+      <main className="px-4 pb-32 max-w-lg mx-auto pt-4">
+        {/* Tactics List */}
+        {viewMode === 'tactics' && (
+            filteredTactics.length > 0 ? (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {filteredTactics.map((tactic) => (
+                    <div key={tactic.id} className="relative group">
+                        <div className="absolute top-6 right-14 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-neutral-400">
+                             #{tactic.id}
+                        </div>
+                        <TacticCard 
+                            tactic={tactic} 
+                            highlightRole={filter.specificRole}
+                        />
+                        <button 
+                            onClick={() => { setEditingTactic(tactic); setActiveEditor('tactic'); }}
+                            className="absolute top-4 right-4 p-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity"
+                            title="Export / Edit Copy"
+                        >
+                            <svg className="w-4 h-4 text-neutral-600 dark:text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                        </button>
+                    </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-neutral-400 dark:text-neutral-600">
+                    <div className="w-16 h-16 rounded-full bg-neutral-200 dark:bg-neutral-900 flex items-center justify-center mb-4">
+                        <svg className="w-6 h-6 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                    </div>
+                    <p className="text-sm font-medium">暂无战术</p>
+                </div>
+            )
+        )}
+
+        {/* Utilities List */}
+        {viewMode === 'utilities' && (
+             filteredUtilities.length > 0 ? (
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {filteredUtilities.map((utility) => (
+                        <UtilityCard key={utility.id} utility={utility} />
+                    ))}
+                </div>
+             ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-neutral-400 dark:text-neutral-600">
+                    <div className="w-16 h-16 rounded-full bg-neutral-200 dark:bg-neutral-900 flex items-center justify-center mb-4">
+                        <svg className="w-6 h-6 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <p className="text-sm font-medium">暂无道具</p>
+                </div>
+             )
+        )}
+      </main>
+
+      {/* Editor Modals */}
+      {activeEditor === 'tactic' && (
+          <TacticEditor 
+            initialTactic={editingTactic}
+            currentMapId={currentMap}
+            currentSide={side}
+            onCancel={() => { setActiveEditor(null); setEditingTactic(undefined); }}
+          />
+      )}
+
+      {activeEditor === 'utility' && (
+          <UtilityEditor
+            currentMapId={currentMap}
+            currentSide={side}
+            onCancel={() => setActiveEditor(null)}
+          />
+      )}
+
+    </div>
+  );
+};
+
+export default App;
