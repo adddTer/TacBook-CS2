@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Action } from '../types';
+import { Action, Utility } from '../types';
 import { sortActions } from '../utils/timeHelper';
 import { UTILITIES } from '../data/utilities';
 
@@ -11,6 +11,7 @@ interface ActionListProps {
 
 export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }) => {
   const [expandedImg, setExpandedImg] = useState<string | null>(null);
+  const [viewingUtility, setViewingUtility] = useState<Utility | null>(null);
 
   // Auto-sort actions chronologically
   const sortedActions = useMemo(() => {
@@ -71,7 +72,7 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            if(linkedUtility.image) setExpandedImg(linkedUtility.image);
+                            setViewingUtility(linkedUtility);
                         }}
                         className={`
                             ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold align-middle transition-colors
@@ -85,12 +86,9 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
                         {linkedUtility.type === 'smoke' && <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>}
                         {linkedUtility.type === 'flash' && <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>}
                         {linkedUtility.title}
-                        {linkedUtility.image && (
-                            <svg className="w-2.5 h-2.5 opacity-50 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                        )}
+                        <svg className="w-2.5 h-2.5 opacity-50 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                     </button>
                 )}
             </div>
@@ -133,6 +131,68 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
             </button>
             <div className="absolute bottom-8 left-0 right-0 text-center pointer-events-none">
                  <span className="bg-black/50 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md">点击任意处关闭</span>
+            </div>
+        </div>
+      )}
+
+      {/* Utility Detail Modal */}
+      {viewingUtility && (
+        <div 
+            className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+            onClick={(e) => { e.stopPropagation(); setViewingUtility(null); }}
+        >
+            <div 
+                className="bg-white dark:bg-neutral-900 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-300"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Modal Header */}
+                <div className="p-4 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center bg-neutral-50 dark:bg-neutral-950/50">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                             <span className={`
+                                text-[10px] font-bold px-1.5 py-0.5 rounded uppercase
+                                ${viewingUtility.type === 'smoke' ? 'bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300' :
+                                  viewingUtility.type === 'flash' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                  viewingUtility.type === 'molotov' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                                  'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'}
+                             `}>
+                                {viewingUtility.type.toUpperCase()}
+                             </span>
+                             <span className="text-[10px] font-mono text-neutral-400">#{viewingUtility.id}</span>
+                        </div>
+                        <h3 className="font-bold text-neutral-900 dark:text-white">{viewingUtility.title}</h3>
+                    </div>
+                    <button 
+                        onClick={() => setViewingUtility(null)}
+                        className="p-1 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
+                    >
+                        <svg className="w-5 h-5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                {/* Modal Content */}
+                <div className="p-4 space-y-4">
+                    <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
+                        {viewingUtility.content}
+                    </p>
+                    
+                    {viewingUtility.image ? (
+                        <div className="rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-800 bg-black">
+                            <img src={viewingUtility.image} className="w-full h-auto object-contain max-h-[400px]" alt="Detail" />
+                        </div>
+                    ) : (
+                        <div className="h-32 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-400 text-xs">
+                            暂无参考图
+                        </div>
+                    )}
+                    
+                    <div className="flex justify-between items-center text-[10px] text-neutral-400 pt-2 border-t border-neutral-100 dark:border-neutral-800">
+                        <span>Site: {viewingUtility.site}</span>
+                        <span>By {viewingUtility.metadata?.author || 'Unknown'}</span>
+                    </div>
+                </div>
             </div>
         </div>
       )}

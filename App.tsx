@@ -23,6 +23,7 @@ const App: React.FC = () => {
   
   const [activeEditor, setActiveEditor] = useState<'tactic' | 'utility' | null>(null);
   const [editingTactic, setEditingTactic] = useState<Tactic | undefined>(undefined);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Hook for Tactics filtering
   const { availableTags: tacticTags, filter, updateFilter, tactics: filteredTactics } = useTactics(currentMap, side); 
@@ -89,6 +90,12 @@ const App: React.FC = () => {
     setIsSettingsOpen(!isSettingsOpen);
   };
 
+  const handleCopyId = (id: string) => {
+      navigator.clipboard.writeText(id);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+  };
+
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700 pt-[60px]">
       
@@ -131,9 +138,17 @@ const App: React.FC = () => {
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {filteredTactics.map((tactic) => (
                     <div key={tactic.id} className="relative group">
-                        <div className="absolute top-6 right-14 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-neutral-400">
-                             #{tactic.id}
-                        </div>
+                        <button 
+                            onClick={() => handleCopyId(tactic.id)}
+                            className="absolute top-6 right-14 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-neutral-400 hover:text-blue-500 flex items-center gap-1"
+                        >
+                             {copiedId === tactic.id ? <span className="text-green-500">Copied!</span> : `#${tactic.id}`}
+                             {copiedId !== tactic.id && (
+                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                 </svg>
+                             )}
+                        </button>
                         <TacticCard 
                             tactic={tactic} 
                             highlightRole={filter.specificRole}

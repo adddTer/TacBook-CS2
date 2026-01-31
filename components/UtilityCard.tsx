@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Utility } from '../types';
 
@@ -15,7 +16,15 @@ const typeConfig = {
 export const UtilityCard: React.FC<UtilityCardProps> = ({ utility }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
   const config = typeConfig[utility.type];
+
+  const handleCopyId = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(utility.id);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  };
 
   return (
     <div className={`
@@ -41,7 +50,20 @@ export const UtilityCard: React.FC<UtilityCardProps> = ({ utility }) => {
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${config.color}`}>
                     {config.label}
                 </span>
-                <span className="text-[10px] font-mono text-neutral-400">#{utility.id}</span>
+                <button 
+                    onClick={handleCopyId}
+                    className="text-[10px] font-mono text-neutral-400 hover:text-blue-500 transition-colors flex items-center gap-1 group"
+                    title="点击复制ID"
+                >
+                    #{utility.id}
+                    <span className="opacity-0 group-hover:opacity-100">
+                        {copiedId ? (
+                            <span className="text-green-500">已复制</span>
+                        ) : (
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        )}
+                    </span>
+                </button>
             </div>
             <h3 className="font-bold text-neutral-900 dark:text-white truncate">
                 {utility.title}

@@ -1,7 +1,9 @@
+
 import { Tactic } from '../types';
 import { mirageMidTactics } from './tactics/mirage_pistol_mid';
 import { mirageATactics } from './tactics/mirage_pistol_a';
 import { mirageCustomTactics } from './tactics/mirage_custom';
+import { anubisTactics } from './tactics/anubis';
 
 let localTactics: Tactic[] = [];
 
@@ -24,5 +26,6 @@ export const ALL_TACTICS: Tactic[] = [
   ...mirageMidTactics,
   ...mirageATactics,
   ...mirageCustomTactics,
+  ...anubisTactics,
   ...localTactics
 ];

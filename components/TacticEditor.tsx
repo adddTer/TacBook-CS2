@@ -56,6 +56,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
   // Utility Modal State
   const [showUtilityModal, setShowUtilityModal] = useState<string | null>(null); // Action ID
   const [utilitySearchQuery, setUtilitySearchQuery] = useState('');
+  const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
     if (initialTactic) {
@@ -146,6 +147,14 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
           }
           setShowUtilityModal(null);
       }
+  };
+
+  const handleCopyId = () => {
+    if (formData.id) {
+        navigator.clipboard.writeText(formData.id);
+        setCopiedId(true);
+        setTimeout(() => setCopiedId(false), 2000);
+    }
   };
 
   const handleExportJSON = async () => {
@@ -243,7 +252,17 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
             {/* Basic Info */}
             <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                   <div className="text-[10px] font-mono text-neutral-400">ID: {formData.id}</div>
+                   <button 
+                    onClick={handleCopyId}
+                    className="text-[10px] font-mono text-neutral-400 flex items-center gap-1 hover:text-blue-500"
+                   >
+                       ID: {formData.id}
+                       {copiedId ? <span className="text-green-500">Copied</span> : (
+                           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                           </svg>
+                       )}
+                   </button>
                 </div>
 
                 <div>
