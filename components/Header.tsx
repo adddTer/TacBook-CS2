@@ -57,9 +57,9 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Logo Title (Animated) */}
         <div className={`
             shrink-0 flex items-center overflow-hidden whitespace-nowrap transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] origin-left
-            ${isSearchFocused ? 'w-0 opacity-0 -mr-2 scale-x-90' : 'w-[110px] opacity-100 scale-x-100'}
+            ${isSearchFocused ? 'w-0 opacity-0 -mr-2 scale-x-90' : 'w-[80px] opacity-100 scale-x-100'}
         `}>
-            <span className="font-black italic text-lg text-neutral-900 dark:text-white tracking-tighter">TacBook CS2</span>
+            <span className="font-black italic text-lg text-neutral-900 dark:text-white tracking-tighter">TacBook</span>
         </div>
 
         {/* Search Input (Expandable) */}
