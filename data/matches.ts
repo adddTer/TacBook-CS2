@@ -4,6 +4,7 @@ import { Match } from '../types';
 export const MATCH_HISTORY: Match[] = [
     {
         id: '9223266999097414540',
+        source: 'PWA',
         date: '2026-01-24T19:28:59',
         mapId: 'mirage',
         rank: 'B+',
@@ -43,7 +44,7 @@ export const MATCH_HISTORY: Match[] = [
         // Enemy Team (Losing Team - Top of screenshot)
         enemyPlayers: [
             { 
-                playerId: '顺水啊.', rank: 'B+', // Blue (SVP) - Gold B+ is B++ rank, irrelevant to SVP
+                playerId: '顺水啊.', rank: 'B+', // Blue (SVP)
                 kills: 17, deaths: 14, assists: 5, adr: 122, hsRate: 63, rating: 1.52, we: 11.1
             },
             { 

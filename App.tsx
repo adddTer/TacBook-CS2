@@ -7,7 +7,9 @@ import { FilterPanel } from './components/FilterPanel';
 import { TacticEditor } from './components/TacticEditor';
 import { UtilityEditor } from './components/UtilityEditor';
 import { ArsenalView } from './components/ArsenalView';
-import { TBTVView } from './components/TBTVView'; // Import new component
+import { TBTVView } from './components/TBTVView';
+import { BottomNav } from './components/BottomNav';
+import { TacticDetailView } from './components/TacticDetailView';
 import { useTactics } from './hooks/useTactics';
 import { Side, MapId, Tactic, Tag } from './types';
 import { UTILITIES } from './data/utilities';
@@ -20,10 +22,10 @@ const App: React.FC = () => {
   
   // Panel States
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const [activeEditor, setActiveEditor] = useState<'tactic' | 'utility' | null>(null);
   const [editingTactic, setEditingTactic] = useState<Tactic | undefined>(undefined);
+  const [selectedTactic, setSelectedTactic] = useState<Tactic | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Hook for Tactics filtering
@@ -76,29 +78,19 @@ const App: React.FC = () => {
       updateFilter('searchQuery', '');
   }, [viewMode]);
 
-  // Mutual exclusion handlers
   const handleToggleFilter = () => {
-    if (!isFilterOpen) {
-      setIsSettingsOpen(false);
-    }
     setIsFilterOpen(!isFilterOpen);
   };
 
-  const handleToggleSettings = () => {
-    if (!isSettingsOpen) {
-      setIsFilterOpen(false);
-    }
-    setIsSettingsOpen(!isSettingsOpen);
-  };
-
-  const handleCopyId = (id: string) => {
+  const handleCopyId = (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
       navigator.clipboard.writeText(id);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 2000);
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700 pt-[60px]">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700 pt-[105px]">
       
       <Header 
         currentMapId={currentMap}
@@ -107,19 +99,13 @@ const App: React.FC = () => {
         onSideChange={setSide}
         toggleTheme={toggleTheme}
         isDark={isDark}
-        searchQuery={filter.searchQuery}
-        onSearchUpdate={(val) => updateFilter('searchQuery', val)}
-        viewMode={viewMode as any}
         isFilterOpen={isFilterOpen}
         toggleFilter={handleToggleFilter}
-        isSettingsOpen={isSettingsOpen}
-        toggleSettings={handleToggleSettings}
-        onCreateTactic={() => { setEditingTactic(undefined); setActiveEditor('tactic'); }}
-        onCreateUtility={() => setActiveEditor('utility')}
+        filterActive={filter.selectedTags.length > 0 || !!filter.searchQuery || filter.site !== 'All'}
       />
 
       {/* Sticky Filter Panel - sits just below the fixed header */}
-      <div className="sticky top-[60px] z-40 w-full shadow-sm">
+      <div className="sticky top-[105px] z-40 w-full shadow-sm">
         <FilterPanel 
             isOpen={isFilterOpen}
             availableTags={viewMode === 'tactics' ? tacticTags : utilityTags}
@@ -128,7 +114,6 @@ const App: React.FC = () => {
             currentSide={side}
             currentMapId={currentMap}
             viewMode={viewMode}
-            onViewModeChange={setViewMode}
         />
       </div>
 
@@ -140,8 +125,8 @@ const App: React.FC = () => {
                     {filteredTactics.map((tactic) => (
                     <div key={tactic.id} className="relative group">
                         <button 
-                            onClick={() => handleCopyId(tactic.id)}
-                            className="absolute top-6 right-14 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-neutral-400 hover:text-blue-500 flex items-center gap-1"
+                            onClick={(e) => handleCopyId(e, tactic.id)}
+                            className="absolute top-6 right-14 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-neutral-400 hover:text-blue-500 flex items-center gap-1 bg-white/50 dark:bg-black/50 backdrop-blur px-1.5 py-0.5 rounded"
                         >
                              {copiedId === tactic.id ? <span className="text-green-500">Copied!</span> : `#${tactic.id}`}
                              {copiedId !== tactic.id && (
@@ -152,7 +137,7 @@ const App: React.FC = () => {
                         </button>
                         <TacticCard 
                             tactic={tactic} 
-                            highlightRole={filter.specificRole}
+                            onClick={() => setSelectedTactic(tactic)}
                         />
                     </div>
                     ))}
@@ -200,6 +185,15 @@ const App: React.FC = () => {
         )}
       </main>
 
+      {/* Full Screen Tactic Detail View */}
+      {selectedTactic && (
+          <TacticDetailView 
+            tactic={selectedTactic}
+            onBack={() => setSelectedTactic(null)}
+            highlightRole={filter.specificRole}
+          />
+      )}
+
       {/* Editor Modals */}
       {activeEditor === 'tactic' && (
           <TacticEditor 
@@ -217,6 +211,9 @@ const App: React.FC = () => {
             onCancel={() => setActiveEditor(null)}
           />
       )}
+
+      {/* Bottom Navigation */}
+      <BottomNav currentMode={viewMode} onChange={setViewMode} />
 
     </div>
   );

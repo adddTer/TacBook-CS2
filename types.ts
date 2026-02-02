@@ -123,6 +123,7 @@ export interface PlayerMatchStats {
 
 export interface Match {
   id: string;
+  source: 'PWA' | 'Official'; // PWA = Perfect World, Official = Valve Matchmaking
   date: string; // ISO string (Time included)
   mapId: MapId;
   rank: Rank; // Lobby average rank

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { MATCH_HISTORY } from '../data/matches';
 import { ROSTER } from '../constants/roster';
 import { MAPS } from '../constants';
@@ -15,14 +15,16 @@ const getRosterId = (name: string) => NAME_MAPPING[name] || name;
 
 export const TBTVView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'matches' | 'players'>('matches');
+  const [matches, setMatches] = useState<Match[]>(MATCH_HISTORY);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Calculations ---
   const playerStats = useMemo(() => {
     return ROSTER.map(player => {
-        // Use getRosterId to match alias names (e.g., addd_233 -> addd)
-        const matchesPlayed = MATCH_HISTORY
+        const matchesPlayed = matches
             .filter(m => m.players.some(p => getRosterId(p.playerId) === player.id))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
@@ -77,26 +79,62 @@ export const TBTVView: React.FC = () => {
             kdRatio: (sums.k / (sums.d || 1)).toFixed(2)
         };
     });
-  }, []);
+  }, [matches]);
 
   const selectedPlayerStats = useMemo(() => {
       if (!selectedPlayerId) return null;
       const profile = playerStats.find(p => p.id === selectedPlayerId);
-      const history = MATCH_HISTORY.filter(m => m.players.some(p => getRosterId(p.playerId) === selectedPlayerId))
+      const history = matches.filter(m => m.players.some(p => getRosterId(p.playerId) === selectedPlayerId))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .map(m => {
             const stats = m.players.find(p => getRosterId(p.playerId) === selectedPlayerId)!;
             return { match: m, stats };
         });
       return { profile, history };
-  }, [selectedPlayerId, playerStats]);
+  }, [selectedPlayerId, playerStats, matches]);
 
+  // --- Handlers ---
+  const handleImportClick = () => {
+      fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const fileName = file.name.toLowerCase();
+
+      if (fileName.endsWith('.json')) {
+          // Real JSON Import
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+              try {
+                  const content = ev.target?.result as string;
+                  const data = JSON.parse(content);
+                  if (Array.isArray(data)) {
+                       setMatches(prev => [...data, ...prev]);
+                  } else {
+                       setMatches(prev => [data, ...prev]);
+                  }
+                  alert('数据导入成功');
+              } catch (err) {
+                  alert('JSON 格式错误');
+              }
+          };
+          reader.readAsText(file);
+      } else {
+          alert('仅支持 .json 数据文件');
+      }
+      
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   // --- Helper Components ---
   
   const RankBadge = ({ rank }: { rank: string }) => {
       const isGold = rank.includes('++') || rank === 'S';
-      const displayRank = rank.replace('++', '+'); // Display "B+" for "B++" but with gold style
+      const displayRank = rank.replace('++', '+'); 
       
       return (
           <span className={`
@@ -109,6 +147,17 @@ export const TBTVView: React.FC = () => {
           </span>
       );
   };
+
+  const SourceBadge = ({ source }: { source: 'PWA' | 'Official' }) => (
+      <span className={`
+        text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider
+        ${source === 'PWA' 
+            ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800' 
+            : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300 border border-neutral-300 dark:border-neutral-600'}
+      `}>
+          {source === 'PWA' ? '完美世界' : '官方竞技'}
+      </span>
+  );
 
   const StatBox = ({ label, value, subValue, colorClass }: any) => (
       <div className="bg-neutral-50 dark:bg-neutral-800 p-3 rounded-xl text-center border border-neutral-100 dark:border-neutral-700">
@@ -138,7 +187,6 @@ export const TBTVView: React.FC = () => {
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                 {[...players].sort((a,b) => b.rating - a.rating).map(p => {
                     const kdDiff = p.kills - p.deaths;
-                    // Map the player ID to roster ID to check membership
                     const rosterId = getRosterId(p.playerId);
                     const isRosterMember = ROSTER.some(r => r.id === rosterId);
                     
@@ -168,7 +216,6 @@ export const TBTVView: React.FC = () => {
                                             {rosterId[0]}
                                         </div>
                                     )}
-                                    {/* Display mapped name if available (e.g., addd instead of addd_233) */}
                                     {isRosterMember ? rosterId : p.playerId}
                                 </div>
                             </td>
@@ -214,7 +261,6 @@ export const TBTVView: React.FC = () => {
 
               {/* Profile Card */}
               <div className="bg-white dark:bg-neutral-900 rounded-3xl p-6 border border-neutral-200 dark:border-neutral-800 shadow-sm relative overflow-hidden">
-                   {/* Background Decoration */}
                    <div className="absolute top-0 right-0 p-8 opacity-5 font-black text-8xl text-neutral-900 dark:text-white select-none pointer-events-none transform translate-x-10 -translate-y-10">
                        {profile.id}
                    </div>
@@ -237,7 +283,6 @@ export const TBTVView: React.FC = () => {
                                </div>
                            </div>
                            
-                           {/* Main Rating */}
                            <div className="text-right">
                                <div className="text-[10px] font-bold text-neutral-400 uppercase">Avg Rating</div>
                                <div className={`text-4xl font-black tracking-tighter ${Number(profile.avgRating) >= 1.2 ? 'text-red-500' : Number(profile.avgRating) >= 1.05 ? 'text-green-500' : 'text-neutral-800 dark:text-neutral-200'}`}>
@@ -246,7 +291,6 @@ export const TBTVView: React.FC = () => {
                            </div>
                        </div>
 
-                       {/* Stats Grid */}
                        <div className="grid grid-cols-4 gap-2 mb-2">
                            <StatBox label="K / D" value={profile.kdRatio} />
                            <StatBox label="ADR" value={profile.avgAdr} />
@@ -279,11 +323,9 @@ export const TBTVView: React.FC = () => {
                                       <div className="text-left">
                                           <div className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
                                               {mapName}
-                                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${match.result === 'WIN' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                                                  {match.result}
-                                              </span>
+                                              <SourceBadge source={match.source} />
                                           </div>
-                                          <div className="text-[10px] text-neutral-400 font-mono mt-0.5">
+                                          <div className="text-[10px] text-neutral-400 font-mono mt-0.5 text-left">
                                               {match.date.split('T')[0]} • Rank {stats.rank}
                                           </div>
                                       </div>
@@ -320,17 +362,10 @@ export const TBTVView: React.FC = () => {
   if (selectedMatch) {
       const mapName = MAPS.find(m => m.id === selectedMatch.mapId)?.name || selectedMatch.mapId;
       const startSide = selectedMatch.startingSide || 'CT';
-      // Logic for colors based on who won the rounds
-      // CT = Blue, T = Yellow
-      
       const ctColor = 'text-blue-500 dark:text-blue-400';
       const tColor = 'text-yellow-500 dark:text-yellow-400';
-
-      // Half 1: Us (started startSide) vs Them
       const half1UsColor = startSide === 'CT' ? ctColor : tColor;
       const half1ThemColor = startSide === 'CT' ? tColor : ctColor;
-
-      // Half 2: Swap sides
       const half2UsColor = startSide === 'CT' ? tColor : ctColor;
       const half2ThemColor = startSide === 'CT' ? ctColor : tColor;
 
@@ -355,7 +390,10 @@ export const TBTVView: React.FC = () => {
                             <span>•</span>
                             <span>LOBBY {selectedMatch.rank}</span>
                        </div>
-                       <h2 className="text-3xl font-black text-neutral-900 dark:text-white mb-6">{mapName}</h2>
+                       <h2 className="text-3xl font-black text-neutral-900 dark:text-white mb-2">{mapName}</h2>
+                       <div className="flex justify-center mb-6">
+                           <SourceBadge source={selectedMatch.source} />
+                       </div>
                        
                        <div className="flex items-center justify-center gap-10">
                            <div className="text-right">
@@ -384,16 +422,9 @@ export const TBTVView: React.FC = () => {
               <div>
                   <h3 className="text-sm font-bold text-neutral-500 uppercase tracking-widest mb-3 px-1">Match Scoreboard</h3>
                   <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden shadow-sm space-y-4 pb-4">
-                       
-                       {/* Team Table */}
                        <ScoreboardTable players={selectedMatch.players} isTeam={true} />
-
-                       {/* Divider */}
                        <div className="h-px bg-neutral-100 dark:bg-neutral-800 mx-4"></div>
-
-                       {/* Enemy Table */}
                        <ScoreboardTable players={selectedMatch.enemyPlayers} isTeam={false} />
-
                   </div>
               </div>
           </div>
@@ -404,26 +435,46 @@ export const TBTVView: React.FC = () => {
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
         
-        {/* Toggle Tabs */}
-        <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl">
-            <button
-                onClick={() => setActiveTab('matches')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'matches' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+        {/* Action Bar */}
+        <div className="flex gap-2">
+             <div className="flex flex-1 p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl">
+                <button
+                    onClick={() => setActiveTab('matches')}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'matches' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                >
+                    赛程
+                </button>
+                <button
+                    onClick={() => setActiveTab('players')}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'players' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                >
+                    队员
+                </button>
+            </div>
+            
+            <button 
+                onClick={handleImportClick}
+                className="px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/20"
+                title="导入数据"
             >
-                赛程列表
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
             </button>
-            <button
-                onClick={() => setActiveTab('players')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'players' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
-            >
-                队员数据
-            </button>
+            {/* Hidden Input */}
+            <input 
+                ref={fileInputRef}
+                type="file" 
+                accept=".json" 
+                className="hidden" 
+                onChange={handleFileChange}
+            />
         </div>
 
         {/* Matches Tab */}
         {activeTab === 'matches' && (
             <div className="space-y-3">
-                {MATCH_HISTORY.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(match => {
+                {matches.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(match => {
                     const mapName = MAPS.find(m => m.id === match.mapId)?.name || match.mapId;
                     return (
                         <div 
@@ -431,7 +482,6 @@ export const TBTVView: React.FC = () => {
                             onClick={() => setSelectedMatch(match)}
                             className="relative overflow-hidden bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl group cursor-pointer hover:border-blue-500/50 transition-all active:scale-[0.99]"
                         >
-                            {/* Decorative Background Tint */}
                             <div className={`absolute top-0 right-0 w-24 h-full opacity-10 -skew-x-12 transform translate-x-8 ${match.result === 'WIN' ? 'bg-green-500' : 'bg-red-500'}`}></div>
 
                             <div className="p-5 relative z-10">
@@ -440,16 +490,15 @@ export const TBTVView: React.FC = () => {
                                         <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-white ${match.result === 'WIN' ? 'bg-green-600' : 'bg-red-600'}`}>
                                             {match.result}
                                         </span>
-                                        <span className="text-xs font-bold text-neutral-400">{match.date.split('T')[0]}</span>
+                                        <SourceBadge source={match.source} />
                                     </div>
                                     <span className="text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 px-2 py-1 rounded">
-                                        {match.rank} 局
+                                        {match.date.split('T')[0]}
                                     </span>
                                 </div>
 
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        {/* Map Icon Placeholder */}
                                         <div className="w-10 h-10 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center font-bold text-xs text-neutral-500 uppercase">
                                             {match.mapId.substring(0,2)}
                                         </div>
