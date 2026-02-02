@@ -11,6 +11,7 @@ export const useTactics = (currentMap: MapId, side: Side) => {
     selectedTags: [],
     timePhase: undefined,
     specificRole: undefined,
+    onlyRecommended: false,
   });
 
   // 1. Get Base Tactics for Map & Side
@@ -37,6 +38,9 @@ export const useTactics = (currentMap: MapId, side: Side) => {
   // 3. Apply Filters
   const filteredTactics = useMemo(() => {
     return baseTactics.filter(t => {
+      // Recommended Filter
+      if (filter.onlyRecommended && !t.isRecommended) return false;
+
       // Site Filter
       if (filter.site !== 'All' && t.site !== filter.site) return false;
 

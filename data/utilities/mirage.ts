@@ -4,7 +4,7 @@ import { Utility } from '../../types';
 export const mirageUtilities: Utility[] = [
   // --- Mid Split Utilities ---
   {
-    id: '200001',
+    id: '2000001',
     mapId: 'mirage',
     side: 'T',
     site: 'Mid',
@@ -15,7 +15,7 @@ export const mirageUtilities: Utility[] = [
     image: 'https://files.catbox.moe/dummy_arch_smoke.jpg'
   },
   {
-    id: '200002',
+    id: '2000002',
     mapId: 'mirage',
     side: 'T',
     site: 'Mid',
@@ -25,7 +25,7 @@ export const mirageUtilities: Utility[] = [
     metadata: { author: 'Admin' }
   },
   {
-    id: '200003',
+    id: '2000003',
     mapId: 'mirage',
     side: 'T',
     site: 'B',
@@ -35,7 +35,7 @@ export const mirageUtilities: Utility[] = [
     metadata: { author: 'Admin' }
   },
   {
-    id: '200004',
+    id: '2000004',
     mapId: 'mirage',
     side: 'T',
     site: 'B',
@@ -47,7 +47,7 @@ export const mirageUtilities: Utility[] = [
 
   // --- A Exec Utilities ---
   {
-    id: '200005',
+    id: '2000005',
     mapId: 'mirage',
     side: 'T',
     site: 'A',
@@ -57,7 +57,7 @@ export const mirageUtilities: Utility[] = [
     metadata: { author: 'Admin' }
   },
   {
-    id: '200006',
+    id: '2000006',
     mapId: 'mirage',
     side: 'T',
     site: 'A',

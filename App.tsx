@@ -76,6 +76,7 @@ const App: React.FC = () => {
   useEffect(() => {
       updateFilter('selectedTags', []);
       updateFilter('searchQuery', '');
+      setIsFilterOpen(false); // Close panel on switch
   }, [viewMode]);
 
   const handleToggleFilter = () => {
@@ -89,8 +90,17 @@ const App: React.FC = () => {
       setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleAdd = () => {
+      if (viewMode === 'tactics') {
+          setActiveEditor('tactic');
+          setEditingTactic(undefined);
+      } else if (viewMode === 'utilities') {
+          setActiveEditor('utility');
+      }
+  };
+
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700 pt-[105px]">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700 pt-[100px]">
       
       <Header 
         currentMapId={currentMap}
@@ -101,11 +111,44 @@ const App: React.FC = () => {
         isDark={isDark}
         isFilterOpen={isFilterOpen}
         toggleFilter={handleToggleFilter}
-        filterActive={filter.selectedTags.length > 0 || !!filter.searchQuery || filter.site !== 'All'}
+        filterActive={filter.selectedTags.length > 0 || filter.site !== 'All' || !!filter.specificRole || !!filter.onlyRecommended}
       />
 
-      {/* Sticky Filter Panel - sits just below the fixed header */}
-      <div className="sticky top-[105px] z-40 w-full shadow-sm">
+      {/* Sticky Controls Container */}
+      {/* top-[99px] creates a 1px overlap with the 100px fixed header to prevent gaps on some screens */}
+      <div className="sticky top-[99px] z-40 w-full shadow-sm bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md transition-all">
+          {/* Search Bar + Add Button */}
+          {(viewMode === 'tactics' || viewMode === 'utilities') && (
+            <div className="px-4 py-2 border-b border-neutral-100 dark:border-neutral-800 flex gap-3">
+                <div className="relative flex-1">
+                     <svg className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                     <input 
+                        type="text"
+                        value={filter.searchQuery}
+                        onChange={(e) => updateFilter('searchQuery', e.target.value)}
+                        placeholder="搜索关键字、ID..."
+                        className="w-full bg-neutral-100 dark:bg-neutral-900 border-none rounded-xl py-2 pl-9 pr-9 text-sm font-medium placeholder-neutral-400 focus:ring-2 focus:ring-blue-500/50 outline-none dark:text-white transition-all"
+                     />
+                     {filter.searchQuery && (
+                        <button onClick={() => updateFilter('searchQuery', '')} className="absolute right-3 top-2.5 text-neutral-400">
+                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                        </button>
+                     )}
+                </div>
+                
+                {/* Editor Entry Point - Optimized UI */}
+                <button
+                    onClick={handleAdd}
+                    className="w-9 h-9 shrink-0 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-xl flex items-center justify-center transition-all active:scale-95 border border-transparent hover:border-blue-200 dark:hover:border-blue-800/50"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                    </svg>
+                </button>
+            </div>
+          )}
+
+        {/* Expandable Filter Panel */}
         <FilterPanel 
             isOpen={isFilterOpen}
             availableTags={viewMode === 'tactics' ? tacticTags : utilityTags}
@@ -126,7 +169,7 @@ const App: React.FC = () => {
                     <div key={tactic.id} className="relative group">
                         <button 
                             onClick={(e) => handleCopyId(e, tactic.id)}
-                            className="absolute top-6 right-14 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-neutral-400 hover:text-blue-500 flex items-center gap-1 bg-white/50 dark:bg-black/50 backdrop-blur px-1.5 py-0.5 rounded"
+                            className="absolute top-6 right-10 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-neutral-400 hover:text-blue-500 flex items-center gap-1 bg-white/50 dark:bg-black/50 backdrop-blur px-1.5 py-0.5 rounded"
                         >
                              {copiedId === tactic.id ? <span className="text-green-500">Copied!</span> : `#${tactic.id}`}
                              {copiedId !== tactic.id && (

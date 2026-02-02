@@ -3,7 +3,7 @@ import { EconomyRule } from '../types';
 
 export const ECONOMY_RULES: EconomyRule[] = [
   {
-    title: "战败补偿 (Loss Bonus)",
+    title: "战败补偿",
     values: [
       { label: "1连败", value: "$1400" },
       { label: "2连败", value: "$1900" },
@@ -14,7 +14,7 @@ export const ECONOMY_RULES: EconomyRule[] = [
     ]
   },
   {
-    title: "胜利奖励 (Round Win)",
+    title: "胜利奖励",
     values: [
       { label: "全歼敌人", value: "$3250" },
       { label: "时间耗尽 (CT)", value: "$3250" },
@@ -23,7 +23,7 @@ export const ECONOMY_RULES: EconomyRule[] = [
     ]
   },
   {
-    title: "目标奖励 (Objectives)",
+    title: "目标奖励",
     values: [
       { label: "安装C4 (全队)", value: "+$600 (输赢皆有)" },
       { label: "安装C4 (个人)", value: "+$300" },

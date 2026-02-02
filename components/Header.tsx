@@ -14,6 +14,7 @@ interface HeaderProps {
   isFilterOpen: boolean;
   toggleFilter: () => void;
   filterActive: boolean;
+  onAdd?: () => void; 
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -25,13 +26,13 @@ export const Header: React.FC<HeaderProps> = ({
   isDark,
   isFilterOpen,
   toggleFilter,
-  filterActive
+  filterActive,
 }) => {
   return (
     <header 
-      className="fixed top-0 left-0 right-0 z-50 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-900 shadow-sm"
+      className="fixed top-0 left-0 right-0 z-50 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-900 shadow-sm transition-colors duration-300"
     >
-      {/* Row 1: Logo & Global Controls */}
+      {/* Row 1: Logo & Global Controls (Height 50px) */}
       <div className="h-[50px] flex items-center justify-between px-4">
         
         {/* Logo */}
@@ -75,8 +76,8 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Row 2: Map Selector (Permanent) */}
-      <div className="pb-2">
+      {/* Row 2: Map Selector (Height 50px) */}
+      <div className="h-[50px] flex items-center">
          <MapSelector currentMap={currentMapId} onChange={onMapChange} />
       </div>
     </header>

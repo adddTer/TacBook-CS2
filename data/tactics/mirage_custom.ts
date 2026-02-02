@@ -4,7 +4,7 @@ import { TAGS } from '../../constants/tags';
 
 export const mirageCustomTactics: Tactic[] = [
   {
-    id: "181080",
+    id: "1181080",
     mapId: "mirage",
     side: "T",
     site: "A",

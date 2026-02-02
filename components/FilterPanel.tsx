@@ -11,6 +11,7 @@ interface FilterPanelProps {
     site: Site | 'All';
     selectedTags: string[];
     specificRole?: string;
+    onlyRecommended?: boolean;
   };
   onUpdate: (key: any, value: any) => void;
   currentSide: 'T' | 'CT';
@@ -79,22 +80,18 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
         {/* Filters are only for Tactics and Utilities */}
         {(viewMode === 'tactics' || viewMode === 'utilities') ? (
             <>
-                {/* Search Bar */}
-                <div className="relative">
-                     <svg className="absolute left-3 top-3 w-5 h-5 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                     <input 
-                        type="text"
-                        value={filterState.searchQuery}
-                        onChange={(e) => onUpdate('searchQuery', e.target.value)}
-                        placeholder="搜索关键字、ID..."
-                        className="w-full bg-neutral-100 dark:bg-neutral-950 border-none rounded-2xl py-3 pl-10 pr-10 text-sm font-bold placeholder-neutral-400 focus:ring-2 focus:ring-blue-500/50 outline-none dark:text-white transition-all"
-                     />
-                     {filterState.searchQuery && (
-                        <button onClick={() => onUpdate('searchQuery', '')} className="absolute right-3 top-3 text-neutral-400">
-                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
-                        </button>
-                     )}
-                </div>
+                {/* Recommended Toggle */}
+                {viewMode === 'tactics' && (
+                    <div className="flex items-center justify-between">
+                         <span className="text-sm font-bold text-neutral-700 dark:text-neutral-300">只看推荐</span>
+                         <button 
+                            onClick={() => onUpdate('onlyRecommended', !filterState.onlyRecommended)}
+                            className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 ${filterState.onlyRecommended ? 'bg-yellow-500' : 'bg-neutral-200 dark:bg-neutral-800'}`}
+                         >
+                             <div className={`w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform duration-200 ${filterState.onlyRecommended ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                         </button>
+                    </div>
+                )}
 
                 {/* Site Filter (Segmented Control) */}
                 <div className="space-y-2">

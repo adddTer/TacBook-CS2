@@ -8,7 +8,6 @@ import { Match, PlayerMatchStats, Rank } from '../types';
 // Mapping for in-game names to Roster IDs
 const NAME_MAPPING: Record<string, string> = {
   'addd_233': 'addd',
-  // Add other alias mappings here if needed
 };
 
 const getRosterId = (name: string) => NAME_MAPPING[name] || name;
@@ -105,7 +104,6 @@ export const TBTVView: React.FC = () => {
       const fileName = file.name.toLowerCase();
 
       if (fileName.endsWith('.json')) {
-          // Real JSON Import
           const reader = new FileReader();
           reader.onload = (ev) => {
               try {
@@ -125,8 +123,6 @@ export const TBTVView: React.FC = () => {
       } else {
           alert('仅支持 .json 数据文件');
       }
-      
-      // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -172,7 +168,7 @@ export const TBTVView: React.FC = () => {
         <table className="w-full text-sm text-left whitespace-nowrap">
             <thead className={`text-[10px] uppercase font-bold border-b ${isTeam ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 text-blue-500' : 'bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30 text-red-500'}`}>
                 <tr>
-                    <th className="px-3 py-2 sticky left-0 z-10 bg-inherit">{isTeam ? 'Our Team' : 'Enemy Team'}</th>
+                    <th className="px-3 py-2 sticky left-0 z-10 bg-inherit">{isTeam ? '我方' : '敌方'}</th>
                     <th className="px-1 py-2 text-center">Rank</th>
                     <th className="px-1 py-2 text-center">K</th>
                     <th className="px-1 py-2 text-center">D</th>
@@ -246,7 +242,6 @@ export const TBTVView: React.FC = () => {
 
   // --- Views ---
 
-  // 1. Player Detail View
   if (selectedPlayerId && selectedPlayerStats && selectedPlayerStats.profile) {
       const { profile, history } = selectedPlayerStats;
       return (
@@ -277,7 +272,7 @@ export const TBTVView: React.FC = () => {
                                    <div className="flex items-center gap-2 mt-2">
                                        <RankBadge rank={profile.currentRank} />
                                        <span className="text-[10px] font-bold bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
-                                           {profile.matches} Matches
+                                           {profile.matches} 场次
                                        </span>
                                    </div>
                                </div>
@@ -400,14 +395,14 @@ export const TBTVView: React.FC = () => {
                                <div className={`text-5xl font-black ${selectedMatch.result === 'LOSS' ? 'text-red-600 dark:text-red-500' : 'text-neutral-400'}`}>
                                    {selectedMatch.score.them}
                                </div>
-                               <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">Opponent</div>
+                               <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">敌方</div>
                            </div>
                            <div className="text-2xl text-neutral-300 font-light opacity-50">:</div>
                            <div className="text-left">
                                 <div className={`text-5xl font-black ${selectedMatch.result === 'WIN' ? 'text-green-600 dark:text-green-500' : 'text-neutral-900 dark:text-white'}`}>
                                    {selectedMatch.score.us}
                                </div>
-                               <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">Our Team</div>
+                               <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">我方</div>
                            </div>
                        </div>
                        
@@ -420,7 +415,7 @@ export const TBTVView: React.FC = () => {
 
               {/* Detailed Scoreboard */}
               <div>
-                  <h3 className="text-sm font-bold text-neutral-500 uppercase tracking-widest mb-3 px-1">Match Scoreboard</h3>
+                  <h3 className="text-sm font-bold text-neutral-500 uppercase tracking-widest mb-3 px-1">记分板</h3>
                   <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden shadow-sm space-y-4 pb-4">
                        <ScoreboardTable players={selectedMatch.players} isTeam={true} />
                        <div className="h-px bg-neutral-100 dark:bg-neutral-800 mx-4"></div>
@@ -551,7 +546,7 @@ export const TBTVView: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-4 text-right">
                              <div>
-                                <div className="text-[9px] text-neutral-400 uppercase font-bold">Matches</div>
+                                <div className="text-[9px] text-neutral-400 uppercase font-bold">场次</div>
                                 <div className="text-xs font-bold">{player.matches}</div>
                              </div>
                              <div>

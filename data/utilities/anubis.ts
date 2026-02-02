@@ -3,7 +3,7 @@ import { Utility } from '../../types';
 
 export const anubisUtilities: Utility[] = [
   {
-    id: '400001',
+    id: '2000001',
     mapId: 'anubis',
     side: 'T',
     site: 'Mid',
@@ -13,7 +13,7 @@ export const anubisUtilities: Utility[] = [
     metadata: { author: 'addd' }
   },
   {
-    id: '400002',
+    id: '2000002',
     mapId: 'anubis',
     side: 'T',
     site: 'Mid',

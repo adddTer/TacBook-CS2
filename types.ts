@@ -51,6 +51,7 @@ export interface Tactic {
   actions: Action[];
   metadata: TacticMetadata;
   description?: string;
+  isRecommended?: boolean; // New field for recommended tactics
 }
 
 export interface UtilityMetadata {
@@ -75,6 +76,7 @@ export interface FilterState {
   selectedTags: string[]; 
   timePhase?: 'early' | 'mid' | 'late';
   specificRole?: string;
+  onlyRecommended?: boolean;
 }
 
 // Weaponry Types

@@ -16,7 +16,7 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
   currentSide
 }) => {
   const [formData, setFormData] = useState<Utility>({
-    id: generateId(),
+    id: generateId('2'), // Utilities start with 2
     mapId: currentMapId,
     side: currentSide,
     site: 'A',
@@ -91,7 +91,7 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
                     className="text-[10px] font-mono text-neutral-400 flex items-center gap-1 hover:text-blue-500"
                    >
                        ID: {formData.id}
-                       {copiedId ? <span className="text-green-500">Copied</span> : (
+                       {copiedId ? <span className="text-green-500">已复制</span> : (
                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                            </svg>
@@ -111,7 +111,7 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
                 </div>
 
                 <div>
-                    <label className="block text-xs font-bold text-neutral-500 uppercase mb-1">作者 (Author)</label>
+                    <label className="block text-xs font-bold text-neutral-500 uppercase mb-1">作者</label>
                     <input 
                         type="text" 
                         value={formData.metadata?.author || ''}
@@ -143,10 +143,10 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
                             onChange={e => setFormData({...formData, type: e.target.value as any})}
                             className="w-full bg-neutral-100 dark:bg-neutral-900 p-3 rounded-xl dark:text-white border-none"
                         >
-                            <option value="smoke">Smoke (烟雾)</option>
-                            <option value="flash">Flash (闪光)</option>
-                            <option value="molotov">Molotov (燃烧弹)</option>
-                            <option value="grenade">Grenade (手雷)</option>
+                            <option value="smoke">烟雾</option>
+                            <option value="flash">闪光</option>
+                            <option value="molotov">燃烧弹</option>
+                            <option value="grenade">手雷</option>
                         </select>
                     </div>
                 </div>

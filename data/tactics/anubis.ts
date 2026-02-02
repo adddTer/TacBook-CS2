@@ -5,7 +5,7 @@ import { TAGS } from '../../constants/tags';
 
 export const anubisTactics: Tactic[] = [
   {
-    id: "t_anubis_buy_mid_split_b",
+    id: "1000005",
     mapId: "anubis",
     title: "长枪局中夹B",
     side: "T",
@@ -26,10 +26,10 @@ export const anubisTactics: Tactic[] = [
     map_visual: "", 
     actions: [
       { id: generateId(), time: "Freeze", who: "全员", content: "2人（突破/补枪）去B外控图，3人（道具/狙击/自由人）去中路集合。" },
-      { id: generateId(), time: "1:45", who: "道具辅助", content: "在匪桥投掷狗洞火（或双雷套餐），防止CT前压。", type: 'utility', utilityId: '400001' },
-      { id: generateId(), time: "1:45", who: "狙击手", content: "同步投掷中路火，压制桥下区域，随后架枪掩护。", type: 'utility', utilityId: '400002' },
+      { id: generateId(), time: "1:45", who: "道具辅助", content: "在匪桥投掷狗洞火（或双雷套餐），防止CT前压。", type: 'utility', utilityId: '2000001' },
+      { id: generateId(), time: "1:45", who: "狙击手", content: "同步投掷中路火，压制桥下区域，随后架枪掩护。", type: 'utility', utilityId: '2000002' },
       { id: generateId(), time: "1:40", who: "自由人", content: "沿着火焰边缘快速推进，控制中路水下。", type: 'movement' },
-      { id: generateId(), time: "1:35", who: "自由人", content: "推进时时刻留意A包点/A连接方向，防止侧身被偷。", type: 'hold' },
+      { id: generateId(), time: "1:35", who: "自由人", content: "推进时时刻留意A包点/A连接方向，防止偷袭。", type: 'hold' },
       { id: generateId(), time: "1:30", who: "突破手", content: "听到中路交火或就位信号后，B外爆弹施压B门。", type: 'utility' },
       { id: generateId(), time: "Exec", who: "全员", content: "中路组走连接/黑屋，B外组进B门，同步夹击B包点。", type: 'frag' },
       { id: generateId(), time: "Post", who: "补枪辅助", content: "负责携带并安放C4，建议下在死点或安全位。", type: 'movement' },

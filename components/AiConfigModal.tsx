@@ -120,7 +120,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
                 <div className="space-y-4">
                     {/* Provider Selector */}
                     <div>
-                        <label className="block text-xs font-bold text-neutral-500 uppercase mb-1">供应商 (Provider)</label>
+                        <label className="block text-xs font-bold text-neutral-500 uppercase mb-1">供应商</label>
                         <select 
                             value={provider}
                             onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
@@ -161,7 +161,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
                     {/* Model Selector / Input */}
                     <div>
                         <div className="flex justify-between items-center mb-1">
-                            <label className="text-xs font-bold text-neutral-500 uppercase">模型 (Model)</label>
+                            <label className="text-xs font-bold text-neutral-500 uppercase">模型</label>
                             {provider !== 'google' && (
                                 <button 
                                     onClick={handleFetchModels}
