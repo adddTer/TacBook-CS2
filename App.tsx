@@ -11,25 +11,29 @@ import { TBTVView } from './components/TBTVView';
 import { BottomNav } from './components/BottomNav';
 import { TacticDetailView } from './components/TacticDetailView';
 import { InstallPrompt } from './components/InstallPrompt';
+import { SettingsModal } from './components/SettingsModal';
 import { useTactics } from './hooks/useTactics';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
-import { Side, MapId, Tactic, Tag, Utility } from './types';
+import { Side, MapId, Tactic, Tag, Utility, Theme } from './types';
 import { loadAllTactics } from './data/tactics';
 import { loadAllUtilities } from './data/utilities';
 
 const App: React.FC = () => {
   const [side, setSide] = useState<Side>('T');
   const [currentMap, setCurrentMap] = useState<MapId>('mirage');
-  const [isDark, setIsDark] = useState(true);
   const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'tbtv'>('tactics');
   
+  // Theme State
+  const [theme, setTheme] = useState<Theme>('system');
+
   // Data State
   const [allTactics, setAllTactics] = useState<Tactic[]>([]);
   const [allUtilities, setAllUtilities] = useState<Utility[]>([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  // Panel States
+  // UI States
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const [activeEditor, setActiveEditor] = useState<'tactic' | 'utility' | null>(null);
   const [editingTactic, setEditingTactic] = useState<Tactic | undefined>(undefined);
@@ -52,6 +56,27 @@ const App: React.FC = () => {
     };
     initData();
   }, []);
+
+  // Theme Logic
+  useEffect(() => {
+      const applyTheme = () => {
+          const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+              document.documentElement.classList.add('dark');
+          } else {
+              document.documentElement.classList.remove('dark');
+          }
+      };
+      
+      applyTheme();
+
+      // Listener for system changes
+      if (theme === 'system') {
+          const mq = window.matchMedia('(prefers-color-scheme: dark)');
+          mq.addEventListener('change', applyTheme);
+          return () => mq.removeEventListener('change', applyTheme);
+      }
+  }, [theme]);
 
   // Hook for Tactics filtering
   const { availableTags: tacticTags, filter, updateFilter, tactics: filteredTactics } = useTactics(currentMap, side, allTactics); 
@@ -87,16 +112,6 @@ const App: React.FC = () => {
       });
   }, [currentMap, side, filter, utilityTags, allUtilities]);
 
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDark]);
-
-  const toggleTheme = () => setIsDark(!isDark);
-
   // Reset filter when switching modes
   useEffect(() => {
       updateFilter('selectedTags', []);
@@ -124,28 +139,26 @@ const App: React.FC = () => {
       }
   };
 
+  const filterActive = filter.selectedTags.length > 0 || filter.site !== 'All' || !!filter.specificRole || !!filter.onlyRecommended;
+  const showSearchAndFilter = viewMode === 'tactics' || viewMode === 'utilities';
+
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700 pt-[100px]">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700 pt-[56px]">
       
       <Header 
         currentMapId={currentMap}
         currentSide={side}
         onMapChange={setCurrentMap}
         onSideChange={setSide}
-        toggleTheme={toggleTheme}
-        isDark={isDark}
-        isFilterOpen={isFilterOpen}
-        toggleFilter={handleToggleFilter}
-        filterActive={filter.selectedTags.length > 0 || filter.site !== 'All' || !!filter.specificRole || !!filter.onlyRecommended}
-        isInstallable={isInstallable && !isStandalone}
-        onInstall={handleInstall}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        viewMode={viewMode}
       />
 
-      {/* Sticky Controls Container */}
-      <div className="sticky top-[99px] z-40 w-full shadow-sm bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md transition-all">
-          {/* Search Bar + Add Button */}
-          {(viewMode === 'tactics' || viewMode === 'utilities') && (
-            <div className="px-4 py-2 border-b border-neutral-100 dark:border-neutral-800 flex gap-3">
+      {/* Search & Filter Bar (Only for Tactics/Utilities) */}
+      {showSearchAndFilter && (
+          <div className="sticky top-[55px] z-40 w-full shadow-sm bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md transition-all">
+            <div className="px-4 py-2 border-b border-neutral-100 dark:border-neutral-800 flex gap-2">
+                {/* Search Input */}
                 <div className="relative flex-1">
                      <svg className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                      <input 
@@ -162,6 +175,24 @@ const App: React.FC = () => {
                      )}
                 </div>
                 
+                {/* Filter Toggle Button */}
+                <button 
+                    onClick={handleToggleFilter}
+                    className={`
+                        w-9 h-9 shrink-0 rounded-xl flex items-center justify-center transition-all relative
+                        ${isFilterOpen || filterActive
+                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
+                            : 'bg-neutral-100 dark:bg-neutral-900 text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-800'}
+                    `}
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                    {filterActive && !isFilterOpen && (
+                        <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-neutral-900"></span>
+                    )}
+                </button>
+
                 {/* Add Button */}
                 <button
                     onClick={handleAdd}
@@ -172,19 +203,19 @@ const App: React.FC = () => {
                     </svg>
                 </button>
             </div>
-          )}
 
-        {/* Expandable Filter Panel */}
-        <FilterPanel 
-            isOpen={isFilterOpen}
-            availableTags={viewMode === 'tactics' ? tacticTags : utilityTags}
-            filterState={filter}
-            onUpdate={updateFilter}
-            currentSide={side}
-            currentMapId={currentMap}
-            viewMode={viewMode}
-        />
-      </div>
+            {/* Expandable Filter Panel */}
+            <FilterPanel 
+                isOpen={isFilterOpen}
+                availableTags={viewMode === 'tactics' ? tacticTags : utilityTags}
+                filterState={filter}
+                onUpdate={updateFilter}
+                currentSide={side}
+                currentMapId={currentMap}
+                viewMode={viewMode}
+            />
+          </div>
+      )}
 
       <main className="px-4 pb-32 max-w-lg mx-auto pt-4">
         {/* Tactics List */}
@@ -281,7 +312,17 @@ const App: React.FC = () => {
           />
       )}
       
-      {/* PWA Install Prompt Banner */}
+      {/* Settings Modal */}
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        currentTheme={theme}
+        onThemeChange={setTheme}
+        isInstallable={isInstallable && !isStandalone}
+        onInstall={handleInstall}
+      />
+
+      {/* PWA Install Prompt Banner (Bottom) */}
       <InstallPrompt 
           isOpen={showPrompt} 
           onClose={closePrompt}
