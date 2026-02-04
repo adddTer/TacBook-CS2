@@ -25,6 +25,9 @@ const App: React.FC = () => {
   
   // Theme State
   const [theme, setTheme] = useState<Theme>('system');
+  
+  // Debug / Edit Mode State
+  const [isDebug, setIsDebug] = useState(false);
 
   // Data State
   const [allTactics, setAllTactics] = useState<Tactic[]>([]);
@@ -55,6 +58,15 @@ const App: React.FC = () => {
         setIsDataLoaded(true);
     };
     initData();
+  }, []);
+
+  // Check for Debug Mode (API Key presence)
+  useEffect(() => {
+      const hasEnvKey = !!process.env.API_KEY;
+      const hasLocalKey = !!localStorage.getItem('tacbook_gemini_api_key');
+      if (hasEnvKey || hasLocalKey) {
+          setIsDebug(true);
+      }
   }, []);
 
   // Theme Logic
@@ -137,6 +149,31 @@ const App: React.FC = () => {
       } else if (viewMode === 'utilities') {
           setActiveEditor('utility');
       }
+  };
+
+  const handleSaveTactic = (updatedTactic: Tactic) => {
+      // Mark as temp edited for the session
+      const tacticWithFlag = { ...updatedTactic, _isTemp: true };
+
+      setAllTactics(prev => {
+          const index = prev.findIndex(t => t.id === tacticWithFlag.id);
+          if (index >= 0) {
+              const newTactics = [...prev];
+              newTactics[index] = tacticWithFlag;
+              return newTactics;
+          } else {
+              return [...prev, tacticWithFlag];
+          }
+      });
+      
+      // Update selected tactic view if applicable
+      if (selectedTactic && selectedTactic.id === tacticWithFlag.id) {
+          setSelectedTactic(tacticWithFlag);
+      }
+      
+      // Close editor
+      setActiveEditor(null);
+      setEditingTactic(undefined);
   };
 
   const filterActive = filter.selectedTags.length > 0 || filter.site !== 'All' || !!filter.specificRole || !!filter.onlyRecommended;
@@ -291,6 +328,10 @@ const App: React.FC = () => {
             tactic={selectedTactic}
             onBack={() => setSelectedTactic(null)}
             highlightRole={filter.specificRole}
+            onEdit={isDebug ? () => {
+                setEditingTactic(selectedTactic);
+                setActiveEditor('tactic');
+            } : undefined}
           />
       )}
 
@@ -301,6 +342,7 @@ const App: React.FC = () => {
             currentMapId={currentMap}
             currentSide={side}
             onCancel={() => { setActiveEditor(null); setEditingTactic(undefined); }}
+            onSave={handleSaveTactic}
           />
       )}
 

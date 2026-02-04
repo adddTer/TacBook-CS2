@@ -14,6 +14,7 @@ import { exportTacticToZip } from '../utils/exportHelper';
 interface TacticEditorProps {
   initialTactic?: Tactic;
   onCancel: () => void;
+  onSave?: (tactic: Tactic) => void;
   currentMapId: MapId;
   currentSide: Side;
 }
@@ -44,6 +45,7 @@ const getTacticDiff = (oldData: Partial<Tactic>, newData: Partial<Tactic>): stri
 export const TacticEditor: React.FC<TacticEditorProps> = ({
   initialTactic,
   onCancel,
+  onSave,
   currentMapId,
   currentSide
 }) => {
@@ -248,18 +250,23 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
       }
   };
 
-  // --- Export ---
-  const handleSave = async () => {
+  // --- Save / Export ---
+  const handleSaveAndExport = async () => {
       if (!formData.title) {
           alert("请输入战术标题");
           return;
       }
 
+      const tacticToSave = formData as Tactic;
+
+      // 1. Update In-Memory State (Immediate reflection in UI)
+      if (onSave) {
+          onSave(tacticToSave);
+      }
+
+      // 2. Export to File
       try {
-          // Cast to Tactic (assume valid if user is saving)
-          const tacticToExport = formData as Tactic;
-          
-          const zipBlob = await exportTacticToZip(tacticToExport);
+          const zipBlob = await exportTacticToZip(tacticToSave);
           const url = URL.createObjectURL(zipBlob);
           
           const downloadAnchorNode = document.createElement('a');
@@ -274,10 +281,11 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
           if (!initialTactic) {
               localStorage.removeItem(DRAFT_KEY);
           }
+          // Close modal
           onCancel();
       } catch (e) {
           console.error("Export failed", e);
-          alert("导出失败");
+          alert("导出失败，但已更新到本地显示。");
       }
   };
 
@@ -300,7 +308,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
     <div className="fixed inset-0 z-[100] bg-white dark:bg-neutral-950 flex flex-col animate-in slide-in-from-bottom-10 duration-300">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-md">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-md sticky top-0 z-20">
             <button onClick={onCancel} className="text-neutral-500 font-medium">取消</button>
             <div className="flex gap-4">
                  <button 
@@ -318,10 +326,10 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                  </button>
             </div>
             <button 
-                onClick={handleSave} 
+                onClick={handleSaveAndExport} 
                 className="text-blue-600 font-bold flex items-center gap-1"
             >
-                <span>导出</span>
+                <span>保存</span>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
             </button>
         </div>
@@ -330,189 +338,195 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
         <div className="flex-1 overflow-hidden relative">
             
             {/* --- Manual Edit Tab --- */}
-            <div className={`absolute inset-0 overflow-y-auto p-4 space-y-6 transition-opacity duration-300 ${activeTab === 'edit' ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
-                
-                {/* Basic Info */}
-                <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-mono text-neutral-400">ID: {formData.id}</span>
-                        <div className="flex gap-2">
-                            <select 
-                                value={formData.side} 
-                                onChange={e => updateField('side', e.target.value)}
-                                className="bg-neutral-100 dark:bg-neutral-900 text-xs font-bold p-2 rounded-lg"
-                            >
-                                <option value="T">T Side</option>
-                                <option value="CT">CT Side</option>
-                            </select>
-                            <select 
-                                value={formData.site} 
-                                onChange={e => updateField('site', e.target.value)}
-                                className="bg-neutral-100 dark:bg-neutral-900 text-xs font-bold p-2 rounded-lg"
-                            >
-                                <option value="A">A Site</option>
-                                <option value="Mid">Mid</option>
-                                <option value="B">B Site</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <input 
-                        type="text" 
-                        value={formData.title}
-                        onChange={e => updateField('title', e.target.value)}
-                        placeholder="战术标题..."
-                        className="w-full text-xl font-black bg-transparent border-b border-neutral-200 dark:border-neutral-800 pb-2 focus:border-blue-500 outline-none dark:text-white placeholder-neutral-300"
-                    />
-
-                    {/* Tags */}
-                    <div>
-                        <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">标签</label>
-                        <div className="flex flex-wrap gap-2">
-                            {[...groupedTags.economy, ...groupedTags.playstyle, ...groupedTags.utility].map(tag => {
-                                const isSelected = formData.tags?.some(t => t.label === tag.label);
-                                return (
-                                    <button
-                                        key={tag.label}
-                                        onClick={() => toggleTag(tag)}
-                                        className={`px-2 py-1 rounded text-[10px] font-bold border transition-all ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'bg-transparent border-neutral-200 dark:border-neutral-800 text-neutral-500'}`}
-                                    >
-                                        {tag.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Map Visual */}
-                <div>
-                     <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">战术示意图</label>
-                     <label className="block w-full aspect-video bg-neutral-100 dark:bg-neutral-900 rounded-xl border-2 border-dashed border-neutral-200 dark:border-neutral-800 flex items-center justify-center cursor-pointer overflow-hidden relative group hover:border-blue-500 transition-colors">
-                        {mapImagePreview ? (
-                            <>
-                                <img src={mapImagePreview} className="w-full h-full object-cover" />
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <span className="text-white text-xs font-bold">点击更换</span>
+            <div className={`absolute inset-0 overflow-y-auto bg-neutral-50 dark:bg-neutral-950 transition-opacity duration-300 ${activeTab === 'edit' ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
+                <div className="max-w-7xl mx-auto p-4 lg:p-8">
+                    <div className="lg:grid lg:grid-cols-2 lg:gap-8">
+                        {/* LEFT COLUMN: Metadata, Map, Loadout */}
+                        <div className="space-y-6">
+                            {/* Basic Info */}
+                            <div className="space-y-4 bg-white dark:bg-neutral-900 p-4 lg:p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-mono text-neutral-400">ID: {formData.id}</span>
+                                    <div className="flex gap-2">
+                                        <select 
+                                            value={formData.side} 
+                                            onChange={e => updateField('side', e.target.value)}
+                                            className="bg-neutral-100 dark:bg-neutral-800 text-xs font-bold p-2 rounded-lg"
+                                        >
+                                            <option value="T">T Side</option>
+                                            <option value="CT">CT Side</option>
+                                        </select>
+                                        <select 
+                                            value={formData.site} 
+                                            onChange={e => updateField('site', e.target.value)}
+                                            className="bg-neutral-100 dark:bg-neutral-800 text-xs font-bold p-2 rounded-lg"
+                                        >
+                                            <option value="A">A Site</option>
+                                            <option value="Mid">Mid</option>
+                                            <option value="B">B Site</option>
+                                        </select>
+                                    </div>
                                 </div>
-                            </>
-                        ) : (
-                            <div className="text-center text-neutral-400">
-                                <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                <span className="text-xs">上传图片 (自动压缩)</span>
-                            </div>
-                        )}
-                        <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleMapImageUpload(e.target.files[0])} />
-                     </label>
-                </div>
 
-                {/* Loadout (Simplified) */}
-                <div>
-                    <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">配装分配</label>
-                    <div className="bg-neutral-50 dark:bg-neutral-900 rounded-xl p-3 space-y-2">
-                        {/* We use a fixed list of roles for editing simplicity, or map current loadout */}
-                        {(formData.loadout && formData.loadout.length > 0 ? formData.loadout : currentRoles.map(r => ({ role: r, equipment: '' }))).map((item, idx) => (
-                            <div key={idx} className="flex items-center gap-2 text-xs">
-                                <span className="w-16 font-bold text-neutral-600 dark:text-neutral-400 shrink-0">{item.role}</span>
                                 <input 
                                     type="text" 
-                                    value={item.equipment}
-                                    onChange={(e) => {
-                                        const newLoadout = [...(formData.loadout || currentRoles.map(r => ({ role: r, equipment: '' })))];
-                                        newLoadout[idx] = { ...newLoadout[idx], equipment: e.target.value };
-                                        updateField('loadout', newLoadout);
-                                    }}
-                                    placeholder="例如: 半甲, 烟闪..."
-                                    className="flex-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded p-1.5 focus:border-blue-500 outline-none dark:text-white"
-                                />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Actions */}
-                <div>
-                    <div className="flex justify-between items-center mb-2">
-                        <label className="text-xs font-bold text-neutral-500 uppercase">战术步骤</label>
-                        <button onClick={addAction} className="text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded hover:bg-blue-100">+ 添加步骤</button>
-                    </div>
-                    
-                    <div className="space-y-3">
-                        {formData.actions?.map((action, idx) => (
-                            <div key={action.id} className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 shadow-sm relative group">
-                                <button 
-                                    onClick={() => removeAction(action.id)}
-                                    className="absolute top-2 right-2 text-neutral-300 hover:text-red-500 p-1"
-                                >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-
-                                <div className="flex gap-2 mb-2">
-                                    <input 
-                                        type="text"
-                                        value={action.time || ''}
-                                        onChange={e => updateAction(action.id, 'time', e.target.value)}
-                                        placeholder="时间"
-                                        className="w-16 bg-neutral-50 dark:bg-neutral-800 border-none rounded p-1 text-xs font-mono text-center font-bold"
-                                    />
-                                    <select
-                                        value={action.who}
-                                        onChange={e => updateAction(action.id, 'who', e.target.value)}
-                                        className="w-24 bg-neutral-50 dark:bg-neutral-800 border-none rounded p-1 text-xs font-bold"
-                                    >
-                                        <option value="全员">全员</option>
-                                        {currentRoles.map(r => <option key={r} value={r}>{r}</option>)}
-                                    </select>
-                                    <select
-                                        value={action.type}
-                                        onChange={e => updateAction(action.id, 'type', e.target.value)}
-                                        className="w-20 bg-neutral-50 dark:bg-neutral-800 border-none rounded p-1 text-xs"
-                                    >
-                                        <option value="movement">移动</option>
-                                        <option value="utility">道具</option>
-                                        <option value="frag">击杀</option>
-                                        <option value="hold">架枪</option>
-                                    </select>
-                                </div>
-
-                                <textarea 
-                                    value={action.content}
-                                    onChange={e => updateAction(action.id, 'content', e.target.value)}
-                                    placeholder="描述具体行动..."
-                                    rows={2}
-                                    className="w-full bg-neutral-50 dark:bg-neutral-800 border-none rounded p-2 text-sm resize-none focus:ring-1 focus:ring-blue-500 mb-2"
+                                    value={formData.title}
+                                    onChange={e => updateField('title', e.target.value)}
+                                    placeholder="战术标题..."
+                                    className="w-full text-xl lg:text-2xl font-black bg-transparent border-b border-neutral-200 dark:border-neutral-700 pb-2 focus:border-blue-500 outline-none dark:text-white placeholder-neutral-300"
                                 />
 
-                                <div className="flex justify-between items-center">
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={() => setShowUtilityModal(action.id)}
-                                            className={`
-                                                flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded border transition-colors
-                                                ${action.utilityId ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-neutral-50 text-neutral-500 border-neutral-200'}
-                                            `}
-                                        >
-                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
-                                            {action.utilityId ? `已关联道具` : '关联道具'}
-                                        </button>
-
-                                        <label className={`
-                                            flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded border cursor-pointer transition-colors
-                                            ${actionImagePreviews[action.id] ? 'bg-green-50 text-green-600 border-green-200' : 'bg-neutral-50 text-neutral-500 border-neutral-200'}
-                                        `}>
-                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                            {actionImagePreviews[action.id] ? '已传图片' : '上传图片'}
-                                            <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleActionImageUpload(action.id, e.target.files[0])} />
-                                        </label>
+                                {/* Tags */}
+                                <div>
+                                    <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">标签</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[...groupedTags.economy, ...groupedTags.playstyle, ...groupedTags.utility].map(tag => {
+                                            const isSelected = formData.tags?.some(t => t.label === tag.label);
+                                            return (
+                                                <button
+                                                    key={tag.label}
+                                                    onClick={() => toggleTag(tag)}
+                                                    className={`px-2 py-1 rounded text-[10px] font-bold border transition-all ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'bg-transparent border-neutral-200 dark:border-neutral-700 text-neutral-500'}`}
+                                                >
+                                                    {tag.label}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
-                                    <span className="text-[9px] font-mono text-neutral-300">#{action.id}</span>
                                 </div>
                             </div>
-                        ))}
+
+                            {/* Map Visual */}
+                            <div className="bg-white dark:bg-neutral-900 p-4 lg:p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm">
+                                <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">战术示意图</label>
+                                <label className="block w-full aspect-video bg-neutral-100 dark:bg-neutral-950 rounded-xl border-2 border-dashed border-neutral-200 dark:border-neutral-700 flex items-center justify-center cursor-pointer overflow-hidden relative group hover:border-blue-500 transition-colors">
+                                    {mapImagePreview ? (
+                                        <>
+                                            <img src={mapImagePreview} className="w-full h-full object-cover" />
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <span className="text-white text-xs font-bold">点击更换</span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="text-center text-neutral-400">
+                                            <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                            <span className="text-xs">上传图片 (自动压缩)</span>
+                                        </div>
+                                    )}
+                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleMapImageUpload(e.target.files[0])} />
+                                </label>
+                            </div>
+
+                            {/* Loadout (Simplified) */}
+                            <div className="bg-white dark:bg-neutral-900 p-4 lg:p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm">
+                                <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">配装分配</label>
+                                <div className="space-y-2">
+                                    {(formData.loadout && formData.loadout.length > 0 ? formData.loadout : currentRoles.map(r => ({ role: r, equipment: '' }))).map((item, idx) => (
+                                        <div key={idx} className="flex items-center gap-2 text-xs">
+                                            <span className="w-16 font-bold text-neutral-600 dark:text-neutral-400 shrink-0">{item.role}</span>
+                                            <input 
+                                                type="text" 
+                                                value={item.equipment}
+                                                onChange={(e) => {
+                                                    const newLoadout = [...(formData.loadout || currentRoles.map(r => ({ role: r, equipment: '' })))];
+                                                    newLoadout[idx] = { ...newLoadout[idx], equipment: e.target.value };
+                                                    updateField('loadout', newLoadout);
+                                                }}
+                                                placeholder="例如: 半甲, 烟闪..."
+                                                className="flex-1 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded p-1.5 focus:border-blue-500 outline-none dark:text-white"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: Actions */}
+                        <div className="space-y-4 mt-6 lg:mt-0">
+                             <div className="bg-white dark:bg-neutral-900 p-4 lg:p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm min-h-[500px]">
+                                <div className="flex justify-between items-center mb-4 pb-2 border-b border-neutral-100 dark:border-neutral-800">
+                                    <label className="text-xs font-bold text-neutral-500 uppercase">战术步骤</label>
+                                    <button onClick={addAction} className="text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">+ 添加步骤</button>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                    {formData.actions?.map((action, idx) => (
+                                        <div key={action.id} className="bg-neutral-50 dark:bg-neutral-950 border border-neutral-100 dark:border-neutral-800 rounded-xl p-3 shadow-sm relative group">
+                                            <button 
+                                                onClick={() => removeAction(action.id)}
+                                                className="absolute top-2 right-2 text-neutral-300 hover:text-red-500 p-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
+
+                                            <div className="flex gap-2 mb-2">
+                                                <input 
+                                                    type="text"
+                                                    value={action.time || ''}
+                                                    onChange={e => updateAction(action.id, 'time', e.target.value)}
+                                                    placeholder="时间"
+                                                    className="w-16 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded p-1 text-xs font-mono text-center font-bold dark:text-white"
+                                                />
+                                                <select
+                                                    value={action.who}
+                                                    onChange={e => updateAction(action.id, 'who', e.target.value)}
+                                                    className="w-24 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded p-1 text-xs font-bold dark:text-white"
+                                                >
+                                                    <option value="全员">全员</option>
+                                                    {currentRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                                                </select>
+                                                <select
+                                                    value={action.type}
+                                                    onChange={e => updateAction(action.id, 'type', e.target.value)}
+                                                    className="w-20 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded p-1 text-xs dark:text-white"
+                                                >
+                                                    <option value="movement">移动</option>
+                                                    <option value="utility">道具</option>
+                                                    <option value="frag">击杀</option>
+                                                    <option value="hold">架枪</option>
+                                                </select>
+                                            </div>
+
+                                            <textarea 
+                                                value={action.content}
+                                                onChange={e => updateAction(action.id, 'content', e.target.value)}
+                                                placeholder="描述具体行动..."
+                                                rows={2}
+                                                className="w-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded p-2 text-sm resize-none focus:ring-1 focus:ring-blue-500 mb-2 dark:text-white"
+                                            />
+
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={() => setShowUtilityModal(action.id)}
+                                                        className={`
+                                                            flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded border transition-colors
+                                                            ${action.utilityId ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-white dark:bg-neutral-800 text-neutral-500 border-neutral-200 dark:border-neutral-700'}
+                                                        `}
+                                                    >
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                                                        {action.utilityId ? `已关联道具` : '关联道具'}
+                                                    </button>
+
+                                                    <label className={`
+                                                        flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded border cursor-pointer transition-colors
+                                                        ${actionImagePreviews[action.id] ? 'bg-green-50 text-green-600 border-green-200' : 'bg-white dark:bg-neutral-800 text-neutral-500 border-neutral-200 dark:border-neutral-700'}
+                                                    `}>
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                                        {actionImagePreviews[action.id] ? '已传图片' : '上传图片'}
+                                                        <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleActionImageUpload(action.id, e.target.files[0])} />
+                                                    </label>
+                                                </div>
+                                                <span className="text-[9px] font-mono text-neutral-300">#{action.id}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                             </div>
+                        </div>
                     </div>
                 </div>
-
-                <div className="h-10"></div>
+                <div className="h-20 lg:h-10"></div>
             </div>
 
             {/* --- Copilot AI Tab --- */}
@@ -528,53 +542,55 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50 dark:bg-neutral-900/50">
-                    {/* ... chat output ... */}
-                    {chatHistory.map((msg, idx) => (
-                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[85%] rounded-2xl p-3 text-sm ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700'}`}>
-                                <div className="prose dark:prose-invert prose-sm max-w-none">
-                                    <ReactMarkdown>
-                                        {msg.text}
-                                    </ReactMarkdown>
-                                </div>
-                                {msg.changedFields && (
-                                    <div className="mt-3 pt-2 border-t border-neutral-100 dark:border-neutral-700">
-                                        <div className="text-[10px] text-neutral-400 font-bold mb-1">已自动修改:</div>
-                                        <div className="flex flex-wrap gap-1">
-                                            {msg.changedFields.map(f => (
-                                                <span key={f} className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded border border-green-100">
-                                                    {f}
-                                                </span>
-                                            ))}
-                                        </div>
-                                        {msg.snapshot && (
-                                            <button 
-                                                onClick={() => handleRevertAiChange(msg.snapshot!)}
-                                                className="mt-2 text-[10px] text-red-500 font-bold hover:underline flex items-center gap-1"
-                                            >
-                                                撤销修改
-                                            </button>
-                                        )}
+                    <div className="max-w-4xl mx-auto w-full">
+                        {/* ... chat output ... */}
+                        {chatHistory.map((msg, idx) => (
+                            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
+                                <div className={`max-w-[85%] lg:max-w-[70%] rounded-2xl p-3 text-sm ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700'}`}>
+                                    <div className="prose dark:prose-invert prose-sm max-w-none">
+                                        <ReactMarkdown>
+                                            {msg.text}
+                                        </ReactMarkdown>
                                     </div>
-                                )}
+                                    {msg.changedFields && (
+                                        <div className="mt-3 pt-2 border-t border-neutral-100 dark:border-neutral-700">
+                                            <div className="text-[10px] text-neutral-400 font-bold mb-1">已自动修改:</div>
+                                            <div className="flex flex-wrap gap-1">
+                                                {msg.changedFields.map(f => (
+                                                    <span key={f} className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded border border-green-100">
+                                                        {f}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            {msg.snapshot && (
+                                                <button 
+                                                    onClick={() => handleRevertAiChange(msg.snapshot!)}
+                                                    className="mt-2 text-[10px] text-red-500 font-bold hover:underline flex items-center gap-1"
+                                                >
+                                                    撤销修改
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                    {isAiLoading && (
-                        <div className="flex justify-start">
-                            <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-3 flex gap-1">
-                                <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce"></span>
-                                <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce delay-100"></span>
-                                <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce delay-200"></span>
+                        ))}
+                        {isAiLoading && (
+                            <div className="flex justify-start">
+                                <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-3 flex gap-1">
+                                    <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce"></span>
+                                    <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce delay-100"></span>
+                                    <span className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce delay-200"></span>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                    <div ref={chatEndRef} />
+                        )}
+                        <div ref={chatEndRef} />
+                    </div>
                 </div>
                 
                 {/* Chat Input */}
                 <div className="p-3 bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800">
-                    <div className="flex gap-2 relative">
+                    <div className="max-w-4xl mx-auto w-full flex gap-2 relative">
                         <textarea 
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}

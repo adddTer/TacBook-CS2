@@ -52,6 +52,7 @@ export interface Tactic {
   metadata: TacticMetadata;
   description?: string;
   isRecommended?: boolean; // New field for recommended tactics
+  _isTemp?: boolean; // UI Flag: Indicates edited in current session (not saved to file)
 }
 
 export interface UtilityMetadata {

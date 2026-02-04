@@ -47,6 +47,12 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick }) => {
                         ${totalTeamCost}
                     </span>
                 )}
+                {tactic._isTemp && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        已编辑
+                    </span>
+                )}
             </div>
             <div className="flex items-start gap-1.5">
                 <h3 className="text-lg font-bold leading-tight text-neutral-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">

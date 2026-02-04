@@ -20,10 +20,10 @@ export const useInstallPrompt = () => {
     const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIos(isIosDevice);
     
-    // On iOS, show prompt automatically after delay
+    // On iOS, show prompt automatically after delay IF NOT DISMISSED
     if (isIosDevice) {
-        const hasSeenPrompt = localStorage.getItem('tacbook_ios_prompt_seen');
-        if (!hasSeenPrompt) {
+        const isDismissed = localStorage.getItem('tacbook_install_dismissed');
+        if (!isDismissed) {
             setTimeout(() => setShowPrompt(true), 3000);
         }
     }
@@ -32,8 +32,12 @@ export const useInstallPrompt = () => {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // Only auto-show if not seen recently could be logic here, but keeping simple
-      setTimeout(() => setShowPrompt(true), 3000);
+      
+      // Only auto-show if not dismissed
+      const isDismissed = localStorage.getItem('tacbook_install_dismissed');
+      if (!isDismissed) {
+          setTimeout(() => setShowPrompt(true), 3000);
+      }
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -62,9 +66,7 @@ export const useInstallPrompt = () => {
 
   const closePrompt = () => {
       setShowPrompt(false);
-      if (isIos) {
-          localStorage.setItem('tacbook_ios_prompt_seen', 'true');
-      }
+      localStorage.setItem('tacbook_install_dismissed', 'true');
   };
 
   return {

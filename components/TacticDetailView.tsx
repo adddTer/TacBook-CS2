@@ -7,10 +7,11 @@ import { calculateLoadoutCost } from '../utils/economyHelper';
 interface TacticDetailViewProps {
   tactic: Tactic;
   onBack: () => void;
+  onEdit?: () => void;
   highlightRole?: string;
 }
 
-export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBack, highlightRole }) => {
+export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBack, onEdit, highlightRole }) => {
   const [isMapZoomed, setIsMapZoomed] = useState(false);
 
   // Calculate costs
@@ -29,9 +30,21 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                  <span className="font-bold text-sm">返回</span>
             </button>
-            <h2 className="font-bold text-neutral-900 dark:text-white text-sm truncate max-w-[200px] text-center">
-                {tactic.title}
-            </h2>
+            
+            <div className="flex items-center gap-2 max-w-[60%]">
+                 {onEdit && (
+                    <button 
+                        onClick={onEdit}
+                        className="text-blue-600 dark:text-blue-400 text-xs font-bold px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 transition-colors whitespace-nowrap"
+                    >
+                        编辑
+                    </button>
+                )}
+                <h2 className="font-bold text-neutral-900 dark:text-white text-sm truncate text-center">
+                    {tactic.title}
+                </h2>
+            </div>
+
             <div className="w-12"></div> {/* Spacer for center alignment */}
         </div>
 
