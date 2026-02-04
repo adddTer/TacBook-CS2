@@ -1,0 +1,42 @@
+{
+  "id": "710617",
+  "mapId": "ancient",
+  "side": "T",
+  "site": "B",
+  "tags": [
+    {
+      "label": "手枪局",
+      "category": "economy"
+    }
+  ],
+  "metadata": {
+    "author": "FuNct1on",
+    "lastUpdated": "2026-02-01",
+    "difficulty": "Medium"
+  },
+  "actions": [
+    {
+      "id": "763630",
+      "who": "道具辅助",
+      "time": "freeze",
+      "content": "买烟➕双闪\n其余人半甲",
+      "type": "movement"
+    },
+    {
+      "id": "441889",
+      "who": "道具辅助",
+      "time": "1:50",
+      "content": "爆b点faze烟\n其余人b坡待命",
+      "type": "movement"
+    },
+    {
+      "id": "115011",
+      "who": "道具辅助",
+      "time": "1:45",
+      "content": "两颗包点闪\n其余人先搜死点\n后抢二道\n下包",
+      "type": "movement"
+    }
+  ],
+  "map_visual": "",
+  "title": "手枪局b区战术"
+}

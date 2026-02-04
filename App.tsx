@@ -11,8 +11,9 @@ import { TBTVView } from './components/TBTVView';
 import { BottomNav } from './components/BottomNav';
 import { TacticDetailView } from './components/TacticDetailView';
 import { useTactics } from './hooks/useTactics';
-import { Side, MapId, Tactic, Tag } from './types';
-import { UTILITIES } from './data/utilities';
+import { Side, MapId, Tactic, Tag, Utility } from './types';
+import { loadAllTactics } from './data/tactics';
+import { loadAllUtilities } from './data/utilities';
 
 const App: React.FC = () => {
   const [side, setSide] = useState<Side>('T');
@@ -20,6 +21,11 @@ const App: React.FC = () => {
   const [isDark, setIsDark] = useState(true);
   const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'tbtv'>('tactics');
   
+  // Data State
+  const [allTactics, setAllTactics] = useState<Tactic[]>([]);
+  const [allUtilities, setAllUtilities] = useState<Utility[]>([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
   // Panel States
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   
@@ -28,8 +34,22 @@ const App: React.FC = () => {
   const [selectedTactic, setSelectedTactic] = useState<Tactic | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Initialize Data
+  useEffect(() => {
+    const initData = async () => {
+        const [tactics, utilities] = await Promise.all([
+            loadAllTactics(),
+            loadAllUtilities()
+        ]);
+        setAllTactics(tactics);
+        setAllUtilities(utilities);
+        setIsDataLoaded(true);
+    };
+    initData();
+  }, []);
+
   // Hook for Tactics filtering
-  const { availableTags: tacticTags, filter, updateFilter, tactics: filteredTactics } = useTactics(currentMap, side); 
+  const { availableTags: tacticTags, filter, updateFilter, tactics: filteredTactics } = useTactics(currentMap, side, allTactics); 
 
   // --- Utility Filtering Logic ---
   const utilityTags: Tag[] = useMemo(() => [
@@ -40,7 +60,7 @@ const App: React.FC = () => {
   ], []);
 
   const filteredUtilities = useMemo(() => {
-      return UTILITIES.filter(u => {
+      return allUtilities.filter(u => {
           if (u.mapId !== currentMap || u.side !== side) return false;
           if (filter.site !== 'All' && u.site !== filter.site) return false;
           
@@ -60,7 +80,7 @@ const App: React.FC = () => {
           }
           return true;
       });
-  }, [currentMap, side, filter, utilityTags]);
+  }, [currentMap, side, filter, utilityTags, allUtilities]);
 
   useEffect(() => {
     if (isDark) {
@@ -136,7 +156,7 @@ const App: React.FC = () => {
                      )}
                 </div>
                 
-                {/* Editor Entry Point - Optimized UI */}
+                {/* Add Button */}
                 <button
                     onClick={handleAdd}
                     className="w-9 h-9 shrink-0 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-xl flex items-center justify-center transition-all active:scale-95 border border-transparent hover:border-blue-200 dark:hover:border-blue-800/50"
@@ -192,7 +212,7 @@ const App: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
                     </div>
-                    <p className="text-sm font-medium">暂无战术</p>
+                    <p className="text-sm font-medium">{isDataLoaded ? '暂无战术' : '加载中...'}</p>
                 </div>
             )
         )}
@@ -212,7 +232,7 @@ const App: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                     </div>
-                    <p className="text-sm font-medium">暂无道具</p>
+                    <p className="text-sm font-medium">{isDataLoaded ? '暂无道具' : '加载中...'}</p>
                 </div>
              )
         )}

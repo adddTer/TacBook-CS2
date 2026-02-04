@@ -1,0 +1,42 @@
+{
+  "id": "532742",
+  "mapId": "ancient",
+  "side": "T",
+  "site": "A",
+  "tags": [
+    {
+      "label": "手枪局",
+      "category": "economy"
+    }
+  ],
+  "metadata": {
+    "author": "FuNct1on",
+    "lastUpdated": "2026-02-01",
+    "difficulty": "Medium"
+  },
+  "actions": [
+    {
+      "id": "522374",
+      "who": "道具辅助",
+      "time": "freeze",
+      "content": "道具手买烟闪\n补枪手买烟闪\n其余人半甲",
+      "type": "movement"
+    },
+    {
+      "id": "793404",
+      "who": "道具辅助",
+      "time": "1:45",
+      "content": "爆a点警家烟\n补枪手爆甜甜圈烟",
+      "type": "movement"
+    },
+    {
+      "id": "265274",
+      "who": "突破手",
+      "time": "1:40",
+      "content": "一闪清大箱\n一闪清包点\n架住遗迹\n下包",
+      "type": "movement"
+    }
+  ],
+  "map_visual": "",
+  "title": "手枪局a区战术"
+}

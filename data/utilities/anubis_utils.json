@@ -1,0 +1,23 @@
+
+[
+  {
+    "id": "2000001",
+    "mapId": "anubis",
+    "side": "T",
+    "site": "Mid",
+    "title": "中路-狗洞火",
+    "type": "molotov",
+    "content": "在匪桥/中路入口投掷，覆盖狗洞（Connector/Camera）入口，防止CT前压或侦查。亦可配合手雷炸烟。",
+    "metadata": { "author": "addd" }
+  },
+  {
+    "id": "2000002",
+    "mapId": "anubis",
+    "side": "T",
+    "site": "Mid",
+    "title": "中路-控制火",
+    "type": "molotov",
+    "content": "投掷到桥下/中路近点，逼退防守方，为T进攻中路创造空间。",
+    "metadata": { "author": "addd" }
+  }
+]

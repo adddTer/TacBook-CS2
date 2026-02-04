@@ -1,0 +1,22 @@
+{
+  "name": "TacBook CS2",
+  "short_name": "TacBook",
+  "description": "CS2 战术手册",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://api.iconify.design/mdi:strategy.svg?color=%233b82f6",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "https://api.iconify.design/mdi:strategy.svg?color=%233b82f6",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

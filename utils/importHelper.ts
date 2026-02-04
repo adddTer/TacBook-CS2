@@ -2,7 +2,8 @@
 import JSZip from 'jszip';
 import { Tactic, Action } from '../types';
 
-export const importTacticFromZip = async (file: File): Promise<Tactic> => {
+// Updated to accept Blob or File since we might fetch .tac files from the server
+export const importTacticFromZip = async (file: Blob | File): Promise<Tactic> => {
   try {
     const zip = await JSZip.loadAsync(file);
     

@@ -1,0 +1,75 @@
+
+[
+  {
+    "id": "1000001",
+    "mapId": "mirage",
+    "title": "中路双烟夹B",
+    "side": "T",
+    "site": "Mid",
+    "tags": [
+      { "label": "手枪局", "category": "economy" },
+      { "label": "控图", "category": "playstyle" },
+      { "label": "标准", "category": "playstyle" }
+    ],
+    "metadata": {
+      "author": "addd",
+      "lastUpdated": "2026-1-31",
+      "difficulty": "Hard"
+    },
+    "loadout": [
+      { "role": "突破手", "equipment": "半甲 (自由人发P250)" },
+      { "role": "补枪辅助", "equipment": "半甲" },
+      { "role": "道具辅助", "equipment": "烟雾弹, 闪光弹, 闪光弹, C4" },
+      { "role": "狙击手", "equipment": "半甲 (扮演步枪手)" },
+      { "role": "自由人", "equipment": "烟雾弹, P250, 闪光弹" }
+    ],
+    "map_visual": "",
+    "actions": [
+      { "id": "freeze_setup", "time": "Freeze", "who": "自由人", "content": "开局发P250给突破手，自己留道具。" },
+      { "id": "act_a", "time": "1:50", "who": "道具辅助", "content": "在出生点/下水道口附近投掷拱门慢烟。", "type": "utility", "utilityId": "2000001" },
+      { "id": "act_b", "time": "1:50", "who": "自由人", "content": "投掷VIP慢烟，封锁VIP视野。", "type": "utility", "utilityId": "2000002" },
+      { "id": "act_c", "time": "1:45", "who": "全员", "content": "除自由人和狙击手外，3人静步进入B二楼。", "type": "movement" },
+      { "id": "act_d", "time": "1:40", "who": "狙击手", "content": "烟雾爆开后，与自由人控制中路，注意下水道前压。", "type": "hold" },
+      { "id": "act_e", "time": "1:35", "who": "自由人", "content": "给B小自助闪光，尝试与狙击手控制B小。", "type": "utility", "utilityId": "2000003" },
+      { "id": "act_f", "time": "1:35", "who": "道具辅助", "content": "看到中路动作后，给B二楼闪光弹，掩护队友出二楼。", "type": "utility", "utilityId": "2000004" },
+      { "id": "act_g", "time": "1:30", "who": "突破手", "content": "闪白后横拉B二楼，注意躲避B小拱门混烟。", "type": "frag" },
+      { "id": "act_h", "time": "Post", "who": "全员", "content": "占领包点，下任意包（推荐安全包或B小包）。", "type": "movement" }
+    ]
+  },
+  {
+    "id": "1000002",
+    "mapId": "mirage",
+    "title": "中路双烟夹B - VIP变体",
+    "side": "T",
+    "site": "Mid",
+    "tags": [
+      { "label": "手枪局", "category": "economy" },
+      { "label": "控图", "category": "playstyle" },
+      { "label": "赌点", "category": "playstyle" }
+    ],
+    "metadata": {
+      "author": "addd",
+      "lastUpdated": "2026-1-31",
+      "difficulty": "Hard"
+    },
+    "loadout": [
+      { "role": "突破手", "equipment": "半甲 (狙击手发P250)" },
+      { "role": "补枪辅助", "equipment": "半甲" },
+      { "role": "道具辅助", "equipment": "烟雾弹, 闪光弹, 闪光弹, C4" },
+      { "role": "狙击手", "equipment": "烟雾弹, P250, 闪光弹" },
+      { "role": "自由人", "equipment": "半甲" }
+    ],
+    "map_visual": "",
+    "actions": [
+      { "id": "freeze_setup_2", "time": "Freeze", "who": "狙击手", "content": "开局发P250给突破手，自己留道具。" },
+      { "id": "act_a2", "time": "1:50", "who": "道具辅助", "content": "在出生点/下水道口附近投掷拱门慢烟。", "type": "utility", "utilityId": "2000001" },
+      { "id": "act_b2", "time": "1:50", "who": "狙击手", "content": "投掷VIP慢烟，掩护中路推进。", "type": "utility", "utilityId": "2000002" },
+      { "id": "act_c2", "time": "1:45", "who": "全员", "content": "补枪/道具/突破手3人B二楼静音架枪，保持不动，等待中路信号。", "type": "hold" },
+      { "id": "act_d2", "time": "1:40", "who": "狙击手", "content": "架枪掩护自由人，或协助自由人双架上VIP。", "type": "movement" },
+      { "id": "act_e2", "time": "1:35", "who": "自由人", "content": "进入VIP，利用半甲优势偷人。", "type": "frag" },
+      { "id": "act_f2", "time": "1:30", "who": "自由人", "content": "取得击杀或控制后，经超市/厨房夹击B区。", "type": "movement" },
+      { "id": "act_g2", "time": "1:30", "who": "突破手", "content": "收到中路信号后，同步爆弹/横拉B二楼。", "type": "frag" },
+      { "id": "act_h2", "time": "Post", "who": "全员", "content": "夹击占领B包点。", "type": "movement" }
+    ]
+  }
+]

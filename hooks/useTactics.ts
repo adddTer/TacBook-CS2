@@ -1,10 +1,9 @@
 
 import { useState, useMemo } from 'react';
-import { Tactic, Side, Site, MapId, FilterState, Tag } from '../types';
-import { ALL_TACTICS } from '../data/tactics';
+import { Tactic, Side, MapId, FilterState, Tag } from '../types';
 import { parseTime } from '../utils/timeHelper';
 
-export const useTactics = (currentMap: MapId, side: Side) => {
+export const useTactics = (currentMap: MapId, side: Side, allTactics: Tactic[]) => {
   const [filter, setFilter] = useState<FilterState>({
     searchQuery: '',
     site: 'All',
@@ -16,8 +15,9 @@ export const useTactics = (currentMap: MapId, side: Side) => {
 
   // 1. Get Base Tactics for Map & Side
   const baseTactics = useMemo(() => {
-    return ALL_TACTICS.filter(t => t.mapId === currentMap && t.side === side);
-  }, [currentMap, side]);
+    // Filter the passed allTactics array
+    return allTactics.filter(t => t.mapId === currentMap && t.side === side);
+  }, [currentMap, side, allTactics]);
 
   // 2. Extract Available Tags & Roles for filters
   const { availableTags, availableRoles } = useMemo(() => {

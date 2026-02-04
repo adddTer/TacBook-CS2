@@ -1,9 +1,5 @@
 
-import { Utility } from '../types';
-
-// --- Static Data Definitions ---
-
-const mirageUtils: Utility[] = [
+[
   {
     "id": "2000001",
     "mapId": "mirage",
@@ -65,39 +61,4 @@ const mirageUtils: Utility[] = [
     "content": "后点投掷，覆盖跳台（Ticket）及楼梯下区域，逼退架枪CT。",
     "metadata": { "author": "Admin" }
   }
-];
-
-const anubisUtils: Utility[] = [
-  {
-    "id": "2000001",
-    "mapId": "anubis",
-    "side": "T",
-    "site": "Mid",
-    "title": "中路-狗洞火",
-    "type": "molotov",
-    "content": "在匪桥/中路入口投掷，覆盖狗洞（Connector/Camera）入口，防止CT前压或侦查。亦可配合手雷炸烟。",
-    "metadata": { "author": "addd" }
-  },
-  {
-    "id": "2000002",
-    "mapId": "anubis",
-    "side": "T",
-    "site": "Mid",
-    "title": "中路-控制火",
-    "type": "molotov",
-    "content": "投掷到桥下/中路近点，逼退防守方，为T进攻中路创造空间。",
-    "metadata": { "author": "addd" }
-  }
-];
-
-// Combine all defined utilities
-const LOCAL_UTILITIES: Utility[] = [
-    ...mirageUtils,
-    ...anubisUtils
-];
-
-export const loadAllUtilities = async (): Promise<Utility[]> => {
-  return [...LOCAL_UTILITIES];
-};
-
-export const UTILITIES: Utility[] = [...LOCAL_UTILITIES];
+]
