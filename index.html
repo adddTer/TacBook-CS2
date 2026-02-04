@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN" class="dark">
   <head>
@@ -8,6 +9,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>TacBook CS2</title>
     <link rel="manifest" href="/manifest.json" />
+    <!-- Apple Touch Icon is crucial for iOS "Add to Home Screen" visual -->
+    <link rel="apple-touch-icon" href="https://api.iconify.design/mdi:strategy.svg?color=%233b82f6" />
     <meta name="description" content="CS2 全地图战术手册" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -62,6 +65,15 @@
     "react-markdown": "https://esm.sh/react-markdown@9.0.1"
   }
 }
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('SW registered'))
+        .catch(err => console.log('SW failed', err));
+    });
+  }
 </script>
 </head>
   <body>

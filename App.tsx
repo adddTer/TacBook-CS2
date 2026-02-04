@@ -10,7 +10,9 @@ import { ArsenalView } from './components/ArsenalView';
 import { TBTVView } from './components/TBTVView';
 import { BottomNav } from './components/BottomNav';
 import { TacticDetailView } from './components/TacticDetailView';
+import { InstallPrompt } from './components/InstallPrompt';
 import { useTactics } from './hooks/useTactics';
+import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { Side, MapId, Tactic, Tag, Utility } from './types';
 import { loadAllTactics } from './data/tactics';
 import { loadAllUtilities } from './data/utilities';
@@ -33,6 +35,9 @@ const App: React.FC = () => {
   const [editingTactic, setEditingTactic] = useState<Tactic | undefined>(undefined);
   const [selectedTactic, setSelectedTactic] = useState<Tactic | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // PWA Install Hook
+  const { isIos, isInstallable, isStandalone, showPrompt, setShowPrompt, handleInstall, closePrompt } = useInstallPrompt();
 
   // Initialize Data
   useEffect(() => {
@@ -132,10 +137,11 @@ const App: React.FC = () => {
         isFilterOpen={isFilterOpen}
         toggleFilter={handleToggleFilter}
         filterActive={filter.selectedTags.length > 0 || filter.site !== 'All' || !!filter.specificRole || !!filter.onlyRecommended}
+        isInstallable={isInstallable && !isStandalone}
+        onInstall={handleInstall}
       />
 
       {/* Sticky Controls Container */}
-      {/* top-[99px] creates a 1px overlap with the 100px fixed header to prevent gaps on some screens */}
       <div className="sticky top-[99px] z-40 w-full shadow-sm bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md transition-all">
           {/* Search Bar + Add Button */}
           {(viewMode === 'tactics' || viewMode === 'utilities') && (
@@ -194,7 +200,7 @@ const App: React.FC = () => {
                              {copiedId === tactic.id ? <span className="text-green-500">Copied!</span> : `#${tactic.id}`}
                              {copiedId !== tactic.id && (
                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                  </svg>
                              )}
                         </button>
@@ -274,6 +280,15 @@ const App: React.FC = () => {
             onCancel={() => setActiveEditor(null)}
           />
       )}
+      
+      {/* PWA Install Prompt Banner */}
+      <InstallPrompt 
+          isOpen={showPrompt} 
+          onClose={closePrompt}
+          onInstall={handleInstall}
+          isIos={isIos}
+          isStandalone={isStandalone}
+      />
 
       {/* Bottom Navigation */}
       <BottomNav currentMode={viewMode} onChange={setViewMode} />

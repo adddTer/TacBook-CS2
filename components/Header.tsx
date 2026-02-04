@@ -14,7 +14,9 @@ interface HeaderProps {
   isFilterOpen: boolean;
   toggleFilter: () => void;
   filterActive: boolean;
-  onAdd?: () => void; 
+  onAdd?: () => void;
+  isInstallable?: boolean;
+  onInstall?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -27,6 +29,8 @@ export const Header: React.FC<HeaderProps> = ({
   isFilterOpen,
   toggleFilter,
   filterActive,
+  isInstallable,
+  onInstall
 }) => {
   return (
     <header 
@@ -42,6 +46,19 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Controls */}
         <div className="flex items-center gap-3">
+             {/* Install Button (Visible only if installable) */}
+             {isInstallable && onInstall && (
+                 <button 
+                    onClick={onInstall}
+                    className="p-2 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                    title="安装应用"
+                 >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                 </button>
+             )}
+
              <Switch side={currentSide} onChange={onSideChange} />
              
              <div className="w-px h-4 bg-neutral-200 dark:bg-neutral-800 mx-1"></div>
