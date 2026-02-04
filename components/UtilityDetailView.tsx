@@ -1,6 +1,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { Utility } from '../types';
+import { shareFile, downloadBlob } from '../utils/shareHelper';
+import { ShareOptionsModal } from './ShareOptionsModal';
+import html2canvas from 'html2canvas';
 
 interface UtilityDetailViewProps {
   utility: Utility;
@@ -32,6 +35,9 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
     onSelectSibling
 }) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
   const config = typeConfig[utility.type];
   const tolerance = utility.tolerance ? toleranceConfig[utility.tolerance] : null;
 
@@ -48,6 +54,51 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
       return allUtilities.filter(u => u.seriesId === utility.seriesId && u.id !== utility.id);
   }, [utility, allUtilities]);
 
+  const handleShareFile = async () => {
+      const jsonString = JSON.stringify(utility, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const safeTitle = utility.title.replace(/\s+/g, '_');
+      const filename = `${utility.mapId}_${utility.type}_${safeTitle}_${utility.id}.utility`;
+      
+      const success = await shareFile(blob, filename, "分享道具", `CS2道具：${utility.title}`);
+      if (!success) {
+          downloadBlob(blob, filename);
+      }
+  };
+
+  const handleShareImage = async () => {
+      setIsGeneratingImage(true);
+      try {
+          const element = document.getElementById('utility-view-container');
+          if (element) {
+              const canvas = await html2canvas(element, {
+                  backgroundColor: document.documentElement.classList.contains('dark') ? '#0a0a0a' : '#ffffff',
+                  useCORS: true,
+                  scale: 2,
+                  ignoreElements: (el) => el.classList.contains('no-capture') // Optional: ignore specific elements
+              });
+              
+              canvas.toBlob(async (blob) => {
+                  if (blob) {
+                      const safeTitle = utility.title.replace(/\s+/g, '_');
+                      const filename = `${safeTitle}_card.png`;
+                      const success = await shareFile(blob, filename, "分享道具图片", `CS2道具：${utility.title}`);
+                      if (!success) {
+                          downloadBlob(blob, filename);
+                      }
+                  }
+                  setIsGeneratingImage(false);
+                  setShowShareModal(false);
+              }, 'image/png');
+          }
+      } catch (e) {
+          console.error("Image generation failed", e);
+          setIsGeneratingImage(false);
+          setShowShareModal(false);
+          alert("图片生成失败");
+      }
+  };
+
   return (
     <div className="fixed inset-0 z-[60] bg-white dark:bg-neutral-950 flex flex-col animate-in slide-in-from-right duration-300">
         {/* Header */}
@@ -57,8 +108,21 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
                  <span className="font-bold text-sm">返回</span>
             </button>
             
-            <div className="flex items-center gap-2 max-w-[60%]">
-                 {onEdit && (
+            <div className="flex items-center gap-2 max-w-[50%]">
+                <h2 className="font-bold text-neutral-900 dark:text-white text-sm truncate text-center">
+                    {utility.title}
+                </h2>
+            </div>
+
+            <div className="flex items-center gap-2">
+                <button 
+                    onClick={() => setShowShareModal(true)}
+                    className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    title="分享"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                </button>
+                {onEdit && (
                     <button 
                         onClick={onEdit}
                         className="text-blue-600 dark:text-blue-400 text-xs font-bold px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 transition-colors whitespace-nowrap"
@@ -66,16 +130,11 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
                         编辑
                     </button>
                 )}
-                <h2 className="font-bold text-neutral-900 dark:text-white text-sm truncate text-center">
-                    {utility.title}
-                </h2>
             </div>
-
-            <div className="w-12"></div>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 pb-20 overscroll-contain">
+        <div id="utility-view-container" className="flex-1 overflow-y-auto p-4 pb-20 overscroll-contain bg-white dark:bg-neutral-950">
              {/* Header Info */}
              <div className="mb-6">
                 <div className="flex flex-wrap gap-2 mb-3">
@@ -112,9 +171,9 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
 
              {/* Series / Variants Section */}
              {siblings.length > 0 && (
-                 <div className="mb-6">
+                 <div className="mb-6 no-capture">
                      <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                         系列相关投掷 ({siblings.length})
                      </h4>
                      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
@@ -165,7 +224,7 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
                                 </div>
                             )}
                             <div 
-                                className="absolute top-2 right-2 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-zoom-in"
+                                className="absolute top-2 right-2 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-zoom-in no-capture"
                                 onClick={() => setSelectedImageIndex(idx)}
                             >
                                 <span className="bg-black/50 text-white text-[10px] px-2 py-1 rounded-full font-bold backdrop-blur-md">
@@ -191,6 +250,11 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
                     {utility.content}
                 </p>
              </div>
+             
+             {/* Watermark for screenshot */}
+            <div className="text-center mt-8 pb-4 opacity-30 text-[10px] font-bold uppercase tracking-widest select-none">
+                Shared via TacBook CS2
+            </div>
         </div>
 
         {/* Full Screen Image Slider Modal */}
@@ -268,6 +332,15 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
                 )}
             </div>
         )}
+
+        <ShareOptionsModal 
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+            onShareFile={handleShareFile}
+            onShareImage={handleShareImage}
+            title={`分享 "${utility.title}"`}
+            isGenerating={isGeneratingImage}
+        />
     </div>
   );
 };

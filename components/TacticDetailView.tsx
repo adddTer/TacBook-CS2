@@ -3,6 +3,10 @@ import React, { useState, useMemo } from 'react';
 import { Tactic } from '../types';
 import { ActionList } from './ActionList';
 import { calculateLoadoutCost } from '../utils/economyHelper';
+import { exportTacticToZip } from '../utils/exportHelper';
+import { shareFile, downloadBlob } from '../utils/shareHelper';
+import { ShareOptionsModal } from './ShareOptionsModal';
+import html2canvas from 'html2canvas';
 
 interface TacticDetailViewProps {
   tactic: Tactic;
@@ -13,6 +17,8 @@ interface TacticDetailViewProps {
 
 export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBack, onEdit, highlightRole }) => {
   const [isMapZoomed, setIsMapZoomed] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   // Calculate costs
   const { loadoutCosts, totalTeamCost } = useMemo(() => {
@@ -21,6 +27,53 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
       const total = costs.reduce((a, b) => a + b, 0);
       return { loadoutCosts: costs, totalTeamCost: total };
   }, [tactic.loadout]);
+
+  const handleShareFile = async () => {
+      try {
+          const blob = await exportTacticToZip(tactic);
+          const safeTitle = tactic.title.replace(/\s+/g, '_');
+          const filename = `${tactic.mapId}_${tactic.side}_${safeTitle}_${tactic.id}.tactic`;
+          
+          const success = await shareFile(blob, filename, "分享战术", `CS2战术：${tactic.title}`);
+          if (!success) {
+              downloadBlob(blob, filename);
+          }
+      } catch (e) {
+          console.error("Share failed", e);
+      }
+  };
+
+  const handleShareImage = async () => {
+      setIsGeneratingImage(true);
+      try {
+          const element = document.getElementById('tactic-view-container');
+          if (element) {
+              const canvas = await html2canvas(element, {
+                  backgroundColor: document.documentElement.classList.contains('dark') ? '#0a0a0a' : '#ffffff',
+                  useCORS: true,
+                  scale: 2
+              });
+              
+              canvas.toBlob(async (blob) => {
+                  if (blob) {
+                      const safeTitle = tactic.title.replace(/\s+/g, '_');
+                      const filename = `${safeTitle}_card.png`;
+                      const success = await shareFile(blob, filename, "分享战术图片", `CS2战术：${tactic.title}`);
+                      if (!success) {
+                          downloadBlob(blob, filename);
+                      }
+                  }
+                  setIsGeneratingImage(false);
+                  setShowShareModal(false);
+              }, 'image/png');
+          }
+      } catch (e) {
+          console.error("Image generation failed", e);
+          setIsGeneratingImage(false);
+          setShowShareModal(false);
+          alert("图片生成失败");
+      }
+  };
 
   return (
     <div className="fixed inset-0 z-[60] bg-white dark:bg-neutral-950 flex flex-col animate-in slide-in-from-right duration-300">
@@ -31,8 +84,21 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                  <span className="font-bold text-sm">返回</span>
             </button>
             
-            <div className="flex items-center gap-2 max-w-[60%]">
-                 {onEdit && (
+            <div className="flex items-center gap-2 max-w-[50%]">
+                <h2 className="font-bold text-neutral-900 dark:text-white text-sm truncate text-center">
+                    {tactic.title}
+                </h2>
+            </div>
+
+            <div className="flex items-center gap-2">
+                <button 
+                    onClick={() => setShowShareModal(true)}
+                    className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    title="分享"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                </button>
+                {onEdit && (
                     <button 
                         onClick={onEdit}
                         className="text-blue-600 dark:text-blue-400 text-xs font-bold px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 transition-colors whitespace-nowrap"
@@ -40,16 +106,11 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                         编辑
                     </button>
                 )}
-                <h2 className="font-bold text-neutral-900 dark:text-white text-sm truncate text-center">
-                    {tactic.title}
-                </h2>
             </div>
-
-            <div className="w-12"></div> {/* Spacer for center alignment */}
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 pb-20 overscroll-contain">
+        <div id="tactic-view-container" className="flex-1 overflow-y-auto p-4 pb-20 overscroll-contain bg-white dark:bg-neutral-950">
              {/* Header Info */}
              <div className="mb-6">
                 <div className="flex flex-wrap gap-2 mb-3">
@@ -148,6 +209,11 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                     highlightRole={highlightRole}
                 />
             </div>
+            
+            {/* Watermark for screenshot */}
+            <div className="text-center mt-8 pb-4 opacity-30 text-[10px] font-bold uppercase tracking-widest select-none">
+                Shared via TacBook CS2
+            </div>
         </div>
 
         {/* Full Screen Map Modal */}
@@ -168,6 +234,15 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                 </button>
             </div>
         )}
+        
+        <ShareOptionsModal 
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+            onShareFile={handleShareFile}
+            onShareImage={handleShareImage}
+            title={`分享 "${tactic.title}"`}
+            isGenerating={isGeneratingImage}
+        />
     </div>
   );
 };

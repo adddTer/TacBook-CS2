@@ -10,6 +10,7 @@ import { chatWithTacticCopilot, ChatMessage, getSelectedModel } from '../service
 import { AiConfigModal } from './AiConfigModal';
 import { compressImage } from '../utils/imageHelper';
 import { exportTacticToZip } from '../utils/exportHelper';
+import { shareFile, downloadBlob } from '../utils/shareHelper';
 
 interface TacticEditorProps {
   initialTactic?: Tactic;
@@ -199,22 +200,33 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
       if (!initialTactic) localStorage.removeItem(DRAFT_KEY);
   };
 
-  const handleExportFile = async () => {
-      if (!formData.title) return;
+  const prepareExport = async () => {
+      if (!formData.title) return null;
       try {
           const zipBlob = await exportTacticToZip(formData as Tactic);
-          const url = URL.createObjectURL(zipBlob);
-          const a = document.createElement('a');
-          a.href = url;
-          // Filename: Map_Side_Title_ID.tactic
           const safeTitle = formData.title.replace(/\s+/g, '_');
-          a.download = `${formData.mapId}_${formData.side}_${safeTitle}_${formData.id}.tactic`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+          const filename = `${formData.mapId}_${formData.side}_${safeTitle}_${formData.id}.tactic`;
+          return { blob: zipBlob, filename, title: formData.title };
       } catch (e) {
-          console.error("Export failed", e);
+          console.error("Export prep failed", e);
+          return null;
+      }
+  };
+
+  const handleDownload = async () => {
+      const result = await prepareExport();
+      if (result) {
+          downloadBlob(result.blob, result.filename);
+      }
+  };
+
+  const handleShare = async () => {
+      const result = await prepareExport();
+      if (result) {
+          const success = await shareFile(result.blob, result.filename, "分享战术", `CS2战术分享：${result.title}`);
+          if (!success) {
+               alert("您的设备不支持直接分享文件，请使用下载功能。");
+          }
       }
   };
 
@@ -244,7 +256,12 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                  <button onClick={() => setActiveTab('ai')} className={`text-sm font-bold transition-colors flex items-center gap-1 ${activeTab === 'ai' ? 'text-purple-600 dark:text-purple-400' : 'text-neutral-400'}`}>Copilot</button>
             </div>
             <div className="flex items-center gap-2">
-                 <button onClick={handleExportFile} className="text-xs font-bold text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white px-2 py-1">导出文件</button>
+                 <button onClick={handleDownload} className="text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white p-2 rounded-lg" title="下载文件">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                 </button>
+                 <button onClick={handleShare} className="text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white p-2 rounded-lg" title="分享文件">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                 </button>
                  <button onClick={handleSaveToGroup} className="text-blue-600 font-bold flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg">保存</button>
             </div>
         </div>

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Utility, Side, Site, MapId, ImageAttachment, UtilityTolerance, ContentGroup } from '../types';
 import { generateId } from '../utils/idGenerator';
 import { compressImage } from '../utils/imageHelper';
+import { shareFile, downloadBlob } from '../utils/shareHelper';
 
 interface UtilityEditorProps {
   initialUtility?: Utility;
@@ -105,20 +106,30 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
       onSave(formData, targetGroupId);
   };
 
-  const handleExportJSON = async () => {
-    if (!formData.title || !formData.content) return;
+  const prepareExport = () => {
+    if (!formData.title || !formData.content) return null;
     const jsonString = JSON.stringify(formData, null, 2);
     const blob = new Blob([jsonString], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    // Filename: Map_Type_Title_ID.utility
     const safeTitle = formData.title.replace(/\s+/g, '_');
-    a.download = `${formData.mapId}_${formData.type}_${safeTitle}_${formData.id}.utility`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const filename = `${formData.mapId}_${formData.type}_${safeTitle}_${formData.id}.utility`;
+    return { blob, filename, title: formData.title };
+  };
+
+  const handleDownload = () => {
+      const result = prepareExport();
+      if (result) {
+          downloadBlob(result.blob, result.filename);
+      }
+  };
+
+  const handleShare = async () => {
+      const result = prepareExport();
+      if (result) {
+          const success = await shareFile(result.blob, result.filename, "分享道具", `CS2道具分享：${result.title}`);
+          if (!success) {
+               alert("您的设备不支持直接分享文件，请使用下载功能。");
+          }
+      }
   };
 
   const applyDefaultAuthor = () => {
@@ -133,7 +144,12 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
             <button onClick={onCancel} className="text-neutral-500 font-medium">取消</button>
             <h2 className="font-bold text-neutral-900 dark:text-white">{initialUtility ? '编辑道具' : '新建道具'}</h2>
             <div className="flex gap-2">
-                <button onClick={handleExportJSON} className="text-neutral-500 dark:text-neutral-400 text-xs font-bold px-2 py-1.5">导出文件</button>
+                <button onClick={handleDownload} className="text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white p-2 rounded-lg" title="下载文件">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                 </button>
+                 <button onClick={handleShare} className="text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white p-2 rounded-lg" title="分享文件">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                 </button>
                 <button onClick={handleSaveToGroup} className="bg-blue-600 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg shadow-blue-500/20 flex items-center gap-1">保存</button>
             </div>
         </div>
