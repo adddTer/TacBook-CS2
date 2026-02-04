@@ -1,0 +1,12 @@
+
+{
+  "id": "2100001",
+  "mapId": "anubis",
+  "side": "T",
+  "site": "Mid",
+  "title": "中路-狗洞火",
+  "type": "molotov",
+  "content": "在匪桥/中路入口投掷，覆盖狗洞（Connector/Camera）入口，防止CT前压或侦查。亦可配合手雷炸烟。",
+  "metadata": { "author": "addd" },
+  "tolerance": "easy"
+}

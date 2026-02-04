@@ -18,12 +18,19 @@ export interface MapInfo {
   enName: string;
 }
 
+export interface ImageAttachment {
+  id: string;
+  url: string;
+  description?: string;
+}
+
 export interface Action {
   id: string;
   time?: string;
   who: string;   
   content: string;
-  image?: string;
+  image?: string; // Deprecated, kept for backward compatibility
+  images?: ImageAttachment[]; // New: Multiple images with descriptions
   type?: 'movement' | 'utility' | 'frag' | 'hold';
   utilityId?: string; // Link to a utility item
 }
@@ -53,11 +60,14 @@ export interface Tactic {
   description?: string;
   isRecommended?: boolean; // New field for recommended tactics
   _isTemp?: boolean; // UI Flag: Indicates edited in current session (not saved to file)
+  groupId?: string; // Runtime link to parent group
 }
 
 export interface UtilityMetadata {
   author?: string;
 }
+
+export type UtilityTolerance = 'easy' | 'medium' | 'hard' | 'pixel';
 
 export interface Utility {
   id: string;
@@ -67,8 +77,33 @@ export interface Utility {
   title: string;
   type: 'smoke' | 'flash' | 'molotov' | 'grenade';
   content: string;
-  image?: string;
+  image?: string; // Deprecated
+  images?: ImageAttachment[]; // New: Multiple images
   metadata?: UtilityMetadata;
+  
+  // New Fields
+  tolerance?: UtilityTolerance; // 容错率
+  seriesId?: string; // Links variations of the same utility (e.g. "mirage_window_smoke")
+  variantLabel?: string; // Label for this specific variation (e.g. "From Spawn", "From Top Mid")
+  
+  _isTemp?: boolean; // UI Flag: Indicates edited in current session
+  groupId?: string; // Runtime link to parent group
+}
+
+export interface GroupMetadata {
+  id: string;       // Unique ID for the group (e.g. "local" or generated hash)
+  name: string;     // Display name
+  description: string;
+  version: number;  // For update checking
+  isReadOnly: boolean; // Imported packs are usually read-only
+  author: string;
+  lastUpdated: number; // Timestamp
+}
+
+export interface ContentGroup {
+  metadata: GroupMetadata;
+  tactics: Tactic[];
+  utilities: Utility[];
 }
 
 export interface FilterState {

@@ -10,13 +10,16 @@ import { ArsenalView } from './components/ArsenalView';
 import { TBTVView } from './components/TBTVView';
 import { BottomNav } from './components/BottomNav';
 import { TacticDetailView } from './components/TacticDetailView';
+import { UtilityDetailView } from './components/UtilityDetailView';
 import { InstallPrompt } from './components/InstallPrompt';
 import { SettingsModal } from './components/SettingsModal';
+import { GroupManagerModal } from './components/GroupManagerModal'; 
+import { ConfirmModal } from './components/ConfirmModal';
 import { useTactics } from './hooks/useTactics';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
-import { Side, MapId, Tactic, Tag, Utility, Theme } from './types';
+import { Side, MapId, Tactic, Tag, Utility, Theme, ContentGroup } from './types';
 import { loadAllTactics } from './data/tactics';
-import { loadAllUtilities } from './data/utilities';
+import { generateGroupId } from './utils/idGenerator';
 
 const App: React.FC = () => {
   const [side, setSide] = useState<Side>('T');
@@ -26,39 +29,168 @@ const App: React.FC = () => {
   // Theme State
   const [theme, setTheme] = useState<Theme>('system');
   
+  // Settings State
+  const [utilityViewMode, setUtilityViewMode] = useState<'detail' | 'accordion'>('detail');
+
   // Debug / Edit Mode State
   const [isDebug, setIsDebug] = useState(false);
 
-  // Data State
-  const [allTactics, setAllTactics] = useState<Tactic[]>([]);
-  const [allUtilities, setAllUtilities] = useState<Utility[]>([]);
+  // --- Group Data State ---
+  const [groups, setGroups] = useState<ContentGroup[]>([]);
+  const [activeGroupIds, setActiveGroupIds] = useState<string[]>([]); 
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Confirm Modal State for App-level actions (Deleting items)
+  const [confirmConfig, setConfirmConfig] = useState<{
+      isOpen: boolean;
+      title: string;
+      message: string;
+      onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+  
+  // Computed: Data for display (Aggregated from all active groups)
+  const { allTactics, allUtilities } = useMemo(() => {
+      const activeGroups = groups.filter(g => activeGroupIds.includes(g.metadata.id));
+      const tactics = activeGroups.flatMap(g => g.tactics);
+      const utilities = activeGroups.flatMap(g => g.utilities);
+      return { allTactics: tactics, allUtilities: utilities };
+  }, [groups, activeGroupIds]);
+
+  // Computed: Check if ANY writable group exists (for showing Add button)
+  const hasWritableGroups = useMemo(() => {
+      return groups.some(g => !g.metadata.isReadOnly);
+  }, [groups]);
+
+  // Computed: List of groups available for saving (for Editor dropdown)
+  const writableGroups = useMemo(() => {
+      return groups.filter(g => !g.metadata.isReadOnly);
+  }, [groups]);
 
   // UI States
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isGroupManagerOpen, setIsGroupManagerOpen] = useState(false); 
   
   const [activeEditor, setActiveEditor] = useState<'tactic' | 'utility' | null>(null);
   const [editingTactic, setEditingTactic] = useState<Tactic | undefined>(undefined);
+  const [editingUtility, setEditingUtility] = useState<Utility | undefined>(undefined);
+  
+  // Selection State
   const [selectedTactic, setSelectedTactic] = useState<Tactic | null>(null);
+  const [selectedUtility, setSelectedUtility] = useState<Utility | null>(null);
+  
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // PWA Install Hook
   const { isIos, isInstallable, isStandalone, showPrompt, setShowPrompt, handleInstall, closePrompt } = useInstallPrompt();
 
-  // Initialize Data
+  // --- Initialization & Persistence ---
+
   useEffect(() => {
     const initData = async () => {
-        const [tactics, utilities] = await Promise.all([
-            loadAllTactics(),
-            loadAllUtilities()
-        ]);
-        setAllTactics(tactics);
-        setAllUtilities(utilities);
+        // 1. Try load groups from localStorage
+        const savedGroupsStr = localStorage.getItem('tacbook_groups');
+        const savedActiveIdsStr = localStorage.getItem('tacbook_active_group_ids');
+        
+        if (savedActiveIdsStr) {
+            try {
+                const parsedIds = JSON.parse(savedActiveIdsStr);
+                if (Array.isArray(parsedIds)) setActiveGroupIds(parsedIds);
+            } catch(e) {}
+        }
+
+        let hasLoadedGroups = false;
+        if (savedGroupsStr) {
+            try {
+                const parsedGroups = JSON.parse(savedGroupsStr);
+                if (Array.isArray(parsedGroups) && parsedGroups.length > 0) {
+                    setGroups(parsedGroups);
+                    hasLoadedGroups = true;
+                }
+            } catch (e) {
+                console.error("Failed to load saved groups", e);
+            }
+        } 
+        
+        // 2. Only if NO groups exist (First run or wiped), create a FRESH Default group
+        if (!hasLoadedGroups) {
+            const defaultId = generateGroupId(); 
+
+            const defaultGroup: ContentGroup = {
+                metadata: {
+                    id: defaultId,
+                    name: '默认',
+                    description: '', 
+                    version: 1,
+                    isReadOnly: false,
+                    author: 'User',
+                    lastUpdated: Date.now()
+                },
+                tactics: [], // Empty as requested
+                utilities: [], // Empty as requested
+            };
+            setGroups([defaultGroup]);
+            setActiveGroupIds([defaultId]);
+            
+            // Notification for auto-creation
+            setTimeout(() => {
+                 // Use custom confirm just for alert to be consistent, or just skip alert to be less annoying
+                 // alert("欢迎使用 TacBook！已为您自动创建【默认】战术包。");
+            }, 500);
+
+        } else if (activeGroupIds.length === 0 && hasLoadedGroups) {
+             // If we have groups but none active, try to select the first one
+             if (savedGroupsStr) { 
+                 const parsed = JSON.parse(savedGroupsStr);
+                 if (parsed[0]) setActiveGroupIds([parsed[0].metadata.id]);
+             }
+        }
+
         setIsDataLoaded(true);
     };
     initData();
+
+    // Load Preferences
+    const savedUtilMode = localStorage.getItem('tacbook_utility_view_mode') as 'detail' | 'accordion';
+    if (savedUtilMode) setUtilityViewMode(savedUtilMode);
+    
+    const savedTheme = localStorage.getItem('tacbook_theme') as Theme;
+    if (savedTheme) setTheme(savedTheme);
   }, []);
+
+  // Persist Groups
+  useEffect(() => {
+      if (isDataLoaded) {
+          localStorage.setItem('tacbook_groups', JSON.stringify(groups));
+      }
+  }, [groups, isDataLoaded]);
+
+  // Persist Active Group IDs (and sync cleanup)
+  useEffect(() => {
+      if (isDataLoaded) {
+          // Verify all active IDs actually exist in groups
+          const existingIds = groups.map(g => g.metadata.id);
+          const validActiveIds = activeGroupIds.filter(id => existingIds.includes(id));
+          
+          // Only update if there's a difference to prevent loops, though React does this shallowly anyway
+          if (validActiveIds.length !== activeGroupIds.length) {
+              setActiveGroupIds(validActiveIds);
+          } else {
+              localStorage.setItem('tacbook_active_group_ids', JSON.stringify(activeGroupIds));
+          }
+      }
+  }, [activeGroupIds, groups, isDataLoaded]);
+
+  // Save Preferences
+  const handleUtilityViewModeChange = (mode: 'detail' | 'accordion') => {
+      setUtilityViewMode(mode);
+      localStorage.setItem('tacbook_utility_view_mode', mode);
+  };
+
+  const handleThemeChange = (newTheme: Theme) => {
+      setTheme(newTheme);
+      localStorage.setItem('tacbook_theme', newTheme);
+  };
 
   // Check for Debug Mode (API Key presence)
   useEffect(() => {
@@ -71,23 +203,15 @@ const App: React.FC = () => {
 
   // Theme Logic
   useEffect(() => {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       const applyTheme = () => {
-          const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          if (isDark) {
-              document.documentElement.classList.add('dark');
-          } else {
-              document.documentElement.classList.remove('dark');
-          }
+          const isDark = theme === 'dark' || (theme === 'system' && mediaQuery.matches);
+          document.documentElement.classList.toggle('dark', isDark);
       };
-      
       applyTheme();
-
-      // Listener for system changes
-      if (theme === 'system') {
-          const mq = window.matchMedia('(prefers-color-scheme: dark)');
-          mq.addEventListener('change', applyTheme);
-          return () => mq.removeEventListener('change', applyTheme);
-      }
+      const listener = () => applyTheme();
+      if (theme === 'system') mediaQuery.addEventListener('change', listener);
+      return () => mediaQuery.removeEventListener('change', listener);
   }, [theme]);
 
   // Hook for Tactics filtering
@@ -148,36 +272,143 @@ const App: React.FC = () => {
           setEditingTactic(undefined);
       } else if (viewMode === 'utilities') {
           setActiveEditor('utility');
+          setEditingUtility(undefined);
       }
   };
 
-  const handleSaveTactic = (updatedTactic: Tactic) => {
-      // Mark as temp edited for the session
-      const tacticWithFlag = { ...updatedTactic, _isTemp: true };
+  // --- Deletion Logic ---
 
-      setAllTactics(prev => {
-          const index = prev.findIndex(t => t.id === tacticWithFlag.id);
-          if (index >= 0) {
-              const newTactics = [...prev];
-              newTactics[index] = tacticWithFlag;
-              return newTactics;
-          } else {
-              return [...prev, tacticWithFlag];
+  const handleDeleteTactic = (tactic: Tactic) => {
+      setConfirmConfig({
+          isOpen: true,
+          title: "删除战术",
+          message: `确定要删除战术 "${tactic.title}" 吗？此操作不可恢复。`,
+          onConfirm: () => {
+              setGroups(prevGroups => prevGroups.map(g => {
+                  if (g.metadata.id === tactic.groupId) {
+                      return {
+                          ...g,
+                          tactics: g.tactics.filter(t => t.id !== tactic.id),
+                          metadata: { ...g.metadata, lastUpdated: Date.now() }
+                      };
+                  }
+                  return g;
+              }));
+              setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+              if (selectedTactic?.id === tactic.id) setSelectedTactic(null);
           }
       });
+  };
+
+  const handleDeleteUtility = (utility: Utility) => {
+      setConfirmConfig({
+          isOpen: true,
+          title: "删除道具",
+          message: `确定要删除道具 "${utility.title}" 吗？此操作不可恢复。`,
+          onConfirm: () => {
+              setGroups(prevGroups => prevGroups.map(g => {
+                  if (g.metadata.id === utility.groupId) {
+                      return {
+                          ...g,
+                          utilities: g.utilities.filter(u => u.id !== utility.id),
+                          metadata: { ...g.metadata, lastUpdated: Date.now() }
+                      };
+                  }
+                  return g;
+              }));
+              setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+              if (selectedUtility?.id === utility.id) setSelectedUtility(null);
+          }
+      });
+  };
+
+  // --- Save Logic ---
+
+  const handleSaveTactic = (updatedTactic: Tactic, targetGroupId: string) => {
+      setGroups(prevGroups => {
+          return prevGroups.map(group => {
+              if (group.metadata.id === targetGroupId) {
+                  if(group.metadata.isReadOnly) return group;
+
+                  const newTactic = { ...updatedTactic, groupId: targetGroupId, _isTemp: false };
+                  const existsIndex = group.tactics.findIndex(t => t.id === newTactic.id);
+                  
+                  let newTactics;
+                  if (existsIndex >= 0) {
+                      newTactics = [...group.tactics];
+                      newTactics[existsIndex] = newTactic;
+                  } else {
+                      newTactics = [...group.tactics, newTactic];
+                  }
+                  return { 
+                      ...group, 
+                      tactics: newTactics,
+                      metadata: { ...group.metadata, version: group.metadata.version + 1, lastUpdated: Date.now() } 
+                  };
+              }
+              return group;
+          });
+      });
       
-      // Update selected tactic view if applicable
-      if (selectedTactic && selectedTactic.id === tacticWithFlag.id) {
-          setSelectedTactic(tacticWithFlag);
+      if (selectedTactic && selectedTactic.id === updatedTactic.id) {
+          setSelectedTactic({ ...updatedTactic, groupId: targetGroupId });
       }
       
-      // Close editor
       setActiveEditor(null);
       setEditingTactic(undefined);
   };
 
+  const handleSaveUtility = (updatedUtility: Utility, targetGroupId: string) => {
+      setGroups(prevGroups => {
+          return prevGroups.map(group => {
+              if (group.metadata.id === targetGroupId) {
+                  if(group.metadata.isReadOnly) return group;
+
+                  const newUtil = { ...updatedUtility, groupId: targetGroupId, _isTemp: false };
+                  const existsIndex = group.utilities.findIndex(u => u.id === newUtil.id);
+                  
+                  let newUtils;
+                  if (existsIndex >= 0) {
+                      newUtils = [...group.utilities];
+                      newUtils[existsIndex] = newUtil;
+                  } else {
+                      newUtils = [...group.utilities, newUtil];
+                  }
+                  return { 
+                      ...group, 
+                      utilities: newUtils,
+                      metadata: { ...group.metadata, version: group.metadata.version + 1, lastUpdated: Date.now() } 
+                  };
+              }
+              return group;
+          });
+      });
+
+      if (selectedUtility && selectedUtility.id === updatedUtility.id) {
+          setSelectedUtility({ ...updatedUtility, groupId: targetGroupId });
+      }
+
+      setActiveEditor(null);
+      setEditingUtility(undefined);
+  };
+
   const filterActive = filter.selectedTags.length > 0 || filter.site !== 'All' || !!filter.specificRole || !!filter.onlyRecommended;
   const showSearchAndFilter = viewMode === 'tactics' || viewMode === 'utilities';
+
+  // Helper: Is a specific item editable?
+  const isItemEditable = (itemGroupId?: string) => {
+      if (!itemGroupId) return false;
+      const group = groups.find(g => g.metadata.id === itemGroupId);
+      return group && !group.metadata.isReadOnly;
+  };
+
+  const getActiveGroupNames = () => {
+      if (activeGroupIds.length === 0) return "无内容";
+      if (activeGroupIds.length === 1) {
+          return groups.find(g => g.metadata.id === activeGroupIds[0])?.metadata.name || "Unknown";
+      }
+      return `${activeGroupIds.length} 个组`;
+  };
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700 pt-[56px]">
@@ -189,9 +420,10 @@ const App: React.FC = () => {
         onSideChange={setSide}
         onOpenSettings={() => setIsSettingsOpen(true)}
         viewMode={viewMode}
+        currentGroupName={getActiveGroupNames()} 
       />
 
-      {/* Search & Filter Bar (Only for Tactics/Utilities) */}
+      {/* Search & Filter Bar */}
       {showSearchAndFilter && (
           <div className="sticky top-[55px] z-40 w-full shadow-sm bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md transition-all">
             <div className="px-4 py-2 border-b border-neutral-100 dark:border-neutral-800 flex gap-2">
@@ -202,7 +434,7 @@ const App: React.FC = () => {
                         type="text"
                         value={filter.searchQuery}
                         onChange={(e) => updateFilter('searchQuery', e.target.value)}
-                        placeholder="搜索关键字、ID..."
+                        placeholder="搜索..."
                         className="w-full bg-neutral-100 dark:bg-neutral-900 border-none rounded-xl py-2 pl-9 pr-9 text-sm font-medium placeholder-neutral-400 focus:ring-2 focus:ring-blue-500/50 outline-none dark:text-white transition-all"
                      />
                      {filter.searchQuery && (
@@ -230,18 +462,19 @@ const App: React.FC = () => {
                     )}
                 </button>
 
-                {/* Add Button */}
-                <button
-                    onClick={handleAdd}
-                    className="w-9 h-9 shrink-0 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-xl flex items-center justify-center transition-all active:scale-95 border border-transparent hover:border-blue-200 dark:hover:border-blue-800/50"
-                >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                    </svg>
-                </button>
+                {/* Add Button - Changed Logic: Show if ANY writable group exists */}
+                {hasWritableGroups && (viewMode === 'tactics' || viewMode === 'utilities') && (
+                    <button
+                        onClick={handleAdd}
+                        className="w-9 h-9 shrink-0 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-xl flex items-center justify-center transition-all active:scale-95 border border-transparent hover:border-blue-200 dark:hover:border-blue-800/50"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                )}
             </div>
 
-            {/* Expandable Filter Panel */}
             <FilterPanel 
                 isOpen={isFilterOpen}
                 availableTags={viewMode === 'tactics' ? tacticTags : utilityTags}
@@ -266,15 +499,11 @@ const App: React.FC = () => {
                             className="absolute top-6 right-10 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-neutral-400 hover:text-blue-500 flex items-center gap-1 bg-white/50 dark:bg-black/50 backdrop-blur px-1.5 py-0.5 rounded"
                         >
                              {copiedId === tactic.id ? <span className="text-green-500">Copied!</span> : `#${tactic.id}`}
-                             {copiedId !== tactic.id && (
-                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                 </svg>
-                             )}
                         </button>
                         <TacticCard 
                             tactic={tactic} 
                             onClick={() => setSelectedTactic(tactic)}
+                            onDelete={isItemEditable(tactic.groupId) ? () => handleDeleteTactic(tactic) : undefined}
                         />
                     </div>
                     ))}
@@ -286,7 +515,7 @@ const App: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
                     </div>
-                    <p className="text-sm font-medium">{isDataLoaded ? '暂无战术' : '加载中...'}</p>
+                    <p className="text-sm font-medium">{isDataLoaded ? `暂无战术 (在${activeGroupIds.length}个组中)` : '加载中...'}</p>
                 </div>
             )
         )}
@@ -296,7 +525,17 @@ const App: React.FC = () => {
              filteredUtilities.length > 0 ? (
                 <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {filteredUtilities.map((utility) => (
-                        <UtilityCard key={utility.id} utility={utility} />
+                        <UtilityCard 
+                            key={utility.id} 
+                            utility={utility} 
+                            viewMode={utilityViewMode}
+                            onClick={() => setSelectedUtility(utility)}
+                            onEdit={isItemEditable(utility.groupId) ? () => {
+                                setEditingUtility(utility);
+                                setActiveEditor('utility');
+                            } : undefined}
+                            onDelete={isItemEditable(utility.groupId) ? () => handleDeleteUtility(utility) : undefined}
+                        />
                     ))}
                 </div>
              ) : (
@@ -306,7 +545,7 @@ const App: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                     </div>
-                    <p className="text-sm font-medium">{isDataLoaded ? '暂无道具' : '加载中...'}</p>
+                    <p className="text-sm font-medium">{isDataLoaded ? `暂无道具 (在${activeGroupIds.length}个组中)` : '加载中...'}</p>
                 </div>
              )
         )}
@@ -328,9 +567,23 @@ const App: React.FC = () => {
             tactic={selectedTactic}
             onBack={() => setSelectedTactic(null)}
             highlightRole={filter.specificRole}
-            onEdit={isDebug ? () => {
+            onEdit={isItemEditable(selectedTactic.groupId) ? () => {
                 setEditingTactic(selectedTactic);
                 setActiveEditor('tactic');
+            } : undefined}
+          />
+      )}
+
+      {/* Full Screen Utility Detail View */}
+      {selectedUtility && (
+          <UtilityDetailView
+            utility={selectedUtility}
+            allUtilities={allUtilities} // Passed for finding siblings
+            onBack={() => setSelectedUtility(null)}
+            onSelectSibling={(sibling) => setSelectedUtility(sibling)}
+            onEdit={isItemEditable(selectedUtility.groupId) ? () => {
+                setEditingUtility(selectedUtility);
+                setActiveEditor('utility');
             } : undefined}
           />
       )}
@@ -343,14 +596,18 @@ const App: React.FC = () => {
             currentSide={side}
             onCancel={() => { setActiveEditor(null); setEditingTactic(undefined); }}
             onSave={handleSaveTactic}
+            writableGroups={writableGroups}
           />
       )}
 
       {activeEditor === 'utility' && (
           <UtilityEditor
+            initialUtility={editingUtility}
             currentMapId={currentMap}
             currentSide={side}
-            onCancel={() => setActiveEditor(null)}
+            onCancel={() => { setActiveEditor(null); setEditingUtility(undefined); }}
+            onSave={handleSaveUtility}
+            writableGroups={writableGroups}
           />
       )}
       
@@ -359,9 +616,34 @@ const App: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         currentTheme={theme}
-        onThemeChange={setTheme}
+        onThemeChange={handleThemeChange}
         isInstallable={isInstallable && !isStandalone}
         onInstall={handleInstall}
+        utilityViewMode={utilityViewMode}
+        onUtilityViewModeChange={handleUtilityViewModeChange}
+        onOpenGroupManager={() => { setIsSettingsOpen(false); setIsGroupManagerOpen(true); }}
+      />
+
+      {/* Group Manager Modal */}
+      <GroupManagerModal 
+        isOpen={isGroupManagerOpen}
+        onClose={() => setIsGroupManagerOpen(false)}
+        groups={groups}
+        setGroups={setGroups}
+        activeGroupIds={activeGroupIds}
+        onToggleGroup={(id) => {
+            setActiveGroupIds(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
+        }}
+      />
+
+      {/* Confirm Modal (App Level for Items) */}
+      <ConfirmModal 
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+        isDangerous={true}
       />
 
       {/* PWA Install Prompt Banner (Bottom) */}

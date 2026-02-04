@@ -1,100 +1,10 @@
 
 import { Utility } from '../types';
 
-// --- Static Data Definitions ---
+// Existing utilities cleared for new grouping system.
+// Initial data will be managed via the "Local" group or imports.
 
-const mirageUtils: Utility[] = [
-  {
-    "id": "2000001",
-    "mapId": "mirage",
-    "side": "T",
-    "site": "Mid",
-    "title": "中路-拱门烟",
-    "type": "smoke",
-    "content": "在T出生点下水道口附近，瞄准天线顶端投掷。用于遮挡连接/拱门视野。",
-    "metadata": { "author": "Admin" },
-    "image": "https://files.catbox.moe/dummy_arch_smoke.jpg"
-  },
-  {
-    "id": "2000002",
-    "mapId": "mirage",
-    "side": "T",
-    "site": "Mid",
-    "title": "中路-VIP烟",
-    "type": "smoke",
-    "content": "瞄准特定标志物跑投/跳投，封锁VIP窗口视野，掩护中路推进。",
-    "metadata": { "author": "Admin" }
-  },
-  {
-    "id": "2000003",
-    "mapId": "mirage",
-    "side": "T",
-    "site": "B",
-    "title": "B小-自助瞬爆闪",
-    "type": "flash",
-    "content": "在B小道墙壁反弹，致盲B小近点及超市外敌人，自己背身不白。",
-    "metadata": { "author": "Admin" }
-  },
-  {
-    "id": "2000004",
-    "mapId": "mirage",
-    "side": "T",
-    "site": "B",
-    "title": "B二楼-掩护闪",
-    "type": "flash",
-    "content": "从二楼窗口/门缝投掷，致盲B包点及白车敌人，掩护队友跳出二楼。",
-    "metadata": { "author": "Admin" }
-  },
-  {
-    "id": "2000005",
-    "mapId": "mirage",
-    "side": "T",
-    "site": "A",
-    "title": "A区-过点烟",
-    "type": "smoke",
-    "content": "后点（T出生点附近）跳投，落在警家与跳台之间，封锁CT回防视野。",
-    "metadata": { "author": "Admin" }
-  },
-  {
-    "id": "2000006",
-    "mapId": "mirage",
-    "side": "T",
-    "site": "A",
-    "title": "A区-跳台火",
-    "type": "molotov",
-    "content": "后点投掷，覆盖跳台（Ticket）及楼梯下区域，逼退架枪CT。",
-    "metadata": { "author": "Admin" }
-  }
-];
-
-const anubisUtils: Utility[] = [
-  {
-    "id": "2000001",
-    "mapId": "anubis",
-    "side": "T",
-    "site": "Mid",
-    "title": "中路-狗洞火",
-    "type": "molotov",
-    "content": "在匪桥/中路入口投掷，覆盖狗洞（Connector/Camera）入口，防止CT前压或侦查。亦可配合手雷炸烟。",
-    "metadata": { "author": "addd" }
-  },
-  {
-    "id": "2000002",
-    "mapId": "anubis",
-    "side": "T",
-    "site": "Mid",
-    "title": "中路-控制火",
-    "type": "molotov",
-    "content": "投掷到桥下/中路近点，逼退防守方，为T进攻中路创造空间。",
-    "metadata": { "author": "addd" }
-  }
-];
-
-// Combine all defined utilities
-const LOCAL_UTILITIES: Utility[] = [
-    ...mirageUtils,
-    ...anubisUtils
-];
+const LOCAL_UTILITIES: Utility[] = [];
 
 export const loadAllUtilities = async (): Promise<Utility[]> => {
   return [...LOCAL_UTILITIES];

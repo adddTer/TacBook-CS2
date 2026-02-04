@@ -202,8 +202,8 @@ const anubisB: Tactic[] = [
     "map_visual": "",
     "actions": [
       { "id": "act1", "time": "Freeze", "who": "全员", "content": "2人（突破/补枪）去B外控图，3人（道具/狙击/自由人）去中路集合。" },
-      { "id": "act2", "time": "1:45", "who": "道具辅助", "content": "在匪桥投掷狗洞火（或双雷套餐），防止CT前压。", "type": "utility", "utilityId": "2000001" },
-      { "id": "act3", "time": "1:45", "who": "狙击手", "content": "同步投掷中路火，压制桥下区域，随后架枪掩护。", "type": "utility", "utilityId": "2000002" },
+      { "id": "act2", "time": "1:45", "who": "道具辅助", "content": "在匪桥投掷狗洞火（或双雷套餐），防止CT前压。", "type": "utility", "utilityId": "2100001" },
+      { "id": "act3", "time": "1:45", "who": "狙击手", "content": "同步投掷中路火，压制桥下区域，随后架枪掩护。", "type": "utility", "utilityId": "2100002" },
       { "id": "act4", "time": "1:40", "who": "自由人", "content": "沿着火焰边缘快速推进，控制中路水下。", "type": "movement" },
       { "id": "act5", "time": "1:35", "who": "自由人", "content": "推进时时刻留意A包点/A连接方向，防止偷袭。", "type": "hold" },
       { "id": "act6", "time": "1:30", "who": "突破手", "content": "听到中路交火或就位信号后，B外爆弹施压B门。", "type": "utility" },

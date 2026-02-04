@@ -1,6 +1,6 @@
 
 import JSZip from 'jszip';
-import { Tactic, Action } from '../types';
+import { Tactic, Action, ImageAttachment } from '../types';
 
 // Updated to accept Blob or File since we might fetch .tac files from the server
 export const importTacticFromZip = async (file: Blob | File): Promise<Tactic> => {
@@ -38,10 +38,23 @@ export const importTacticFromZip = async (file: Blob | File): Promise<Tactic> =>
     // 4. Process Action Images
     if (tactic.actions) {
       tactic.actions = await Promise.all(tactic.actions.map(async (action: Action) => {
+        // Handle Legacy Image
         if (action.image) {
            const newImage = await replaceImagePaths(action.image);
-           return { ...action, image: newImage };
+           action.image = newImage;
         }
+
+        // Handle New Images Array
+        if (action.images && action.images.length > 0) {
+            action.images = await Promise.all(action.images.map(async (img: ImageAttachment) => {
+                if (img.url) {
+                    const newUrl = await replaceImagePaths(img.url);
+                    return { ...img, url: newUrl };
+                }
+                return img;
+            }));
+        }
+        
         return action;
       }));
     }

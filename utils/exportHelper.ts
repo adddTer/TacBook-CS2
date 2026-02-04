@@ -1,15 +1,9 @@
 
 import JSZip from 'jszip';
-import { Tactic } from '../types';
+import { Tactic, Utility } from '../types';
 
 /**
- * Exports a tactic object to a .zip file (renamed as .tac).
- * 
- * Logic:
- * 1. Base64 images are extracted from the JSON.
- * 2. Images are saved as binary files inside the zip (e.g., 'map.jpg', 'action_1.jpg').
- * 3. The JSON references are updated to point to these relative paths (e.g., './map.jpg').
- * 4. This ensures the JSON is lightweight and images are portable.
+ * Exports a tactic or utility object to a .zip file (renamed as .tac or .json).
  */
 export const exportTacticToZip = async (tactic: Tactic) => {
     const zip = new JSZip();
@@ -24,20 +18,35 @@ export const exportTacticToZip = async (tactic: Tactic) => {
     // 1. Process Map Visual
     if (t.map_visual && t.map_visual.startsWith('data:image')) {
         const blob = await base64ToBlob(t.map_visual);
-        const fileName = 'map_visual.jpg'; // We assume jpeg from our compressor
+        const fileName = 'map_visual.jpg';
         zip.file(fileName, blob);
         t.map_visual = `./${fileName}`;
     }
 
-    // 2. Process Action Images
+    // 2. Process Action Images (New Array Support)
     if (t.actions) {
         for (let i = 0; i < t.actions.length; i++) {
             const action = t.actions[i];
+            
+            // Handle Legacy Single Image (convert to array structure usually, or just save it)
             if (action.image && action.image.startsWith('data:image')) {
                 const blob = await base64ToBlob(action.image);
-                const fileName = `action_${action.id}.jpg`;
+                const fileName = `action_${action.id}_legacy.jpg`;
                 zip.file(fileName, blob);
                 action.image = `./${fileName}`;
+            }
+
+            // Handle New Images Array
+            if (action.images && action.images.length > 0) {
+                for (let j = 0; j < action.images.length; j++) {
+                    const img = action.images[j];
+                    if (img.url && img.url.startsWith('data:image')) {
+                        const blob = await base64ToBlob(img.url);
+                        const fileName = `action_${action.id}_${j}.jpg`;
+                        zip.file(fileName, blob);
+                        img.url = `./${fileName}`;
+                    }
+                }
             }
         }
     }

@@ -10,7 +10,7 @@ interface ActionListProps {
 }
 
 export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }) => {
-  const [expandedImg, setExpandedImg] = useState<string | null>(null);
+  const [viewingImages, setViewingImages] = useState<{ url: string, description?: string }[] | null>(null);
   const [viewingUtility, setViewingUtility] = useState<Utility | null>(null);
 
   // Auto-sort actions chronologically
@@ -29,6 +29,13 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
         
         // Find linked utility
         const linkedUtility = action.utilityId ? UTILITIES.find(u => u.id === action.utilityId) : null;
+
+        // Get images (handle both legacy and new structure)
+        const actionImages = action.images && action.images.length > 0 
+            ? action.images 
+            : action.image 
+                ? [{ id: 'legacy', url: action.image, description: '' }] 
+                : [];
 
         return (
             <div 
@@ -93,45 +100,64 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
                 )}
             </div>
 
-            {/* Optional Image Thumbnail (Action specific) */}
-            {action.image && (
-                <div className="mt-2">
-                <button 
-                    onClick={(e) => { e.stopPropagation(); setExpandedImg(action.image || null); }}
-                    className="group relative overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700 w-24 h-16 shadow-sm"
-                >
-                    <img 
-                    src={action.image} 
-                    alt="Action Visual" 
-                    className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" 
-                    />
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                        <svg className="w-4 h-4 text-white drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                        </svg>
-                    </div>
-                </button>
+            {/* Action Images (Horizontal Scroll if multiple) */}
+            {actionImages.length > 0 && (
+                <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                    {actionImages.map((img, i) => (
+                        <button 
+                            key={i}
+                            onClick={(e) => { e.stopPropagation(); setViewingImages(actionImages); }}
+                            className="group relative overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700 w-24 h-16 shadow-sm shrink-0"
+                        >
+                            <img 
+                                src={img.url} 
+                                alt={img.description || "Action Visual"} 
+                                className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" 
+                            />
+                            {img.description && (
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white px-1 py-0.5 truncate text-center backdrop-blur-sm">
+                                    {img.description}
+                                </div>
+                            )}
+                        </button>
+                    ))}
                 </div>
             )}
             </div>
         );
       })}
 
-      {/* Image Modal */}
-      {expandedImg && (
+      {/* Image Gallery Modal */}
+      {viewingImages && (
         <div 
-            className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
-            onClick={(e) => { e.stopPropagation(); setExpandedImg(null); }}
+            className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in"
+            onClick={(e) => { e.stopPropagation(); setViewingImages(null); }}
         >
-            <img src={expandedImg} className="max-w-full max-h-full rounded shadow-2xl" alt="Full size" />
-            <button className="absolute top-8 right-8 text-white bg-neutral-800/50 p-2 rounded-full hover:bg-neutral-800 transition-colors">
+            <div className="flex overflow-x-auto snap-x snap-mandatory w-full h-full items-center gap-4 no-scrollbar px-4" onClick={e => e.stopPropagation()}>
+                {viewingImages.map((img, i) => (
+                    <div key={i} className="snap-center shrink-0 w-full max-w-2xl flex flex-col items-center justify-center h-full">
+                        <img src={img.url} className="max-w-full max-h-[70vh] rounded shadow-2xl object-contain" alt="Full size" />
+                        {img.description && (
+                            <div className="mt-4 bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl text-white text-sm font-medium text-center">
+                                {img.description}
+                            </div>
+                        )}
+                        {viewingImages.length > 1 && (
+                            <div className="mt-2 text-white/50 text-xs">
+                                {i + 1} / {viewingImages.length}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+            <button 
+                onClick={() => setViewingImages(null)}
+                className="absolute top-6 right-6 text-white bg-neutral-800/50 p-2 rounded-full hover:bg-neutral-800 transition-colors z-50"
+            >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
-            <div className="absolute bottom-8 left-0 right-0 text-center pointer-events-none">
-                 <span className="bg-black/50 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md">点击任意处关闭</span>
-            </div>
         </div>
       )}
 
@@ -142,11 +168,11 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
             onClick={(e) => { e.stopPropagation(); setViewingUtility(null); }}
         >
             <div 
-                className="bg-white dark:bg-neutral-900 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-300"
+                className="bg-white dark:bg-neutral-900 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-8 duration-300 max-h-[80vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Modal Header */}
-                <div className="p-4 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center bg-neutral-50 dark:bg-neutral-950/50">
+                <div className="p-4 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center bg-neutral-50 dark:bg-neutral-950/50 shrink-0">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                              <span className={`
@@ -173,20 +199,42 @@ export const ActionList: React.FC<ActionListProps> = ({ actions, highlightRole }
                 </div>
                 
                 {/* Modal Content */}
-                <div className="p-4 space-y-4">
+                <div className="p-4 space-y-4 overflow-y-auto">
                     <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
                         {viewingUtility.content}
                     </p>
                     
-                    {viewingUtility.image ? (
-                        <div className="rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-800 bg-black">
-                            <img src={viewingUtility.image} className="w-full h-auto object-contain max-h-[400px]" alt="Detail" />
-                        </div>
-                    ) : (
-                        <div className="h-32 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-400 text-xs">
-                            暂无参考图
-                        </div>
-                    )}
+                    {/* Utility Images logic */}
+                    {(() => {
+                        const imgs = viewingUtility.images && viewingUtility.images.length > 0
+                            ? viewingUtility.images
+                            : viewingUtility.image
+                                ? [{ id: 'legacy', url: viewingUtility.image, description: '' }]
+                                : [];
+                        
+                        if (imgs.length === 0) {
+                            return (
+                                <div className="h-32 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-400 text-xs">
+                                    暂无参考图
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div className="space-y-4">
+                                {imgs.map((img, i) => (
+                                    <div key={i} className="space-y-1">
+                                        <div className="rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-800 bg-black">
+                                            <img src={img.url} className="w-full h-auto object-contain max-h-[300px]" alt="Detail" />
+                                        </div>
+                                        {img.description && (
+                                            <div className="text-xs text-neutral-500 text-center">{img.description}</div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })()}
                     
                     <div className="flex justify-between items-center text-[10px] text-neutral-400 pt-2 border-t border-neutral-100 dark:border-neutral-800">
                         <span>Site: {viewingUtility.site}</span>

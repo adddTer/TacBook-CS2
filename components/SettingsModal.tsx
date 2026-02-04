@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Theme } from '../types';
 
 interface SettingsModalProps {
@@ -9,6 +9,9 @@ interface SettingsModalProps {
   onThemeChange: (t: Theme) => void;
   isInstallable: boolean;
   onInstall: () => void;
+  utilityViewMode: 'detail' | 'accordion';
+  onUtilityViewModeChange: (mode: 'detail' | 'accordion') => void;
+  onOpenGroupManager?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -17,8 +20,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   currentTheme,
   onThemeChange,
   isInstallable,
-  onInstall
+  onInstall,
+  utilityViewMode,
+  onUtilityViewModeChange,
+  onOpenGroupManager
 }) => {
+  const [defaultAuthor, setDefaultAuthor] = useState('');
+
+  useEffect(() => {
+      const saved = localStorage.getItem('tacbook_default_author');
+      if (saved) setDefaultAuthor(saved);
+  }, [isOpen]);
+
+  const handleAuthorChange = (val: string) => {
+      setDefaultAuthor(val);
+      localStorage.setItem('tacbook_default_author', val);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -58,6 +76,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
         </div>
 
+        {/* Data Management */}
+        <div className="space-y-3">
+            <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">数据管理</label>
+            <button 
+                onClick={onOpenGroupManager}
+                className="w-full py-3 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-xl text-sm font-bold text-neutral-700 dark:text-neutral-300 transition-colors flex items-center justify-center gap-2"
+            >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                战术包管理
+            </button>
+        </div>
+
+        {/* Default Author */}
+        <div className="space-y-3">
+            <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">默认作者 (自动填充)</label>
+            <input 
+                type="text"
+                value={defaultAuthor}
+                onChange={(e) => handleAuthorChange(e.target.value)}
+                placeholder="你的昵称..."
+                className="w-full bg-neutral-100 dark:bg-neutral-800 border border-transparent focus:border-blue-500 rounded-xl p-3 text-sm dark:text-white outline-none font-bold"
+            />
+        </div>
+
+        {/* Utility View Mode */}
+        <div className="space-y-3">
+            <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">道具浏览方式</label>
+            <div className="grid grid-cols-2 gap-2 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl">
+                <button
+                    onClick={() => onUtilityViewModeChange('detail')}
+                    className={`
+                        py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1
+                        ${utilityViewMode === 'detail' 
+                            ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm' 
+                            : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}
+                    `}
+                >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" /></svg>
+                    详情页
+                </button>
+                <button
+                    onClick={() => onUtilityViewModeChange('accordion')}
+                    className={`
+                        py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1
+                        ${utilityViewMode === 'accordion' 
+                            ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm' 
+                            : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}
+                    `}
+                >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    折叠展开
+                </button>
+            </div>
+        </div>
+
         {/* Install Button (If applicable) */}
         {isInstallable && (
             <div className="space-y-3 pt-2 border-t border-neutral-100 dark:border-neutral-800">
@@ -74,7 +147,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
         
         <div className="pt-4 text-center">
-            <p className="text-[10px] text-neutral-300">TacBook CS2 v1.0.0</p>
+            <p className="text-[10px] text-neutral-300">TacBook CS2 v1.2.0</p>
         </div>
 
       </div>

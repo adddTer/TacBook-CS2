@@ -279,8 +279,8 @@ export const TBTVView: React.FC = () => {
                            </div>
                            
                            <div className="text-right">
-                               <div className="text-[10px] font-bold text-neutral-400 uppercase">Avg Rating</div>
-                               <div className={`text-4xl font-black tracking-tighter ${Number(profile.avgRating) >= 1.2 ? 'text-red-500' : Number(profile.avgRating) >= 1.05 ? 'text-green-500' : 'text-neutral-800 dark:text-neutral-200'}`}>
+                               <div className="text-[10px] font-bold text-neutral-400 uppercase">Rating</div>
+                               <div className={`text-4xl font-black tracking-tighter ${Number(profile.avgRating) >= 1.2 ? 'text-red-500' : Number(profile.avgRating) >= 1.05 ? 'text-green-500' : 'text-neutral-400'}`}>
                                    {profile.avgRating}
                                </div>
                            </div>
@@ -292,19 +292,13 @@ export const TBTVView: React.FC = () => {
                            <StatBox label="HS%" value={`${profile.avgHs}%`} />
                            <StatBox label="WE" value={profile.avgWe} />
                        </div>
-                       <div className="grid grid-cols-1 mt-2">
-                           <StatBox label="Kills" value={profile.totalK} subValue="Total" />
-                       </div>
                    </div>
               </div>
 
-              {/* Match History List */}
+              {/* Match History List (Compact) */}
               <div>
-                  <h3 className="text-lg font-bold text-neutral-900 dark:text-white mb-3 flex items-center gap-2">
-                      <svg className="w-5 h-5 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      近期比赛
-                  </h3>
-                  <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-neutral-500 uppercase tracking-widest mb-3 px-1">近期表现</h3>
+                  <div className="space-y-2">
                       {history.map(({ match, stats }) => {
                           const mapName = MAPS.find(m => m.id === match.mapId)?.name || match.mapId;
                           return (
@@ -314,32 +308,28 @@ export const TBTVView: React.FC = () => {
                                 className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-3 rounded-xl flex items-center justify-between hover:border-blue-500/50 transition-all active:scale-[0.99]"
                               >
                                   <div className="flex items-center gap-3">
-                                      <div className={`w-1 h-12 rounded-full ${match.result === 'WIN' ? 'bg-green-500' : match.result === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
+                                      <div className={`w-1 h-8 rounded-full ${match.result === 'WIN' ? 'bg-green-500' : match.result === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
                                       <div className="text-left">
                                           <div className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
                                               {mapName}
-                                              <SourceBadge source={match.source} />
+                                              <span className={`text-[10px] font-black ${match.result === 'WIN' ? 'text-green-500' : match.result === 'LOSS' ? 'text-red-500' : 'text-yellow-500'}`}>{match.score.us}:{match.score.them}</span>
                                           </div>
                                           <div className="text-[10px] text-neutral-400 font-mono mt-0.5 text-left">
-                                              {match.date.split('T')[0]} • Rank {stats.rank}
+                                              {match.date.split('T')[0]}
                                           </div>
                                       </div>
                                   </div>
                                   
                                   <div className="flex items-center gap-4 text-right">
-                                      <div className="hidden sm:block">
-                                          <div className="text-[9px] text-neutral-400 uppercase font-bold">ADR</div>
-                                          <div className="text-sm font-mono font-bold text-neutral-600 dark:text-neutral-300">{stats.adr.toFixed(0)}</div>
-                                      </div>
-                                      <div>
+                                      <div className="flex flex-col items-end">
                                           <div className="text-[9px] text-neutral-400 uppercase font-bold">K - D</div>
-                                          <div className="text-sm font-mono font-bold text-neutral-800 dark:text-neutral-200">
-                                              {stats.kills}-{stats.deaths}
+                                          <div className={`text-xs font-mono font-bold ${stats.kills - stats.deaths > 0 ? 'text-green-500' : stats.kills - stats.deaths < 0 ? 'text-red-500' : 'text-neutral-500'}`}>
+                                              {stats.kills}-{stats.deaths} ({stats.kills - stats.deaths > 0 ? '+' : ''}{stats.kills - stats.deaths})
                                           </div>
                                       </div>
-                                      <div className="min-w-[40px]">
+                                      <div className="min-w-[40px] flex flex-col items-end">
                                           <div className="text-[9px] text-neutral-400 uppercase font-bold">RTG</div>
-                                          <div className={`text-lg font-black leading-none ${stats.rating >= 1.3 ? 'text-red-500' : stats.rating >= 1.1 ? 'text-green-500' : 'text-neutral-600 dark:text-neutral-400'}`}>
+                                          <div className={`text-sm font-black leading-none ${stats.rating >= 1.3 ? 'text-red-500' : stats.rating >= 1.1 ? 'text-green-500' : 'text-neutral-400'}`}>
                                               {stats.rating}
                                           </div>
                                       </div>
@@ -376,14 +366,13 @@ export const TBTVView: React.FC = () => {
 
               {/* Match Header */}
               <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl overflow-hidden relative shadow-sm">
-                  <div className={`absolute top-0 w-full h-1 ${selectedMatch.result === 'WIN' ? 'bg-green-500' : selectedMatch.result === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
+                  <div className={`absolute left-0 top-0 bottom-0 w-2 ${selectedMatch.result === 'WIN' ? 'bg-green-500' : selectedMatch.result === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
                   
-                  <div className="p-6 text-center">
+                  <div className="p-6 text-center pl-8">
                        <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
                             <span>{selectedMatch.date.split('T')[0]}</span>
-                            <span>{selectedMatch.date.split('T')[1].substring(0,5)}</span>
                             <span>•</span>
-                            <span>LOBBY {selectedMatch.rank}</span>
+                            <span>{selectedMatch.date.split('T')[1].substring(0,5)}</span>
                        </div>
                        <h2 className="text-3xl font-black text-neutral-900 dark:text-white mb-2">{mapName}</h2>
                        <div className="flex justify-center mb-6">
@@ -477,44 +466,32 @@ export const TBTVView: React.FC = () => {
                             onClick={() => setSelectedMatch(match)}
                             className="relative overflow-hidden bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl group cursor-pointer hover:border-blue-500/50 transition-all active:scale-[0.99]"
                         >
-                            <div className={`absolute top-0 right-0 w-24 h-full opacity-10 -skew-x-12 transform translate-x-8 ${match.result === 'WIN' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${match.result === 'WIN' ? 'bg-green-500' : match.result === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
 
-                            <div className="p-5 relative z-10">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider text-white ${match.result === 'WIN' ? 'bg-green-600' : 'bg-red-600'}`}>
-                                            {match.result}
-                                        </span>
-                                        <SourceBadge source={match.source} />
-                                    </div>
-                                    <span className="text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 px-2 py-1 rounded">
+                            <div className="p-4 pl-6 relative z-10">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
                                         {match.date.split('T')[0]}
                                     </span>
+                                    <SourceBadge source={match.source} />
                                 </div>
 
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center font-bold text-xs text-neutral-500 uppercase">
-                                            {match.mapId.substring(0,2)}
-                                        </div>
-                                        <div>
-                                            <div className="text-lg font-black text-neutral-900 dark:text-white leading-none">
-                                                {mapName}
-                                            </div>
-                                            <div className="text-[10px] text-neutral-400 font-medium mt-1">
-                                                半场: {match.score.half1_us}-{match.score.half1_them} / {match.score.half2_us}-{match.score.half2_them}
-                                            </div>
+                                        <div className="text-lg font-black text-neutral-900 dark:text-white leading-none">
+                                            {mapName}
                                         </div>
                                     </div>
-                                    <div className="text-3xl font-black font-mono tracking-tighter">
-                                        <span className={match.result === 'WIN' ? 'text-green-500' : 'text-neutral-900 dark:text-white'}>{match.score.us}</span>
+                                    <div className="text-2xl font-black font-mono tracking-tighter">
+                                        <span className={match.result === 'WIN' ? 'text-green-600 dark:text-green-500' : 'text-neutral-900 dark:text-white'}>{match.score.us}</span>
                                         <span className="text-neutral-300 mx-1">:</span>
-                                        <span className={match.result === 'LOSS' ? 'text-red-500' : 'text-neutral-900 dark:text-white'}>{match.score.them}</span>
+                                        <span className={match.result === 'LOSS' ? 'text-red-600 dark:text-red-500' : 'text-neutral-900 dark:text-white'}>{match.score.them}</span>
                                     </div>
                                 </div>
                                 
-                                <div className="absolute bottom-2 right-14 text-[10px] text-neutral-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                                    详情 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                                <div className="mt-2 text-[10px] text-neutral-400 flex justify-between items-center">
+                                     <span>Rank: {match.rank}</span>
+                                     <span className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold">查看详情 &rarr;</span>
                                 </div>
                             </div>
                         </div>

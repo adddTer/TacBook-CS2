@@ -11,6 +11,7 @@ interface HeaderProps {
   onSideChange: (side: Side) => void;
   onOpenSettings: () => void;
   viewMode: 'tactics' | 'utilities' | 'weapons' | 'tbtv';
+  currentGroupName?: string; // New prop
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -19,7 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   onMapChange, 
   onSideChange,
   onOpenSettings,
-  viewMode
+  viewMode,
+  currentGroupName
 }) => {
   // Determine if we should show map and side controls
   const showControls = viewMode === 'tactics' || viewMode === 'utilities';
@@ -28,9 +30,14 @@ export const Header: React.FC<HeaderProps> = ({
     <header 
       className="fixed top-0 left-0 right-0 z-50 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-900 shadow-sm transition-colors duration-300 h-[56px] flex items-center px-4 gap-3"
     >
-        {/* Logo */}
-        <div className="shrink-0 flex items-center">
-            <span className="font-black italic text-xl text-neutral-900 dark:text-white tracking-tighter">TacBook</span>
+        {/* Logo & Group Name */}
+        <div className="shrink-0 flex flex-col justify-center">
+            <span className="font-black italic text-xl text-neutral-900 dark:text-white tracking-tighter leading-none">TacBook</span>
+            {currentGroupName && (
+                <span className="text-[10px] font-bold text-neutral-400 leading-tight mt-0.5 max-w-[80px] truncate">
+                    {currentGroupName}
+                </span>
+            )}
         </div>
 
         {/* Middle: Map Selector (Only for Tactics/Utils) */}
@@ -39,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
                  <MapSelector currentMap={currentMapId} onChange={onMapChange} />
              ) : (
                  <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest opacity-30 select-none">
-                     CS2 Tactics
+                     CS2 战术手册
                  </div>
              )}
         </div>

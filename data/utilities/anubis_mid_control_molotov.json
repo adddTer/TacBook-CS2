@@ -1,0 +1,12 @@
+
+{
+  "id": "2100002",
+  "mapId": "anubis",
+  "side": "T",
+  "site": "Mid",
+  "title": "中路-控制火",
+  "type": "molotov",
+  "content": "投掷到桥下/中路近点，逼退防守方，为T进攻中路创造空间。",
+  "metadata": { "author": "addd" },
+  "tolerance": "easy"
+}

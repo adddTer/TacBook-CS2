@@ -6,10 +6,11 @@ import { calculateLoadoutCost } from '../utils/economyHelper';
 interface TacticCardProps {
   tactic: Tactic;
   onClick: () => void;
-  highlightRole?: string; // Kept for interface compatibility but not used in summary
+  onDelete?: () => void; // New prop
+  highlightRole?: string; 
 }
 
-export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick }) => {
+export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick, onDelete }) => {
   // Calculate costs for preview
   const { totalTeamCost } = useMemo(() => {
       if (!tactic.loadout) return { totalTeamCost: 0 };
@@ -81,16 +82,28 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick }) => {
             </div>
             </div>
 
-            {/* Chevron Right */}
-            <div className={`
-                w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 dark:text-neutral-400 mt-1 transition-colors
-                ${tactic.isRecommended 
-                    ? 'bg-yellow-100 text-yellow-600 group-hover:bg-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-400' 
-                    : 'bg-neutral-100 dark:bg-neutral-800 group-hover:bg-blue-100 group-hover:text-blue-600 dark:group-hover:bg-blue-900/30 dark:group-hover:text-blue-400'}
-            `}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                </svg>
+            <div className="flex flex-col gap-2 items-end">
+                {onDelete && (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                )}
+                
+                <div className={`
+                    w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 dark:text-neutral-400 transition-colors
+                    ${tactic.isRecommended 
+                        ? 'bg-yellow-100 text-yellow-600 group-hover:bg-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-400' 
+                        : 'bg-neutral-100 dark:bg-neutral-800 group-hover:bg-blue-100 group-hover:text-blue-600 dark:group-hover:bg-blue-900/30 dark:group-hover:text-blue-400'}
+                `}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                    </svg>
+                </div>
             </div>
         </div>
       </div>

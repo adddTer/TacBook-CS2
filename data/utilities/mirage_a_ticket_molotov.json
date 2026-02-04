@@ -1,0 +1,12 @@
+
+{
+  "id": "2000006",
+  "mapId": "mirage",
+  "side": "T",
+  "site": "A",
+  "title": "A区-跳台火",
+  "type": "molotov",
+  "content": "后点投掷，覆盖跳台（Ticket）及楼梯下区域，逼退架枪CT。",
+  "metadata": { "author": "Admin" },
+  "tolerance": "hard"
+}

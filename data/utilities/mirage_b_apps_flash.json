@@ -1,0 +1,12 @@
+
+{
+  "id": "2000004",
+  "mapId": "mirage",
+  "side": "T",
+  "site": "B",
+  "title": "B二楼-掩护闪",
+  "type": "flash",
+  "content": "从二楼窗口/门缝投掷，致盲B包点及白车敌人，掩护队友跳出二楼。",
+  "metadata": { "author": "Admin" },
+  "tolerance": "medium"
+}

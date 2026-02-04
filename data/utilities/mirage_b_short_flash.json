@@ -1,0 +1,12 @@
+
+{
+  "id": "2000003",
+  "mapId": "mirage",
+  "side": "T",
+  "site": "B",
+  "title": "B小-自助瞬爆闪",
+  "type": "flash",
+  "content": "在B小道墙壁反弹，致盲B小近点及超市外敌人，自己背身不白。",
+  "metadata": { "author": "Admin" },
+  "tolerance": "easy"
+}

@@ -1,0 +1,14 @@
+
+{
+  "id": "2000002",
+  "mapId": "mirage",
+  "side": "T",
+  "site": "Mid",
+  "title": "中路-VIP烟",
+  "type": "smoke",
+  "content": "瞄准特定标志物跑投/跳投，封锁VIP窗口视野，掩护中路推进。",
+  "metadata": { "author": "Admin" },
+  "tolerance": "hard",
+  "seriesId": "mirage_mid_vip_smoke",
+  "variantLabel": "出生点 (跑投)"
+}

@@ -1,0 +1,12 @@
+
+{
+  "id": "2000005",
+  "mapId": "mirage",
+  "side": "T",
+  "site": "A",
+  "title": "A区-过点烟",
+  "type": "smoke",
+  "content": "后点（T出生点附近）跳投，落在警家与跳台之间，封锁CT回防视野。",
+  "metadata": { "author": "Admin" },
+  "tolerance": "medium"
+}

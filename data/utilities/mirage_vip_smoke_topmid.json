@@ -1,0 +1,14 @@
+
+{
+  "id": "2000099",
+  "mapId": "mirage",
+  "side": "T",
+  "site": "Mid",
+  "title": "中路-VIP烟 (TopMid)",
+  "type": "smoke",
+  "content": "在Top Mid栏杆旁，简单瞄准投掷。更安全但需要先控制中远。",
+  "metadata": { "author": "Admin" },
+  "tolerance": "easy",
+  "seriesId": "mirage_mid_vip_smoke",
+  "variantLabel": "中远 (站投)"
+}

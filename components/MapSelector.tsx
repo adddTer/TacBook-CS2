@@ -22,14 +22,14 @@ export const MapSelector: React.FC<MapSelectorProps> = ({ currentMap, onChange }
   }, [currentMap]);
 
   return (
-    <div className="w-full max-w-[200px] sm:max-w-xs relative group">
+    <div className="flex-1 w-full min-w-0 relative group mx-2">
         {/* Fading Edges to indicate scroll */}
-        <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-white dark:from-neutral-950 to-transparent z-10 pointer-events-none"></div>
-        <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-white dark:from-neutral-950 to-transparent z-10 pointer-events-none"></div>
+        <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-white dark:from-neutral-950 to-transparent z-10 pointer-events-none"></div>
+        <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white dark:from-neutral-950 to-transparent z-10 pointer-events-none"></div>
 
         <div 
             ref={scrollRef}
-            className="flex overflow-x-auto no-scrollbar gap-1 snap-x w-full items-center py-1"
+            className="flex overflow-x-auto no-scrollbar gap-1.5 snap-x w-full items-center py-1 px-4"
         >
             {MAPS.map((map) => {
             const isActive = currentMap === map.id;
@@ -41,7 +41,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({ currentMap, onChange }
                 className={`
                     snap-center shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 border whitespace-nowrap
                     ${isActive 
-                    ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-black border-transparent shadow-sm' 
+                    ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-black border-transparent shadow-sm scale-105' 
                     : 'bg-transparent text-neutral-500 dark:text-neutral-400 border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800'}
                 `}
                 >
