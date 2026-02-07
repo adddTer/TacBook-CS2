@@ -12,10 +12,11 @@ interface TacticDetailViewProps {
   tactic: Tactic;
   onBack: () => void;
   onEdit?: () => void;
+  onDelete?: () => void;
   highlightRole?: string;
 }
 
-export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBack, onEdit, highlightRole }) => {
+export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBack, onEdit, onDelete, highlightRole }) => {
   const [isMapZoomed, setIsMapZoomed] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -48,10 +49,30 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
       try {
           const element = document.getElementById('tactic-view-container');
           if (element) {
+              // Ensure we capture nicely on mobile by momentarily modifying styling
               const canvas = await html2canvas(element, {
                   backgroundColor: document.documentElement.classList.contains('dark') ? '#0a0a0a' : '#ffffff',
                   useCORS: true,
-                  scale: 2
+                  scale: 2,
+                  onclone: (clonedDoc) => {
+                      const clonedElement = clonedDoc.getElementById('tactic-view-container');
+                      if (clonedElement) {
+                          // Force width to avoid mobile layout quirks
+                          clonedElement.style.width = '600px'; 
+                          clonedElement.style.height = 'auto';
+                          clonedElement.style.overflow = 'visible';
+                          clonedElement.style.position = 'static';
+                          
+                          // Reset typography to system fonts to avoid misalignment of webfonts/letter-spacing in canvas
+                          const allElements = clonedElement.querySelectorAll('*');
+                          allElements.forEach((el) => {
+                              const e = el as HTMLElement;
+                              e.style.fontFamily = 'sans-serif';
+                              e.style.letterSpacing = 'normal';
+                              e.style.lineHeight = '1.4';
+                          });
+                      }
+                  }
               });
               
               canvas.toBlob(async (blob) => {
@@ -104,6 +125,17 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                         className="text-blue-600 dark:text-blue-400 text-xs font-bold px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 transition-colors whitespace-nowrap"
                     >
                         编辑
+                    </button>
+                )}
+                {onDelete && (
+                    <button 
+                        onClick={onDelete}
+                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="删除"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
                     </button>
                 )}
             </div>

@@ -104,7 +104,7 @@ export const ArsenalView: React.FC = () => {
              </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 pt-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 pt-2">
             {filteredWeapons.map(weapon => (
                 <div key={weapon.id} className="relative bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden group hover:border-blue-400 transition-colors">
                     {/* Side Indicator Strip */}

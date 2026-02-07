@@ -7,7 +7,6 @@ interface UtilityCardProps {
   viewMode?: 'detail' | 'accordion'; 
   onClick?: () => void; 
   onEdit?: () => void;
-  onDelete?: () => void; // New prop
 }
 
 const typeConfig = {
@@ -24,7 +23,7 @@ const toleranceConfig = {
     pixel: { label: '像素级', color: 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20' },
 };
 
-export const UtilityCard: React.FC<UtilityCardProps> = ({ utility, viewMode = 'detail', onClick, onEdit, onDelete }) => {
+export const UtilityCard: React.FC<UtilityCardProps> = ({ utility, viewMode = 'detail', onClick, onEdit }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
@@ -117,16 +116,6 @@ export const UtilityCard: React.FC<UtilityCardProps> = ({ utility, viewMode = 'd
                         </span>
                     )}
                 </div>
-                {onDelete && (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                        className="text-red-400 hover:text-red-600 p-1"
-                    >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                    </button>
-                )}
             </div>
 
             <div className="flex justify-between items-start">

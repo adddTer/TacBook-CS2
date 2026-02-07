@@ -13,6 +13,7 @@ interface GroupManagerModalProps {
     setGroups: React.Dispatch<React.SetStateAction<ContentGroup[]>>;
     activeGroupIds: string[];
     onToggleGroup: (id: string) => void;
+    isDebug?: boolean;
 }
 
 export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({ 
@@ -22,6 +23,7 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
     setGroups,
     activeGroupIds,
     onToggleGroup,
+    isDebug = false
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [view, setView] = useState<'list' | 'create' | 'edit' | 'export_config'>('list');
@@ -29,6 +31,7 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
     // Form State for Create/Edit
     const [formName, setFormName] = useState('');
     const [formDesc, setFormDesc] = useState('');
+    const [formReadOnly, setFormReadOnly] = useState(false);
     const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
 
     // Form State for Export
@@ -63,6 +66,8 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
         setExportTargetGroup(group);
         setFormName(group.metadata.name);
         setFormDesc(group.metadata.description || '');
+        // Default to ReadOnly for export, unless user explicitly changes it (if allowed)
+        // If source is ReadOnly, export must be ReadOnly (unless Debug).
         setExportReadOnly(true); 
         setView('export_config');
     };
@@ -165,6 +170,7 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
     const startCreate = () => {
         setFormName('');
         setFormDesc('');
+        setFormReadOnly(false);
         setEditingGroupId(null);
         setView('create');
     };
@@ -172,6 +178,7 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
     const startEdit = (group: ContentGroup) => {
         setFormName(group.metadata.name);
         setFormDesc(group.metadata.description);
+        setFormReadOnly(group.metadata.isReadOnly);
         setEditingGroupId(group.metadata.id);
         setView('edit');
     };
@@ -205,6 +212,7 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                             ...g.metadata,
                             name: formName,
                             description: formDesc,
+                            isReadOnly: formReadOnly, // Update read-only state
                             lastUpdated: Date.now()
                         }
                     };
@@ -223,6 +231,9 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
             default: return '战术包管理';
         }
     };
+
+    // Helper: Determine if user can change ReadOnly status during export
+    const canToggleExportReadOnly = isDebug || (exportTargetGroup && !exportTargetGroup.metadata.isReadOnly);
 
     return (
         <>
@@ -300,14 +311,12 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                                             </div>
                                             
                                             <div className="flex gap-2 justify-end border-t border-neutral-200 dark:border-neutral-800 pt-3 pl-7">
-                                                {!group.metadata.isReadOnly && (
-                                                    <button 
-                                                        onClick={() => startEdit(group)}
-                                                        className="text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 px-3 py-1.5 rounded-lg transition-colors"
-                                                    >
-                                                        编辑
-                                                    </button>
-                                                )}
+                                                <button 
+                                                    onClick={() => startEdit(group)}
+                                                    className="text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 px-3 py-1.5 rounded-lg transition-colors"
+                                                >
+                                                    {(group.metadata.isReadOnly && !isDebug) ? '查看' : '编辑'}
+                                                </button>
 
                                                 <button 
                                                     onClick={() => handleInitiateExport(group)}
@@ -366,6 +375,7 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                                     value={formName}
                                     onChange={e => setFormName(e.target.value)}
                                     className="w-full bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white font-bold"
+                                    readOnly={view === 'edit' && formReadOnly && !isDebug}
                                 />
                             </div>
                             <div>
@@ -374,20 +384,54 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                                     value={formDesc}
                                     onChange={e => setFormDesc(e.target.value)}
                                     className="w-full bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white resize-none h-32"
+                                    readOnly={view === 'edit' && formReadOnly && !isDebug}
                                 />
                             </div>
+                            
+                            {view === 'edit' && (
+                                <div className="bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4">
+                                    {isDebug ? (
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={formReadOnly}
+                                                onChange={e => setFormReadOnly(e.target.checked)}
+                                                className="w-5 h-5 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <div>
+                                                <div className="font-bold text-sm text-neutral-900 dark:text-white">只读 (Read Only)</div>
+                                                <div className="text-xs text-neutral-500">调试模式：允许修改只读状态。</div>
+                                            </div>
+                                        </label>
+                                    ) : (
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-5 h-5 rounded border flex items-center justify-center ${formReadOnly ? 'bg-neutral-200 dark:bg-neutral-700' : 'bg-white dark:bg-neutral-900'}`}>
+                                                {formReadOnly && <svg className="w-3.5 h-3.5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-sm text-neutral-900 dark:text-white">状态：{formReadOnly ? '只读 (Read Only)' : '可编辑 (Writable)'}</div>
+                                                <div className="text-xs text-neutral-500">此属性由导入文件决定，无法修改。</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {view === 'edit' && editingGroupId && (
                                  <div className="text-[10px] text-neutral-400 font-mono">
                                      Group ID: {editingGroupId}
                                  </div>
                             )}
                             <div className="flex-1"></div>
-                            <button 
-                                onClick={handleSaveGroup}
-                                className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors"
-                            >
-                                {view === 'create' ? '创建并启用' : '保存修改'}
-                            </button>
+                            
+                            {(!formReadOnly || isDebug || view === 'create') && (
+                                <button 
+                                    onClick={handleSaveGroup}
+                                    className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors"
+                                >
+                                    {view === 'create' ? '创建并启用' : '保存修改'}
+                                </button>
+                            )}
                         </div>
                     )}
 
@@ -420,19 +464,20 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                             </div>
 
                             <div className="bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4">
-                                <label className="flex items-center gap-3 cursor-pointer">
+                                <label className={`flex items-center gap-3 ${canToggleExportReadOnly ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                                     <input 
                                         type="checkbox" 
                                         checked={exportReadOnly}
-                                        onChange={e => setExportReadOnly(e.target.checked)}
+                                        onChange={e => canToggleExportReadOnly && setExportReadOnly(e.target.checked)}
+                                        disabled={!canToggleExportReadOnly}
                                         className="w-5 h-5 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
                                     />
                                     <div>
                                         <div className="font-bold text-sm text-neutral-900 dark:text-white">锁定为只读 (Read Only)</div>
                                         <div className="text-xs text-neutral-500">
-                                            如果勾选，其他人导入此包后将无法修改其中的内容。
-                                            <br/>
-                                            <span className="text-red-500">注意：如果您希望分享可编辑的模板，请取消勾选。</span>
+                                            {canToggleExportReadOnly 
+                                                ? "如果勾选，其他人导入此包后将无法修改其中的内容。"
+                                                : "源文件为只读，导出时强制保持只读属性。"}
                                         </div>
                                     </div>
                                 </label>

@@ -1,6 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { getAIConfig, saveAIConfig, testConnection, fetchOpenAIModels, AIProvider, PRESET_MODELS } from '../services/ai';
+import { getAIConfig, saveAIConfig, getApiKey } from '../services/ai/config';
+import { testConnection, fetchOpenAIModels } from '../services/ai/providers';
+import { AIProvider } from '../services/ai/types';
+import { PRESET_MODELS } from '../services/ai/models';
 
 interface AiConfigModalProps {
     onClose: () => void;
@@ -20,9 +23,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
     const [apiKey, setApiKey] = useState('');
     const [model, setModel] = useState('');
     
-    // List of models to show in the dropdown
     const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([]);
-
     const [isLoading, setIsLoading] = useState(false);
     const [isFetchingModels, setIsFetchingModels] = useState(false);
     const [statusMsg, setStatusMsg] = useState('');
@@ -34,7 +35,6 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
         setApiKey(config.apiKey);
         setModel(config.model);
         
-        // Initialize available models with presets for the current provider
         setAvailableModels(PRESET_MODELS[config.provider] || []);
     }, []);
 
@@ -46,11 +46,9 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
             setBaseUrl(provData.defaultBaseUrl);
         }
 
-        // Reset available models to presets
         const presets = PRESET_MODELS[newProvider] || [];
         setAvailableModels(presets);
 
-        // Auto-select first preset if available
         if (presets.length > 0) {
             setModel(presets[0].id);
         } else {
@@ -92,7 +90,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
         setIsLoading(true);
         setStatusMsg('正在测试连接...');
         try {
-            await testConnection(provider, baseUrl, apiKey, model);
+            await testConnection({ provider, baseUrl, apiKey, model });
             setStatusMsg('连接成功！API 可用。');
         } catch (e) {
             console.error(e);
@@ -104,7 +102,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
 
     const handleSave = () => {
         if (apiKey && model) {
-            saveAIConfig(provider, baseUrl, apiKey, model);
+            saveAIConfig({ provider, baseUrl, apiKey, model });
             onSave();
         }
     };
@@ -174,7 +172,6 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
                             )}
                         </div>
                         
-                        {/* If we have a list (either preset or fetched), show dropdown + custom input capability */}
                         <div className="relative">
                             <input 
                                 type="text"
@@ -184,7 +181,6 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
                                 className="w-full bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none text-neutral-900 dark:text-neutral-100 pr-8"
                             />
                             
-                            {/* Dropdown overlay for quick selection */}
                             <select 
                                 onChange={(e) => setModel(e.target.value)}
                                 value=""

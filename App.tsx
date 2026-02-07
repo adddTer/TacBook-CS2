@@ -7,7 +7,6 @@ import { FilterPanel } from './components/FilterPanel';
 import { TacticEditor } from './components/TacticEditor';
 import { UtilityEditor } from './components/UtilityEditor';
 import { ArsenalView } from './components/ArsenalView';
-import { TBTVView } from './components/TBTVView';
 import { BottomNav } from './components/BottomNav';
 import { TacticDetailView } from './components/TacticDetailView';
 import { UtilityDetailView } from './components/UtilityDetailView';
@@ -18,13 +17,12 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { useTactics } from './hooks/useTactics';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { Side, MapId, Tactic, Tag, Utility, Theme, ContentGroup } from './types';
-import { loadAllTactics } from './data/tactics';
 import { generateGroupId } from './utils/idGenerator';
 
 const App: React.FC = () => {
   const [side, setSide] = useState<Side>('T');
   const [currentMap, setCurrentMap] = useState<MapId>('mirage');
-  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'tbtv'>('tactics');
+  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons'>('tactics');
   
   // Theme State
   const [theme, setTheme] = useState<Theme>('system');
@@ -92,13 +90,6 @@ const App: React.FC = () => {
         const savedGroupsStr = localStorage.getItem('tacbook_groups');
         const savedActiveIdsStr = localStorage.getItem('tacbook_active_group_ids');
         
-        if (savedActiveIdsStr) {
-            try {
-                const parsedIds = JSON.parse(savedActiveIdsStr);
-                if (Array.isArray(parsedIds)) setActiveGroupIds(parsedIds);
-            } catch(e) {}
-        }
-
         let hasLoadedGroups = false;
         if (savedGroupsStr) {
             try {
@@ -112,7 +103,15 @@ const App: React.FC = () => {
             }
         } 
         
-        // 2. Only if NO groups exist (First run or wiped), create a FRESH Default group
+        // 2. Load Active IDs if groups loaded successfully
+        if (savedActiveIdsStr && hasLoadedGroups) {
+            try {
+                const parsedIds = JSON.parse(savedActiveIdsStr);
+                if (Array.isArray(parsedIds)) setActiveGroupIds(parsedIds);
+            } catch(e) {}
+        }
+
+        // 3. Only if NO groups exist (First run or wiped), create a FRESH Default group
         if (!hasLoadedGroups) {
             const defaultId = generateGroupId(); 
 
@@ -131,13 +130,6 @@ const App: React.FC = () => {
             };
             setGroups([defaultGroup]);
             setActiveGroupIds([defaultId]);
-            
-            // Notification for auto-creation
-            setTimeout(() => {
-                 // Use custom confirm just for alert to be consistent, or just skip alert to be less annoying
-                 // alert("欢迎使用 TacBook！已为您自动创建【默认】战术包。");
-            }, 500);
-
         } else if (activeGroupIds.length === 0 && hasLoadedGroups) {
              // If we have groups but none active, try to select the first one
              if (savedGroupsStr) { 
@@ -160,14 +152,16 @@ const App: React.FC = () => {
 
   // Persist Groups
   useEffect(() => {
-      if (isDataLoaded) {
+      if (isDataLoaded && groups.length > 0) {
           localStorage.setItem('tacbook_groups', JSON.stringify(groups));
       }
   }, [groups, isDataLoaded]);
 
   // Persist Active Group IDs (and sync cleanup)
   useEffect(() => {
-      if (isDataLoaded) {
+      // FIX: Only save if data is loaded AND we have groups. 
+      // Prevents overwriting valid IDs with [] during initial load.
+      if (isDataLoaded && groups.length > 0) {
           // Verify all active IDs actually exist in groups
           const existingIds = groups.map(g => g.metadata.id);
           const validActiveIds = activeGroupIds.filter(id => existingIds.includes(id));
@@ -425,8 +419,8 @@ const App: React.FC = () => {
 
       {/* Search & Filter Bar */}
       {showSearchAndFilter && (
-          <div className="sticky top-[55px] z-40 w-full shadow-sm bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md transition-all">
-            <div className="px-4 py-2 border-b border-neutral-100 dark:border-neutral-800 flex gap-2">
+          <div className="sticky top-[55px] z-40 w-full shadow-sm bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md transition-all border-b border-neutral-100 dark:border-neutral-800">
+            <div className="max-w-[1920px] mx-auto px-4 lg:px-8 py-2 flex gap-2">
                 {/* Search Input */}
                 <div className="relative flex-1">
                      <svg className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -487,11 +481,11 @@ const App: React.FC = () => {
           </div>
       )}
 
-      <main className="px-4 pb-32 max-w-lg mx-auto pt-4">
+      <main className="px-4 lg:px-8 pb-32 max-w-[1920px] mx-auto pt-4">
         {/* Tactics List */}
         {viewMode === 'tactics' && (
             filteredTactics.length > 0 ? (
-                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {filteredTactics.map((tactic) => (
                     <div key={tactic.id} className="relative group">
                         <button 
@@ -503,7 +497,6 @@ const App: React.FC = () => {
                         <TacticCard 
                             tactic={tactic} 
                             onClick={() => setSelectedTactic(tactic)}
-                            onDelete={isItemEditable(tactic.groupId) ? () => handleDeleteTactic(tactic) : undefined}
                         />
                     </div>
                     ))}
@@ -523,7 +516,7 @@ const App: React.FC = () => {
         {/* Utilities List */}
         {viewMode === 'utilities' && (
              filteredUtilities.length > 0 ? (
-                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {filteredUtilities.map((utility) => (
                         <UtilityCard 
                             key={utility.id} 
@@ -534,7 +527,6 @@ const App: React.FC = () => {
                                 setEditingUtility(utility);
                                 setActiveEditor('utility');
                             } : undefined}
-                            onDelete={isItemEditable(utility.groupId) ? () => handleDeleteUtility(utility) : undefined}
                         />
                     ))}
                 </div>
@@ -552,12 +544,9 @@ const App: React.FC = () => {
 
         {/* Arsenal (Weapons) View */}
         {viewMode === 'weapons' && (
-            <ArsenalView />
-        )}
-
-        {/* TBTV View */}
-        {viewMode === 'tbtv' && (
-            <TBTVView />
+            <div className="max-w-[1920px] mx-auto">
+                <ArsenalView />
+            </div>
         )}
       </main>
 
@@ -571,6 +560,7 @@ const App: React.FC = () => {
                 setEditingTactic(selectedTactic);
                 setActiveEditor('tactic');
             } : undefined}
+            onDelete={isItemEditable(selectedTactic.groupId) ? () => handleDeleteTactic(selectedTactic) : undefined}
           />
       )}
 
@@ -585,6 +575,7 @@ const App: React.FC = () => {
                 setEditingUtility(selectedUtility);
                 setActiveEditor('utility');
             } : undefined}
+            onDelete={isItemEditable(selectedUtility.groupId) ? () => handleDeleteUtility(selectedUtility) : undefined}
           />
       )}
 
@@ -634,6 +625,7 @@ const App: React.FC = () => {
         onToggleGroup={(id) => {
             setActiveGroupIds(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
         }}
+        isDebug={isDebug}
       />
 
       {/* Confirm Modal (App Level for Items) */}

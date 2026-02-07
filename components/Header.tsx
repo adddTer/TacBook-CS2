@@ -10,7 +10,7 @@ interface HeaderProps {
   onMapChange: (id: MapId) => void;
   onSideChange: (side: Side) => void;
   onOpenSettings: () => void;
-  viewMode: 'tactics' | 'utilities' | 'weapons' | 'tbtv';
+  viewMode: 'tactics' | 'utilities' | 'weapons';
   currentGroupName?: string; // New prop
 }
 

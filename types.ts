@@ -133,48 +133,46 @@ export interface EconomyRule {
   values: { label: string; value: string }[];
 }
 
-// --- TBTV Types ---
-
-export type RosterPlayerId = 'Ser1EN' | 'Sanatio' | 'FuNct1on' | 'F1oyd' | 'addd';
-// Added ++ ranks for Gold styling
-export type Rank = 'S' | 'A++' | 'A+' | 'A' | 'A-' | 'B++' | 'B+' | 'B' | 'B-' | 'C++' | 'C+' | 'C' | 'C-' | 'D' | '?' ;
-
+// TBTV / Match Stats Types
 export interface PlayerProfile {
-  id: RosterPlayerId;
-  name: string;
-  role: string;
-  roleType: string; // Internal mapping for tactic logic
-  avatar?: string;
+    id: string;
+    name: string;
+    role: string;
+    roleType: string;
 }
 
+export type Rank = string; // Flexible rank string (e.g., 'B+', 'S', 'A')
+
 export interface PlayerMatchStats {
-  playerId: string; // Changed from PlayerId to string to accommodate enemies
-  rank: Rank;
-  kills: number;
-  deaths: number;
-  assists: number;
-  adr: number;
-  hsRate: number; // percentage 0-100
-  rating: number; // HLTV 2.0
-  we: number; // Win Effect
+    playerId: string;
+    rank: Rank;
+    kills: number;
+    deaths: number;
+    assists: number;
+    adr: number;
+    hsRate: number;
+    rating: number;
+    we: number;
+}
+
+export interface MatchScore {
+    us: number;
+    them: number;
+    half1_us: number;
+    half1_them: number;
+    half2_us: number;
+    half2_them: number;
 }
 
 export interface Match {
-  id: string;
-  source: 'PWA' | 'Official'; // PWA = Perfect World, Official = Valve Matchmaking
-  date: string; // ISO string (Time included)
-  mapId: MapId;
-  rank: Rank; // Lobby average rank
-  result: 'WIN' | 'LOSS' | 'DRAW';
-  startingSide: Side; // To color code halftime scores
-  score: {
-      us: number;
-      them: number;
-      half1_us: number;
-      half1_them: number;
-      half2_us: number;
-      half2_them: number;
-  };
-  players: PlayerMatchStats[]; // Our Team
-  enemyPlayers: PlayerMatchStats[]; // Opponent Team
+    id: string;
+    source: 'PWA' | 'Official';
+    date: string;
+    mapId: MapId;
+    rank: string;
+    result: 'WIN' | 'LOSS' | 'TIE';
+    startingSide?: Side;
+    score: MatchScore;
+    players: PlayerMatchStats[];
+    enemyPlayers: PlayerMatchStats[];
 }
