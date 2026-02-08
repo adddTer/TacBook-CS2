@@ -499,8 +499,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                     <div className="p-6 text-center">
                          <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-2 font-sans tabular-nums">
                               <span>{match.date.split('T')[0]}</span>
-                              <span>•</span>
-                              <span>{match.date.split('T')[1].substring(0,5)}</span>
+                              {/* Removed time display */}
                          </div>
                          <h2 className="text-3xl font-black text-neutral-900 dark:text-white mb-2">{mapName}</h2>
                          <div className="flex justify-center mb-6">

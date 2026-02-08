@@ -16,6 +16,7 @@ const NAME_ALIASES: Record<string, string> = {
     '冥医': 'Sanatio',
     'addd_233': 'addd',
     'Ser1EN': 'Ser1EN',
+    'ClayDEN': 'Ser1EN', 
     'FuNct1on': 'FuNct1on',
     'R\u2061\u2061\u2061ain\u2061\u2061\u2061\u2061\u2061': 'Rain' 
 };
@@ -47,8 +48,10 @@ export const parseDemoJson = (data: DemoData): Match => {
     const activeSteamIds = new Set<string>();
     
     const steamIdToName = new Map<string, string>();
+    // Store team identifier (could be number or name string) -> players
+    const steamIdToTeamId = new Map<string, string | number>(); 
 
-    const collectPlayerInfo = (sid: string, name: string | null) => {
+    const collectPlayerInfo = (sid: string, name: string | null, teamIdentifier?: number | string) => {
         if (sid === "BOT") return;
         allSteamIds.add(sid);
         if (name) {
@@ -56,10 +59,19 @@ export const parseDemoJson = (data: DemoData): Match => {
                 steamIdToName.set(sid, name);
             }
         }
+        if (teamIdentifier !== undefined && teamIdentifier !== null) {
+            steamIdToTeamId.set(sid, teamIdentifier);
+        }
     };
 
     if (!Array.isArray(data) && data.players) {
-        data.players.forEach(p => collectPlayerInfo(normalizeSteamId(p.steamid), p.name));
+        data.players.forEach((p: any) => {
+            const sid = normalizeSteamId(p.steamid);
+            // Prefer team_name if available (some parsers provide it), else team_number
+            // Using || instead of ? : to handle empty string case
+            const teamId = p.team_name || p.team_number;
+            collectPlayerInfo(sid, p.name, teamId);
+        });
     }
 
     events.forEach((e: any) => {
@@ -75,12 +87,91 @@ export const parseDemoJson = (data: DemoData): Match => {
         }
     });
 
+    // 1. Identify Roster Members (Anchors)
     allSteamIds.forEach(sid => {
         const rawName = steamIdToName.get(sid) || "Unknown";
         const resolved = resolveName(rawName);
         const isRoster = ROSTER.some(r => r.id === resolved);
         if (isRoster) rosterSteamIds.add(sid);
     });
+
+    // 2. Identify "My Team" ID based on metadata (Method A)
+    const teamCounts = new Map<string | number, number>();
+    rosterSteamIds.forEach(sid => {
+        const tid = steamIdToTeamId.get(sid);
+        if (tid !== undefined) {
+            teamCounts.set(tid, (teamCounts.get(tid) || 0) + 1);
+        }
+    });
+
+    let myTeamIdentifier: string | number | null = null;
+    let maxCount = 0;
+    
+    teamCounts.forEach((count, tid) => {
+        if (count > maxCount) {
+            maxCount = count;
+            myTeamIdentifier = tid;
+        }
+    });
+
+    // 3. Build Initial Teammate Set from Metadata
+    const teammateSteamIds = new Set<string>(rosterSteamIds);
+    
+    if (myTeamIdentifier !== null) {
+        allSteamIds.forEach(sid => {
+            if (steamIdToTeamId.get(sid) === myTeamIdentifier) {
+                teammateSteamIds.add(sid);
+            }
+        });
+    }
+
+    // 4. Interaction Propagation (Method B: Fix for missing/bad metadata)
+    // Use kill events to deduce teams. 
+    // Logic: Roster = Friend. Killer of Friend = Enemy. Killer of Enemy = Friend.
+    
+    const knownFriends = new Set<string>(teammateSteamIds);
+    const knownEnemies = new Set<string>();
+
+    // We do multiple passes to propagate relationships
+    let changed = true;
+    let iterations = 0;
+    while (changed && iterations < 5) {
+        changed = false;
+        events.forEach((e: any) => {
+            if (e.event_name === 'player_death') {
+                const vic = normalizeSteamId(e.user_steamid);
+                const att = normalizeSteamId(e.attacker_steamid);
+
+                if (att && vic && att !== vic && att !== 'BOT' && vic !== 'BOT') {
+                    // Scenario 1: Attacker is Friend -> Victim is Enemy
+                    if (knownFriends.has(att) && !knownEnemies.has(vic) && !knownFriends.has(vic)) {
+                        knownEnemies.add(vic);
+                        changed = true;
+                    }
+                    // Scenario 2: Victim is Friend -> Attacker is Enemy
+                    if (knownFriends.has(vic) && !knownEnemies.has(att) && !knownFriends.has(att)) {
+                        knownEnemies.add(att);
+                        changed = true;
+                    }
+                    // Scenario 3: Attacker is Enemy -> Victim is Friend
+                    if (knownEnemies.has(att) && !knownFriends.has(vic) && !knownEnemies.has(vic)) {
+                        knownFriends.add(vic);
+                        changed = true;
+                    }
+                    // Scenario 4: Victim is Enemy -> Attacker is Friend
+                    if (knownEnemies.has(vic) && !knownFriends.has(att) && !knownEnemies.has(att)) {
+                        knownFriends.add(att);
+                        changed = true;
+                    }
+                }
+            }
+        });
+        iterations++;
+    }
+
+    // Merge inferred friends into teammate list
+    knownFriends.forEach(sid => teammateSteamIds.add(sid));
+
 
     // PASS 1: DETERMINE SIDE
     let h1_t_weight = 0;
@@ -111,15 +202,15 @@ export const parseDemoJson = (data: DemoData): Match => {
         let weight = 0;
         if (e.event_name === 'bomb_planted') {
             const sid = normalizeSteamId(e.user_steamid);
-            if (rosterSteamIds.has(sid)) { side = 'T'; weight = 100; }
+            if (teammateSteamIds.has(sid)) { side = 'T'; weight = 100; }
         }
         else if (e.event_name === 'bomb_defused') {
             const sid = normalizeSteamId(e.user_steamid);
-            if (rosterSteamIds.has(sid)) { side = 'CT'; weight = 100; }
+            if (teammateSteamIds.has(sid)) { side = 'CT'; weight = 100; }
         }
         else if (e.event_name === 'player_death' || e.event_name === 'player_hurt') {
             const sid = normalizeSteamId(e.attacker_steamid);
-            if (rosterSteamIds.has(sid) && e.weapon) {
+            if (teammateSteamIds.has(sid) && e.weapon) {
                 const w = e.weapon.replace("weapon_", "");
                 if (WEAPON_SIDE_MAP[w]) { side = WEAPON_SIDE_MAP[w]; weight = 1; }
             }
@@ -195,8 +286,9 @@ export const parseDemoJson = (data: DemoData): Match => {
         aliveCTs.clear();
         const currentRosterSide = (currentRound <= 12) ? initialRosterSide : (initialRosterSide === 'T' ? 'CT' : 'T');
         activeSteamIds.forEach(sid => {
-            const isRoster = rosterSteamIds.has(sid);
-            const side = isRoster ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
+            // Check based on detected teammates (Roster + Randoms)
+            const isTeammate = teammateSteamIds.has(sid);
+            const side = isTeammate ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
             if (side === 'T') aliveTs.add(sid);
             else aliveCTs.add(sid);
         });
@@ -204,7 +296,7 @@ export const parseDemoJson = (data: DemoData): Match => {
 
     for (const e of events) {
         // Rating 4.0 Hook
-        ratingEngine.handleEvent(e, currentRound, rosterSteamIds);
+        ratingEngine.handleEvent(e, currentRound, teammateSteamIds);
 
         const type = e.event_name;
         
@@ -264,8 +356,8 @@ export const parseDemoJson = (data: DemoData): Match => {
                 else { if (isFirstHalf) s2++; else s4++; }
 
                 roundClutchAttempts.forEach((data, sid) => {
-                    const isRoster = rosterSteamIds.has(sid);
-                    const playerSide = isRoster ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
+                    const isTeammate = teammateSteamIds.has(sid);
+                    const playerSide = isTeammate ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
                     const won = (playerSide === winner);
                     let isSave = false;
                     if (!won) {
@@ -390,7 +482,11 @@ export const parseDemoJson = (data: DemoData): Match => {
 
         if (stats.kills === 0 && stats.deaths === 0 && stats.assists === 0 && stats.total_damage === 0 && stats.utility_count === 0) return;
         
-        if (rosterSteamIds.has(sid)) ourPlayers.push(stats);
+        // Final Bucket Assignment
+        // Force roster name match as ultimate fallback
+        const isRosterByName = ROSTER.some(r => r.id === stats.playerId);
+
+        if (teammateSteamIds.has(sid) || isRosterByName) ourPlayers.push(stats);
         else enemyPlayers.push(stats);
     });
 

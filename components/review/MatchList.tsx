@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Match } from '../../types';
-import { SourceBadge, getMapTheme, getMapDisplayName, getMapEnName } from './ReviewShared';
+import { SourceBadge, getMapDisplayName, getMapEnName } from './ReviewShared';
 
 interface MatchListProps {
     matches: Match[];
@@ -31,7 +31,7 @@ export const MatchList: React.FC<MatchListProps> = ({ matches, onSelectMatch }) 
             {sortedMatches.map(match => {
                 const mapName = getMapDisplayName(match.mapId);
                 const mapEn = getMapEnName(match.mapId);
-                const themeClass = getMapTheme(match.mapId);
+                // Removed dynamic theme class, using standard neutral look
                 const isWin = match.result === 'WIN';
                 const isTie = match.result === 'TIE';
 
@@ -39,11 +39,7 @@ export const MatchList: React.FC<MatchListProps> = ({ matches, onSelectMatch }) 
                     <div 
                         key={match.id} 
                         onClick={() => onSelectMatch(match)}
-                        className={`
-                            relative overflow-hidden rounded-2xl cursor-pointer group transition-all duration-300
-                            bg-gradient-to-br border shadow-sm hover:shadow-md active:scale-[0.98]
-                            ${themeClass}
-                        `}
+                        className="relative overflow-hidden rounded-2xl cursor-pointer group transition-all duration-300 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-sm hover:shadow-md active:scale-[0.98]"
                     >
                         {/* Status Bar */}
                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 z-10 ${isWin ? 'bg-green-500' : isTie ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
@@ -77,7 +73,7 @@ export const MatchList: React.FC<MatchListProps> = ({ matches, onSelectMatch }) 
                                 
                                 <div className="text-right">
                                      <div className="text-[10px] font-bold text-neutral-400 mb-1">{match.date.split('T')[0]}</div>
-                                     <button className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-white/50 dark:bg-black/20 px-3 py-1.5 rounded-lg backdrop-blur-sm group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                     <button className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
                                          查看详情 &rarr;
                                      </button>
                                 </div>

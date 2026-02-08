@@ -36,7 +36,8 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     // Import state
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDebuggerOpen, setIsDebuggerOpen] = useState(false);
-    const [showSaveModal, setShowSaveModal] = useState<{ match: Match, isOpen: boolean }>({ match: {} as any, isOpen: false });
+    // Changed to support array of matches for bulk import
+    const [saveModal, setSaveModal] = useState<{ matches: Match[], isOpen: boolean }>({ matches: [], isOpen: false });
     const [targetGroupId, setTargetGroupId] = useState(writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
 
     // Confirm Delete
@@ -117,37 +118,53 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         fileInputRef.current?.click();
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
 
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            try {
-                const content = ev.target?.result as string;
-                const data = JSON.parse(content);
-                const matchData = parseDemoJson(data);
-                
-                // Open save modal
-                if (writableGroups.length > 0) {
-                    setTargetGroupId(writableGroups[0].metadata.id);
-                    setShowSaveModal({ match: matchData, isOpen: true });
-                } else {
-                    alert("请先创建一个可编辑的战术包来保存比赛记录");
-                }
-            } catch (err) {
-                console.error(err);
-                alert('解析失败，请确保是合法的 Demo JSON');
+        const promises = Array.from(files).map((file: File) => {
+            return new Promise<Match | null>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const content = ev.target?.result as string;
+                        const data = JSON.parse(content);
+                        const matchData = parseDemoJson(data);
+                        resolve(matchData);
+                    } catch (err) {
+                        console.error(`Error parsing file ${file.name}:`, err);
+                        resolve(null);
+                    }
+                };
+                reader.onerror = () => resolve(null);
+                reader.readAsText(file);
+            });
+        });
+
+        const results = await Promise.all(promises);
+        const validMatches = results.filter((m): m is Match => m !== null);
+
+        if (validMatches.length > 0) {
+            // Open save modal
+            if (writableGroups.length > 0) {
+                setTargetGroupId(writableGroups[0].metadata.id);
+                setSaveModal({ matches: validMatches, isOpen: true });
+            } else {
+                alert("请先创建一个可编辑的战术包来保存比赛记录");
             }
-        };
-        reader.readAsText(file);
+        } else {
+            alert('没有找到有效的 Demo JSON 数据');
+        }
+        
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const handleConfirmSave = () => {
-        if (showSaveModal.match && targetGroupId) {
-            onSaveMatch(showSaveModal.match, targetGroupId);
-            setShowSaveModal({ match: {} as any, isOpen: false });
+        if (saveModal.matches.length > 0 && targetGroupId) {
+            saveModal.matches.forEach(match => {
+                onSaveMatch(match, targetGroupId);
+            });
+            setSaveModal({ matches: [], isOpen: false });
         }
     };
 
@@ -168,101 +185,116 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     };
 
     // --- Render Logic ---
+    const renderActiveView = () => {
+        // 1. Detail View: Player
+        if (selectedPlayerId && selectedPlayerStats && selectedPlayerStats.profile) {
+            return (
+                <PlayerDetail 
+                    profile={selectedPlayerStats.profile}
+                    history={selectedPlayerStats.history}
+                    onBack={() => setSelectedPlayerId(null)}
+                    onMatchClick={(m) => { setSelectedPlayerId(null); setSelectedMatch(m); }}
+                />
+            );
+        }
 
-    // 1. Detail View: Player
-    if (selectedPlayerId && selectedPlayerStats && selectedPlayerStats.profile) {
+        // 2. Detail View: Match
+        if (selectedMatch) {
+            return (
+                <MatchDetail 
+                    match={selectedMatch}
+                    onBack={() => setSelectedMatch(null)}
+                    onPlayerClick={(id) => { setSelectedMatch(null); setSelectedPlayerId(id); }}
+                    onDelete={handleDeleteClick}
+                    onShare={handleShareMatch}
+                />
+            );
+        }
+
+        // 3. Main Dashboard View
         return (
-            <PlayerDetail 
-                profile={selectedPlayerStats.profile}
-                history={selectedPlayerStats.history}
-                onBack={() => setSelectedPlayerId(null)}
-                onMatchClick={(m) => { setSelectedPlayerId(null); setSelectedMatch(m); }}
-            />
-        );
-    }
-
-    // 2. Detail View: Match
-    if (selectedMatch) {
-        return (
-            <MatchDetail 
-                match={selectedMatch}
-                onBack={() => setSelectedMatch(null)}
-                onPlayerClick={(id) => { setSelectedMatch(null); setSelectedPlayerId(id); }}
-                onDelete={handleDeleteClick}
-                onShare={handleShareMatch}
-            />
-        );
-    }
-
-    // 3. Main Dashboard View
-    return (
-        <div className="space-y-6 px-4 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            
-            {/* Header / Action Bar */}
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl w-full sm:w-auto">
-                    <button
-                        onClick={() => setActiveTab('matches')}
-                        className={`flex-1 sm:flex-none sm:w-32 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'matches' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
-                    >
-                        赛程 Match
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('players')}
-                        className={`flex-1 sm:flex-none sm:w-32 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'players' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
-                    >
-                        队员 Roster
-                    </button>
-                </div>
+            <div className="space-y-6 px-4 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 
-                <div className="flex gap-3 w-full sm:w-auto">
-                    <button 
-                        onClick={() => setIsDebuggerOpen(true)}
-                        className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl flex items-center justify-center transition-colors text-xs font-bold flex-1 sm:flex-none"
-                    >
-                        Debug JSON
-                    </button>
-                    <button 
-                        onClick={handleImportClick}
-                        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/20 gap-2 font-bold text-xs flex-1 sm:flex-none"
-                    >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                        </svg>
-                        导入 Demo
-                    </button>
-                    {/* Hidden Input */}
-                    <input 
-                        ref={fileInputRef}
-                        type="file" 
-                        accept=".json" 
-                        className="hidden" 
-                        onChange={handleFileChange}
-                    />
+                {/* Header / Action Bar */}
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                    <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl w-full sm:w-auto">
+                        <button
+                            onClick={() => setActiveTab('matches')}
+                            className={`flex-1 sm:flex-none sm:w-32 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'matches' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                        >
+                            赛程 Match
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('players')}
+                            className={`flex-1 sm:flex-none sm:w-32 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'players' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                        >
+                            队员 Roster
+                        </button>
+                    </div>
+                    
+                    <div className="flex gap-3 w-full sm:w-auto">
+                        <button 
+                            onClick={() => setIsDebuggerOpen(true)}
+                            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl flex items-center justify-center transition-colors text-xs font-bold flex-1 sm:flex-none"
+                        >
+                            Debug JSON
+                        </button>
+                        <button 
+                            onClick={handleImportClick}
+                            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/20 gap-2 font-bold text-xs flex-1 sm:flex-none"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                            导入 Demo
+                        </button>
+                        {/* Hidden Input with multiple attribute */}
+                        <input 
+                            ref={fileInputRef}
+                            type="file" 
+                            accept=".json" 
+                            multiple
+                            className="hidden" 
+                            onChange={handleFileChange}
+                        />
+                    </div>
                 </div>
-            </div>
 
-            {/* Content Tabs */}
-            {activeTab === 'matches' ? (
-                <MatchList 
-                    matches={allMatches} 
-                    onSelectMatch={setSelectedMatch}
-                />
-            ) : (
-                <PlayerList 
-                    playerStats={playerStats}
-                    onSelectPlayer={setSelectedPlayerId}
-                />
-            )}
+                {/* Content Tabs */}
+                {activeTab === 'matches' ? (
+                    <MatchList 
+                        matches={allMatches} 
+                        onSelectMatch={setSelectedMatch}
+                    />
+                ) : (
+                    <PlayerList 
+                        playerStats={playerStats}
+                        onSelectPlayer={setSelectedPlayerId}
+                    />
+                )}
+            </div>
+        );
+    };
+
+    return (
+        <>
+            {renderActiveView()}
 
             {/* Modals */}
             <JsonDebugger isOpen={isDebuggerOpen} onClose={() => setIsDebuggerOpen(false)} />
             
-            {showSaveModal.isOpen && (
+            {saveModal.isOpen && (
                 <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white dark:bg-neutral-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-neutral-200 dark:border-neutral-800">
-                        <h3 className="text-lg font-bold text-neutral-900 dark:text-white mb-4">保存比赛记录</h3>
-                        <p className="text-sm text-neutral-500 mb-4">Demo 解析成功！请选择要保存到的战术包：</p>
+                        <h3 className="text-lg font-bold text-neutral-900 dark:text-white mb-4">
+                            {saveModal.matches.length > 1 ? `批量保存 (${saveModal.matches.length})` : '保存比赛记录'}
+                        </h3>
+                        <p className="text-sm text-neutral-500 mb-4">
+                            {saveModal.matches.length > 1 
+                                ? `成功解析 ${saveModal.matches.length} 场比赛！请选择要保存到的战术包：`
+                                : `Demo 解析成功 (${saveModal.matches[0]?.mapId})！请选择要保存到的战术包：`
+                            }
+                        </p>
                         
                         <div className="mb-6">
                             <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">目标战术包</label>
@@ -279,7 +311,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
                         <div className="flex gap-3 justify-end">
                             <button 
-                                onClick={() => setShowSaveModal({ match: {} as any, isOpen: false })}
+                                onClick={() => setSaveModal({ matches: [], isOpen: false })}
                                 className="px-4 py-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors"
                             >
                                 取消
@@ -288,7 +320,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                                 onClick={handleConfirmSave}
                                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20"
                             >
-                                确认保存
+                                {saveModal.matches.length > 1 ? '全部保存' : '确认保存'}
                             </button>
                         </div>
                     </div>
@@ -309,6 +341,6 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 }}
                 onCancel={() => setConfirmDelete({ isOpen: false, match: null })}
             />
-        </div>
+        </>
     );
 };
