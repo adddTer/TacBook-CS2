@@ -16,7 +16,7 @@ interface FilterPanelProps {
   onUpdate: (key: any, value: any) => void;
   currentSide: 'T' | 'CT';
   currentMapId: string;
-  viewMode: 'tactics' | 'utilities' | 'weapons';
+  viewMode: 'tactics' | 'utilities' | 'weapons' | 'economy';
 }
 
 export const FilterPanel: React.FC<FilterPanelProps> = ({ 

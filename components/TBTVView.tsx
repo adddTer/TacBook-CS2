@@ -144,14 +144,16 @@ export const TBTVView: React.FC = () => {
       );
   };
 
-  const SourceBadge = ({ source }: { source: 'PWA' | 'Official' }) => (
+  const SourceBadge = ({ source }: { source: 'PWA' | 'Official' | 'Demo' }) => (
       <span className={`
         text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider
         ${source === 'PWA' 
             ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800' 
-            : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300 border border-neutral-300 dark:border-neutral-600'}
+            : source === 'Demo'
+                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
+                : 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300 border border-neutral-300 dark:border-neutral-600'}
       `}>
-          {source === 'PWA' ? '完美世界' : '官方竞技'}
+          {source === 'PWA' ? '完美世界' : source === 'Demo' ? 'DEMO' : '官方竞技'}
       </span>
   );
 

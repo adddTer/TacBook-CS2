@@ -199,7 +199,8 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                     lastUpdated: Date.now()
                 },
                 tactics: [],
-                utilities: []
+                utilities: [],
+                matches: []
             };
             setGroups(prev => [...prev, newGroup]);
             onToggleGroup(newId); // Activate new group

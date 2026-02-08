@@ -1,6 +1,6 @@
 
 import JSZip from 'jszip';
-import { ContentGroup, Tactic, Utility, GroupMetadata } from '../types';
+import { ContentGroup, Tactic, Utility, GroupMetadata, Match } from '../types';
 
 // --- Export Logic ---
 
@@ -34,6 +34,16 @@ export const exportGroupToZip = async (group: ContentGroup): Promise<Blob> => {
         });
     }
 
+    // 4. Matches Folder
+    const matchesFolder = zip.folder("matches");
+    if (matchesFolder && group.matches) {
+        group.matches.forEach(m => {
+            const matchCopy = JSON.parse(JSON.stringify(m));
+            delete matchCopy.groupId;
+            matchesFolder.file(`${m.id}.json`, JSON.stringify(matchCopy, null, 2));
+        });
+    }
+
     return await zip.generateAsync({ type: "blob" });
 };
 
@@ -56,6 +66,7 @@ export const importGroupFromZip = async (file: File | Blob): Promise<ContentGrou
 
     const tactics: Tactic[] = [];
     const utilities: Utility[] = [];
+    const matches: Match[] = [];
 
     // 2. Read Tactics
     const tacticsFolder = zip.folder("tactics");
@@ -85,9 +96,24 @@ export const importGroupFromZip = async (file: File | Blob): Promise<ContentGrou
         }
     }
 
+    // 4. Read Matches
+    const matchesFolder = zip.folder("matches");
+    if (matchesFolder) {
+        const matchFiles = matchesFolder.filter((path, file) => file.name.endsWith('.json'));
+        for (const file of matchFiles) {
+            const content = await file.async("string");
+            try {
+                const m = JSON.parse(content);
+                m.groupId = metadata.id; // Link to group
+                matches.push(m);
+            } catch (e) { console.warn("Failed to parse match", file.name); }
+        }
+    }
+
     return {
         metadata,
         tactics,
-        utilities
+        utilities,
+        matches
     };
 };

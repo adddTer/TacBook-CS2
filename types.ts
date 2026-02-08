@@ -104,6 +104,7 @@ export interface ContentGroup {
   metadata: GroupMetadata;
   tactics: Tactic[];
   utilities: Utility[];
+  matches: Match[]; // Added Match support
 }
 
 export interface FilterState {
@@ -133,7 +134,8 @@ export interface EconomyRule {
   values: { label: string; value: string }[];
 }
 
-// TBTV / Match Stats Types
+// --- REVIEW / TBTV / Match Stats Types ---
+
 export interface PlayerProfile {
     id: string;
     name: string;
@@ -143,16 +145,66 @@ export interface PlayerProfile {
 
 export type Rank = string; // Flexible rank string (e.g., 'B+', 'S', 'A')
 
+export interface DuelRecord {
+    [opponentSteamId: string]: { kills: number; deaths: number };
+}
+
+export interface ClutchRecord {
+    '1v1': { won: number; lost: number };
+    '1v2': { won: number; lost: number };
+    '1v3': { won: number; lost: number };
+    '1v4': { won: number; lost: number };
+    '1v5': { won: number; lost: number };
+}
+
+export interface ClutchAttempt {
+    round: number;
+    opponentCount: number; // 1vN
+    result: 'won' | 'lost' | 'saved';
+    kills: number; // Kills made during the clutch attempt
+    side: Side;
+}
+
+export interface UtilityStats {
+    smokesThrown: number;
+    flashesThrown: number;
+    enemiesBlinded: number;
+    blindDuration: number; // seconds
+    heThrown: number;
+    heDamage: number;
+    molotovsThrown: number;
+    molotovDamage: number;
+}
+
 export interface PlayerMatchStats {
     playerId: string;
+    steamid?: string; // New: Link to demo data
     rank: Rank;
     kills: number;
     deaths: number;
     assists: number;
     adr: number;
     hsRate: number;
-    rating: number;
-    we: number;
+    rating: number; // Rating 3.0
+    we: number; // Win Effect / Impact (Old WE or WPA)
+    
+    // Detailed Stats from Demo
+    total_damage?: number;
+    utility_count?: number; // General counter
+    flash_assists?: number;
+    entry_kills?: number; // TBD
+    
+    // RATING 3.0 Internal Accumulators
+    r3_wpa_accum?: number; // Total Win Probability Added
+    r3_impact_accum?: number; // Raw Impact score accumulator
+    r3_econ_accum?: number; // Economy weighted score
+    r3_rounds_played?: number;
+
+    // Advanced Stats
+    duels: DuelRecord;
+    utility: UtilityStats;
+    clutches: ClutchRecord;
+    clutchHistory: ClutchAttempt[]; // New detailed history
 }
 
 export interface MatchScore {
@@ -166,13 +218,83 @@ export interface MatchScore {
 
 export interface Match {
     id: string;
-    source: 'PWA' | 'Official';
+    source: 'PWA' | 'Official' | 'Demo'; // Added Demo source
     date: string;
-    mapId: MapId;
+    mapId: string; // Changed from MapId to string to accommodate raw map names
     rank: string;
     result: 'WIN' | 'LOSS' | 'TIE';
     startingSide?: Side;
     score: MatchScore;
     players: PlayerMatchStats[];
     enemyPlayers: PlayerMatchStats[];
+    groupId?: string; // Runtime link to parent group
+}
+
+// --- Demo JSON Specification Types ---
+
+export interface DemoMeta {
+    client_name: string;
+    server_name?: string;
+    map_name: string;
+    game_directory?: string;
+    // ... other meta fields
+}
+
+export interface DemoPlayer {
+    steamid: number | string; // Can be big number or string
+    name: string;
+    team_number: number;
+}
+
+export interface DemoEventBase {
+    event_name: string;
+    tick: number;
+}
+
+export interface PlayerDeathEvent extends DemoEventBase {
+    event_name: "player_death";
+    
+    attacker_name: string | null;
+    attacker_steamid: number | string | null;
+    
+    user_name: string | null;
+    user_steamid: number | string | null;
+    
+    assister_name: string | null;
+    assister_steamid: number | string | null;
+    
+    assistedflash: boolean;
+    weapon: string;
+    headshot: boolean;
+    dmg_health: number;
+    dmg_armor: number;
+    
+    thrusmoke: boolean;
+    penetrated: number; // number in provided JSON (0.0)
+    noscope: boolean;
+    attackerblind: boolean;
+    
+    round: number | null;
+    wipe: number;
+}
+
+export interface ItemEvent extends DemoEventBase {
+    event_name: "item_purchase" | "item_pickup" | "item_drop";
+    user_steamid: number | string | null;
+    user_name: string;
+    item: string; // "weapon_ak47", "item_kevlar", etc.
+}
+
+export interface RoundEvent extends DemoEventBase {
+    event_name: "round_start" | "round_end" | "round_freeze_end" | "round_announce_match_start";
+    winner?: number;
+    reason?: number;
+}
+
+export type DemoEvent = PlayerDeathEvent | ItemEvent | RoundEvent | DemoEventBase;
+
+export interface DemoData {
+    meta: DemoMeta;
+    players: DemoPlayer[];
+    events: DemoEvent[];
 }
