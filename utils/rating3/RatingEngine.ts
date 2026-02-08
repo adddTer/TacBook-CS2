@@ -1,27 +1,81 @@
 
 import { InventoryTracker } from "./InventoryTracker";
-import { WIN_PROB_MATRIX } from "./constants";
+import { LossBonusTracker } from "./LossBonusTracker";
+import { WEAPON_VALUES } from "./constants";
+
+// Temporary stats for a single round
+interface RoundStats {
+    kills: number;
+    deaths: number;
+    assists: number;
+    damage: number;
+    traded_death: boolean;
+    trade_kill: boolean;
+    flash_assists: number;
+    utility_damage: number;
+    is_entry_kill: boolean;
+    is_clutch_win: boolean;
+    
+    // Econ 4.0 Tracking
+    investment_kills_value: number; // Value of enemies killed (equipment value)
+    survived: boolean;
+}
 
 interface PlayerRatingState {
     steamid: string;
-    wpa_accum: number; // Win Probability Added
-    impact_points: number; // Multikills, Opening kills, Clutches
-    economy_impact: number; // Value destroyed vs used
-    trade_kills: number;
-    rounds_played: number;
+    
+    // Match Accumulators (Legacy support & Aggregate view)
+    total_kills: number;
+    total_deaths: number;
+    total_assists: number;
+    total_damage: number;
+    total_rounds: number;
+    
+    // Rating 4.0 Components
+    round_ratings: number[]; // Store every round's calculated rating
+    
+    // Helpers
+    flash_assists: number;
+    utility_count: number;
+    total_impact_score: number; // For aggregate impact
+
+    // New Counters
+    total_entry_kills: number;
+    kast_rounds: number;
+    multikills: { 2: number, 3: number, 4: number, 5: number };
 }
 
 export class RatingEngine {
     private inventory: InventoryTracker;
+    private lossBonus: LossBonusTracker;
     private states: Map<string, PlayerRatingState> = new Map();
     
-    // Round State
-    private aliveT: Set<string> = new Set();
-    private aliveCT: Set<string> = new Set();
-    private recentDeaths: { sid: string, tick: number, side: 'T'|'CT', killer: string }[] = [];
+    // Current Round State
+    private roundData: Map<string, RoundStats> = new Map();
+    // Track deaths: { victimSid, killerSid, tick }
+    private recentDeaths: { victim: string, killer: string, tick: number }[] = [];
+    private firstKillHappened: boolean = false;
     
+    // Round State Flags
+    private isPostRound: boolean = false;
+    private currentWinner: 'T' | 'CT' | null = null;
+
     constructor() {
         this.inventory = new InventoryTracker();
+        this.lossBonus = new LossBonusTracker();
+    }
+
+    private getRoundStats(sid: string): RoundStats {
+        if (!this.roundData.has(sid)) {
+            this.roundData.set(sid, {
+                kills: 0, deaths: 0, assists: 0, damage: 0,
+                traded_death: false, trade_kill: false,
+                flash_assists: 0, utility_damage: 0,
+                is_entry_kill: false, is_clutch_win: false,
+                investment_kills_value: 0, survived: true
+            });
+        }
+        return this.roundData.get(sid)!;
     }
 
     public getOrInitState(sid: string): PlayerRatingState {
@@ -29,198 +83,275 @@ export class RatingEngine {
         if (!this.states.has(s)) {
             this.states.set(s, {
                 steamid: s,
-                wpa_accum: 0,
-                impact_points: 0,
-                economy_impact: 0,
-                trade_kills: 0,
-                rounds_played: 0
+                total_kills: 0, total_deaths: 0, total_assists: 0, total_damage: 0,
+                total_rounds: 0, round_ratings: [],
+                flash_assists: 0, utility_count: 0, total_impact_score: 0,
+                total_entry_kills: 0, kast_rounds: 0, multikills: { 2:0, 3:0, 4:0, 5:0 }
             });
         }
         return this.states.get(s)!;
     }
 
     public handleEvent(e: any, round: number, rosterSteamIds: Set<string>) {
-        // 1. Inventory Tracking
+        const allIds = Array.from(this.states.keys());
+
+        // 1. Inventory & Econ Tracking
         if (e.event_name.startsWith('item_')) {
             this.inventory.handleItemEvent(e);
+            if (e.event_name === 'item_pickup' || e.event_name === 'item_purchase') return; 
+        }
+        if (e.event_name.endsWith('_detonate') || e.event_name === 'player_blind') {
+             const user = e.user_steamid || e.attacker_steamid;
+             if (user) {
+                 const state = this.getOrInitState(user);
+                 state.utility_count++;
+             }
         }
 
-        // 2. Round Start / End Logic
-        if (e.event_name === 'round_start' || e.event_name === 'round_freeze_end') {
-            // Re-populate alive lists
-            // Note: We need a way to know who is T or CT. 
-            // In the main parser loop, we don't easily have 'side' for everyone at round start 
-            // without iterating all players. We will maintain alive sets via spawn/death.
-            // But since 'player_spawn' isn't always reliable in JSON, we reset on death events primarily.
-            // For WPA, we really need the count.
-            
-            // Heuristic: Reset trade queue
-            this.recentDeaths = [];
-        }
-        
-        // Match Start Reset
+        // 2. Round Flow
         if (e.event_name === 'round_announce_match_start') {
             this.states.clear();
             this.inventory.reset();
-            this.aliveT.clear();
-            this.aliveCT.clear();
+            this.lossBonus.reset();
+            this.roundData.clear();
+            this.recentDeaths = [];
+            this.isPostRound = false;
         }
-
-        // 3. Tracking Alive Players (Crucial for WPA)
-        // We rely on the parser telling us who is alive, or we track it.
-        // Since we are "hooked" in, we'll try to infer side from the event or roster.
-        
-        if (e.event_name === 'player_death') {
-            const vic = String(e.user_steamid);
-            const att = String(e.attacker_steamid);
-            const ast = String(e.assister_steamid);
+        // IMPORTANT: Clear round data on BOTH start and freeze_end to prevent double accumulation
+        else if (e.event_name === 'round_start' || e.event_name === 'round_freeze_end') {
+            // Snapshot Start Values (only once, prefer freeze_end)
+            if (e.event_name === 'round_freeze_end') {
+                this.inventory.snapshotRoundStart(allIds);
+            }
             
-            // Determine Sides (Attacker side vs Victim side)
-            // We can check the alive sets if we maintained them perfectly, 
-            // but for safety, let's use the roster set passed in.
-            // This is a limitation: if we don't know the sides, WPA is hard.
-            // However, the main parser loop usually calculates `aliveTs` and `aliveCTs`. 
-            // We will ask the main parser to pass the alive counts if possible, 
-            // OR we infer it here. 
-            
-            // Let's implement the logic assuming `this.aliveT` and `this.aliveCT` are maintained externally
-            // or we accept we might be slightly off on 5v5 vs 4v5 if we miss a spawn.
-            // actually, let's allow the main parser to `setAliveCounts` for us.
-        }
-    }
-
-    // Called by main parser when a kill happens, with full context
-    public processKill(
-        victimId: string, 
-        attackerId: string, 
-        assisterId: string,
-        tick: number,
-        tAliveCount: number, // Count BEFORE death
-        ctAliveCount: number, // Count BEFORE death
-        victimSide: 'T' | 'CT'
-    ) {
-        const vState = this.getOrInitState(victimId);
-        const aState = this.getOrInitState(attackerId);
-        
-        // --- 1. WPA (Win Probability Added) ---
-        let winProbBefore = 0;
-        let winProbAfter = 0;
-        
-        // Clamp counts to 0-5
-        const t = Math.max(0, Math.min(5, tAliveCount));
-        const ct = Math.max(0, Math.min(5, ctAliveCount));
-        
-        winProbBefore = WIN_PROB_MATRIX[t][ct];
-        
-        // Calculate After
-        let t_after = t;
-        let ct_after = ct;
-        if (victimSide === 'T') t_after--; else ct_after--;
-        t_after = Math.max(0, t_after);
-        ct_after = Math.max(0, ct_after);
-        
-        winProbAfter = WIN_PROB_MATRIX[t_after][ct_after];
-        
-        let wpa = 0;
-        if (victimSide === 'CT') {
-            // T killed CT: T win prob increases
-            wpa = winProbAfter - winProbBefore;
-        } else {
-            // CT killed T: T win prob decreases (CT win prob increases)
-            wpa = winProbBefore - winProbAfter;
-        }
-
-        // Attribute WPA
-        if (attackerId && attackerId !== "BOT" && attackerId !== "0") {
-            aState.wpa_accum += Math.max(0, wpa); // Only positive contribution
-            
-            // Opening Kill Bonus
-            if (tAliveCount === 5 && ctAliveCount === 5) {
-                aState.impact_points += 0.2; 
+            // Safety clear to prevent "Rating=10" bug if stats accumulated
+            if (this.isPostRound) {
+                this.roundData.clear(); 
+                this.recentDeaths = []; 
+                this.firstKillHappened = false;
+                this.isPostRound = false;
+                this.currentWinner = null;
             }
         }
-        if (assisterId && assisterId !== "BOT" && assisterId !== "0") {
-            const astState = this.getOrInitState(assisterId);
-            astState.wpa_accum += Math.max(0, wpa * 0.3); // Assist gets 30% credit
+        
+        else if (e.event_name === 'round_end') {
+            // Snapshot End Values
+            this.inventory.snapshotRoundEnd(allIds);
+            
+            // Determine Winner for Loss Bonus
+            let winner: 'T' | 'CT' | null = null;
+            if (e.winner == 2 || String(e.winner) === '2') winner = 'T';
+            else if (e.winner == 3 || String(e.winner) === '3') winner = 'CT';
+            this.currentWinner = winner;
+            
+            if (winner) {
+                this.lossBonus.update(winner);
+            }
+
+            this.calculateRoundRatings(allIds, rosterSteamIds);
+            this.isPostRound = true; // Mark round as done
+        }
+        
+        else if (e.event_name === 'player_death') {
+             this.handleDeath(e, allIds, rosterSteamIds);
         }
 
-        // --- 2. Trade Kill Logic ---
-        const tradeWindowTicks = 64 * 4; // ~4 seconds
-        const trade = this.recentDeaths.find(d => 
-            d.side === (victimSide === 'T' ? 'CT' : 'T') && // Teammate of current killer died (Killer is opposite of Victim)
-            (tick - d.tick) <= tradeWindowTicks
+        else if (e.event_name === 'player_hurt') {
+             const att = String(e.attacker_steamid);
+             const vic = String(e.user_steamid);
+             const dmg = parseInt(e.dmg_health || 0);
+             if (att && att !== "BOT" && att !== "0" && att !== vic) {
+                 const rStats = this.getRoundStats(att);
+                 rStats.damage += dmg;
+                 const weapon = e.weapon || "";
+                 if (weapon.includes("grenade") || weapon.includes("molotov") || weapon.includes("incendiary")) {
+                     rStats.utility_damage += dmg;
+                 }
+             }
+        }
+    }
+
+    private handleDeath(e: any, allIds: string[], rosterSteamIds: Set<string>) {
+        const vic = String(e.user_steamid);
+        const att = String(e.attacker_steamid);
+        const ast = String(e.assister_steamid);
+        const tick = e.tick;
+
+        const vStats = this.getRoundStats(vic);
+        vStats.deaths++;
+        vStats.survived = false;
+        
+        this.inventory.handlePlayerDeath(vic);
+
+        // --- Tragedy Check (Post Round Death) ---
+        if (this.isPostRound && this.currentWinner) {
+            this.checkTragedy(vic, rosterSteamIds);
+        }
+
+        // --- Trade & Kill Logic ---
+        const TRADE_WINDOW = 256; // ~4s
+        const avengedDeath = this.recentDeaths.find(d => 
+            d.killer === vic && (tick - d.tick) <= TRADE_WINDOW
         );
-        
-        if (trade && attackerId && attackerId !== "BOT") {
-            aState.trade_kills++;
-            aState.impact_points += 0.15; // Trade bonus
-        }
-        
-        // Log death for future trades
-        if (victimSide) {
-            this.recentDeaths.push({ sid: victimId, tick, side: victimSide, killer: attackerId });
+
+        if (att && att !== "BOT" && att !== "0" && att !== vic) {
+            const aStats = this.getRoundStats(att);
+            aStats.kills++;
+            
+            // Investment Efficiency Data
+            const victimValue = this.inventory.getStartValue(vic); 
+            aStats.investment_kills_value += victimValue;
+
+            if (!this.firstKillHappened) {
+                aStats.is_entry_kill = true;
+                this.firstKillHappened = true;
+            }
+
+            if (avengedDeath) {
+                aStats.trade_kill = true;
+                const teammateStats = this.getRoundStats(avengedDeath.victim);
+                teammateStats.traded_death = true;
+            }
         }
 
-        // --- 3. Economy Impact ---
-        // Value Destroyed / Value Used
-        if (attackerId && attackerId !== "BOT") {
-            const vVal = this.inventory.getLoadoutValue(victimId);
-            const aVal = this.inventory.getLoadoutValue(attackerId);
-            
-            // Normalized ratio: Kill high value with low value = High score
-            let ecoScore = (vVal / Math.max(1, aVal)); 
-            // Cap it to avoid crazy pistols rounds skewing everything (e.g. 5000 / 200 = 25)
-            ecoScore = Math.min(ecoScore, 3.0); 
-            
-            aState.economy_impact += ecoScore;
+        // Assist Logic
+        if (ast && ast !== "BOT" && ast !== "0" && ast !== vic && ast !== att) {
+            const astStats = this.getRoundStats(ast);
+            astStats.assists++;
+            if (e.assistedflash) {
+                astStats.flash_assists++;
+            }
         }
+        
+        if (att) this.recentDeaths.push({ victim: vic, killer: att, tick });
     }
 
-    public incrementRound(allPlayerIds: string[]) {
-        allPlayerIds.forEach(id => {
-            this.getOrInitState(id).rounds_played++;
+    private calculateRoundRatings(allIds: string[], rosterSteamIds: Set<string>) {
+        allIds.forEach(sid => {
+            const pState = this.states.get(sid)!;
+            const rStats = this.getRoundStats(sid);
+            
+            // Stats Tracking
+            if (rStats.is_entry_kill) pState.total_entry_kills++;
+            
+            // KAST: Kill, Assist, Survive, Traded
+            const isKast = rStats.kills > 0 || rStats.assists > 0 || rStats.survived || rStats.traded_death;
+            if (isKast) pState.kast_rounds++;
+
+            // MultiKills
+            const k = rStats.kills;
+            if (k >= 2) {
+                if (k >= 5) pState.multikills[5]++;
+                else pState.multikills[k as 2|3|4]++;
+            }
+
+            // === RATING 4.0 BALANCED CALCULATION ===
+            
+            // 1. Kill Rating (Weight 0.25, Threshold 0.80)
+            const scoreKill = (rStats.kills / 0.80) * 0.25;
+
+            // 2. Survival Rating (Weight 0.15, Fixed 0.30)
+            const scoreSurv = (rStats.survived ? 0.30 : 0.0);
+
+            // 3. Damage Rating (Weight 0.15, Threshold 85.0)
+            const scoreDmg = (rStats.damage / 85.0) * 0.15;
+
+            // 4. KAST Rating (Weight 0.10, Fixed 0.20)
+            const scoreKast = (isKast ? 0.20 : 0.0);
+
+            // 5. Impact Rating (Weight 0.25, Divisor 1.3)
+            let impactVal = 0;
+            if (rStats.kills === 1) impactVal = 1.0;
+            else if (rStats.kills === 2) impactVal = 2.2;
+            else if (rStats.kills >= 3) impactVal = 3.5;
+            
+            if (rStats.is_entry_kill) impactVal += 0.5;
+            if (rStats.is_clutch_win) impactVal += 1.0;
+            impactVal += (rStats.flash_assists * 0.5); 
+            
+            const scoreImpact = (impactVal / 1.3) * 0.25;
+
+            let roundRating = scoreKill + scoreSurv + scoreDmg + scoreKast + scoreImpact;
+
+            // === ECONOMIC MODIFIERS (LOGARITHMIC & TIGHTENED) ===
+            
+            // A. Investment Efficiency (Log Scale)
+            const startValue = this.inventory.getStartValue(sid);
+            const investBase = startValue + 500; 
+            
+            // Coefficient lowered to 0.10 to reduce econ inflation
+            if (rStats.investment_kills_value > 0) {
+                const roi = rStats.investment_kills_value / investBase;
+                const efficiency = Math.log2(1 + roi) * 0.10;
+                roundRating += efficiency;
+            }
+
+            // B. Scavenger (Saving)
+            // Cap lowered to 0.20
+            if (rStats.survived) {
+                const endValue = this.inventory.getEndValue(sid);
+                const saveBonus = Math.min(endValue / 15000, 0.20);
+                roundRating += saveBonus;
+            }
+
+            // Push to history (Min 0)
+            pState.round_ratings.push(Math.max(0, parseFloat(roundRating.toFixed(2))));
+
+            // Update Accumulators
+            pState.total_rounds++;
+            pState.total_kills += rStats.kills;
+            pState.total_deaths += rStats.deaths;
+            pState.total_assists += rStats.assists;
+            pState.total_damage += rStats.damage;
+            pState.flash_assists += rStats.flash_assists;
+            pState.total_impact_score += impactVal;
         });
-        
-        // Identify survivors for inventory tracking
-        // This requires the main parser to tell us who survived, or we assume logic elsewhere.
-        // For simplicity, we handle inventory reset in handleRoundStart via external set.
     }
-    
-    // Inject calculated ratings into the main stats object
+
+    private checkTragedy(sid: string, rosterSteamIds: Set<string>) {
+        const pState = this.states.get(sid);
+        if (!pState) return;
+
+        const lastIdx = pState.round_ratings.length - 1;
+        if (lastIdx < 0) return;
+
+        // "Tragedy" Logic: Died AFTER round end + Had valuable equipment
+        const savedValue = this.inventory.getEndValue(sid);
+        
+        if (savedValue > 2000) {
+             const penalty = 0.3; // Flat penalty for dying with gun after round
+             
+             let newRating = pState.round_ratings[lastIdx] - penalty;
+             pState.round_ratings[lastIdx] = Math.max(0, parseFloat(newRating.toFixed(2)));
+        }
+    }
+
     public applyStats(statsMap: Map<string, any>) {
         statsMap.forEach((stats, sid) => {
-            const rState = this.getOrInitState(sid);
-            const rounds = Math.max(1, stats.r3_rounds_played || rState.rounds_played || 1); // Use parser's round count if available
-            
-            // Standard Rating 2.0 Components (Calculated in main parser usually, but we refine here)
-            const kpr = stats.kills / rounds;
-            const spr = (rounds - stats.deaths) / rounds;
-            const apr = stats.assists / rounds;
-            const adr = stats.adr || (stats.total_damage / rounds); // Ensure ADR exists
+            const state = this.states.get(sid);
+            if (!state || state.round_ratings.length === 0) {
+                stats.rating = 0;
+                return;
+            }
 
-            // Rating 3.0 Components
-            const wpaRating = (rState.wpa_accum / rounds) * 4.0; // Scale up
-            const impactRating = (rState.impact_points / rounds) * 1.5;
-            const ecoRating = (rState.economy_impact / Math.max(1, stats.kills)) * 0.2; // Avg efficiency per kill
+            const sum = state.round_ratings.reduce((a, b) => a + b, 0);
+            stats.rating = parseFloat((sum / state.round_ratings.length).toFixed(2));
             
-            // Base 2.0 (Approx) + 3.0 Modifiers
-            // 0.0073*ADR + 0.3591*KPR + -0.5329*DPR + 0.2372*Impact + 0.0032*KAST + 0.1587
-            // We use a simplified weighted sum
+            stats.flash_assists = state.flash_assists;
+            stats.utility_count = state.utility_count || 0; 
+            stats.ratingHistory = state.round_ratings;
             
-            const raw = 
-                (kpr * 1.0) + 
-                (spr * 0.7) + 
-                (wpaRating * 1.2) + 
-                (impactRating * 1.0) + 
-                (ecoRating * 0.5) +
-                (adr * 0.005);
-
-            // Normalize to ~1.0 average
-            stats.rating = parseFloat((raw / 1.1).toFixed(2));
-            stats.we = parseFloat((rState.wpa_accum * 10).toFixed(2)); // Display Win Effect
+            stats.we = parseFloat((state.total_impact_score / state.total_rounds).toFixed(2)); 
             
-            // Store internal metrics for debugging if needed
-            stats.r3_data = rState;
+            // New Fields
+            stats.entry_kills = state.total_entry_kills;
+            stats.kast = state.total_rounds > 0 ? parseFloat(((state.kast_rounds / state.total_rounds) * 100).toFixed(1)) : 0;
+            stats.multikills = {
+                k2: state.multikills[2],
+                k3: state.multikills[3],
+                k4: state.multikills[4],
+                k5: state.multikills[5]
+            };
         });
     }
 }

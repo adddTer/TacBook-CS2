@@ -1,4 +1,5 @@
 
+
 export type Side = 'T' | 'CT';
 export type Site = 'A' | 'Mid' | 'B' | 'All';
 export type MapId = 'mirage' | 'inferno' | 'dust2' | 'ancient' | 'anubis' | 'overpass' | 'nuke';
@@ -176,6 +177,13 @@ export interface UtilityStats {
     molotovDamage: number;
 }
 
+export interface MultiKillBreakdown {
+    k2: number;
+    k3: number;
+    k4: number;
+    k5: number;
+}
+
 export interface PlayerMatchStats {
     playerId: string;
     steamid?: string; // New: Link to demo data
@@ -192,13 +200,16 @@ export interface PlayerMatchStats {
     total_damage?: number;
     utility_count?: number; // General counter
     flash_assists?: number;
-    entry_kills?: number; // TBD
+    entry_kills: number;
+    kast: number; // Percentage
+    multikills: MultiKillBreakdown;
     
     // RATING 3.0 Internal Accumulators
     r3_wpa_accum?: number; // Total Win Probability Added
     r3_impact_accum?: number; // Raw Impact score accumulator
     r3_econ_accum?: number; // Economy weighted score
     r3_rounds_played?: number;
+    ratingHistory?: number[]; // Array of ratings per round
 
     // Advanced Stats
     duels: DuelRecord;

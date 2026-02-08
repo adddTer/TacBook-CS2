@@ -3,7 +3,6 @@ import { DemoData, Match, PlayerMatchStats, ClutchAttempt } from "../types";
 import { generateId } from "./idGenerator";
 import { ROSTER } from "../constants/roster";
 import { RatingEngine } from "./rating3/RatingEngine";
-import { InventoryManager } from "./rating/inventory"; // Keep old reference if needed, or remove if unused, but we use new engine now.
 
 // --- Helpers ---
 
@@ -21,7 +20,6 @@ const NAME_ALIASES: Record<string, string> = {
     'R\u2061\u2061\u2061ain\u2061\u2061\u2061\u2061\u2061': 'Rain' 
 };
 
-// Map weapon names to likely side for heuristic side determination
 const WEAPON_SIDE_MAP: Record<string, 'T' | 'CT'> = {
     'glock': 'T', 'ak47': 'T', 'galilar': 'T', 'sg553': 'T', 'tec9': 'T', 'mac10': 'T', 'molotov': 'T', 'g3sg1': 'T',
     'usp_silencer': 'CT', 'hkp2000': 'CT', 'm4a1': 'CT', 'm4a1_silencer': 'CT', 'm4a4': 'CT', 'famas': 'CT', 'aug': 'CT', 'fiveseven': 'CT', 'mp9': 'CT', 'incendiary': 'CT', 'scar20': 'CT'
@@ -42,17 +40,14 @@ export const parseDemoJson = (data: DemoData): Match => {
     const events = Array.isArray(data) ? data : (data.events || []);
     const meta = (!Array.isArray(data) && data.meta) ? data.meta : { map_name: 'Unknown' };
     
-    // Sort by Tick to ensure linear processing
     events.sort((a: any, b: any) => (a.tick || 0) - (b.tick || 0));
 
-    // Common: Identify Roster SteamIDs & Collect Names
     const rosterSteamIds = new Set<string>();
     const allSteamIds = new Set<string>(); 
     const activeSteamIds = new Set<string>();
     
     const steamIdToName = new Map<string, string>();
 
-    // Helper to collect names from events
     const collectPlayerInfo = (sid: string, name: string | null) => {
         if (sid === "BOT") return;
         allSteamIds.add(sid);
@@ -63,7 +58,6 @@ export const parseDemoJson = (data: DemoData): Match => {
         }
     };
 
-    // Pre-scan players
     if (!Array.isArray(data) && data.players) {
         data.players.forEach(p => collectPlayerInfo(normalizeSteamId(p.steamid), p.name));
     }
@@ -88,10 +82,7 @@ export const parseDemoJson = (data: DemoData): Match => {
         if (isRoster) rosterSteamIds.add(sid);
     });
 
-    // ==========================================================================================
     // PASS 1: DETERMINE SIDE
-    // ==========================================================================================
-    
     let h1_t_weight = 0;
     let h1_ct_weight = 0;
     let h2_t_weight = 0;
@@ -151,13 +142,8 @@ export const parseDemoJson = (data: DemoData): Match => {
         else if (h2_t_weight > h2_ct_weight) initialRosterSide = 'CT';
     }
 
-    // ==========================================================================================
     // PASS 2: CALCULATE STATS
-    // ==========================================================================================
-
     const statsMap = new Map<string, PlayerMatchStats>();
-    
-    // RATING 3.0 ENGINE INITIALIZATION
     const ratingEngine = new RatingEngine();
 
     const getOrInitStats = (sid: string, fallbackName: string | null) => {
@@ -177,18 +163,21 @@ export const parseDemoJson = (data: DemoData): Match => {
                 utility_count: 0,
                 flash_assists: 0,
                 headshots: 0, 
+                entry_kills: 0,
+                kast: 0,
+                multikills: { k2: 0, k3: 0, k4: 0, k5: 0 },
                 duels: {}, 
                 utility: { smokesThrown: 0, flashesThrown: 0, enemiesBlinded: 0, blindDuration: 0, heThrown: 0, heDamage: 0, molotovsThrown: 0, molotovDamage: 0 },
                 clutches: { '1v1': { won: 0, lost: 0 }, '1v2': { won: 0, lost: 0 }, '1v3': { won: 0, lost: 0 }, '1v4': { won: 0, lost: 0 }, '1v5': { won: 0, lost: 0 } },
                 clutchHistory: [],
-                // Rating 3.0 Placeholders
                 r3_rounds_played: 0
             } as any);
+            ratingEngine.getOrInitState(sid);
         }
         return statsMap.get(sid);
     };
 
-    allSteamIds.forEach(sid => getOrInitStats(sid, null));
+    activeSteamIds.forEach(sid => getOrInitStats(sid, null));
 
     let currentRound = 1;
     let scores = { T: 0, CT: 0 };
@@ -211,13 +200,10 @@ export const parseDemoJson = (data: DemoData): Match => {
             if (side === 'T') aliveTs.add(sid);
             else aliveCTs.add(sid);
         });
-        
-        // Rating 3.0: Reset Inventory for Dead Players (keep survivors)
-        // Since we don't have explicit survivors passed to engine yet, engine handles internal resets logic.
     };
 
     for (const e of events) {
-        // RATING 3.0: Engine Hook
+        // Rating 4.0 Hook
         ratingEngine.handleEvent(e, currentRound, rosterSteamIds);
 
         const type = e.event_name;
@@ -230,6 +216,8 @@ export const parseDemoJson = (data: DemoData): Match => {
             statsMap.forEach(p => {
                 p.kills = 0; p.deaths = 0; p.assists = 0;
                 p.total_damage = 0; (p as any).headshots = 0;
+                p.entry_kills = 0; p.kast = 0;
+                p.multikills = { k2: 0, k3: 0, k4: 0, k5: 0 };
                 p.utility = { smokesThrown: 0, flashesThrown: 0, enemiesBlinded: 0, blindDuration: 0, heThrown: 0, heDamage: 0, molotovsThrown: 0, molotovDamage: 0 };
                 p.duels = {};
                 p.clutches = { '1v1': { won: 0, lost: 0 }, '1v2': { won: 0, lost: 0 }, '1v3': { won: 0, lost: 0 }, '1v4': { won: 0, lost: 0 }, '1v5': { won: 0, lost: 0 } };
@@ -242,15 +230,12 @@ export const parseDemoJson = (data: DemoData): Match => {
 
         if (!matchStarted) continue;
 
-        // --- Round Start ---
         if (type === 'round_start' || type === 'round_freeze_end') {
             if (!roundProcessed) {
                 resetRoundState();
                 roundProcessed = true; 
             }
         }
-
-        // --- Round End ---
         else if (type === 'round_end') {
             roundProcessed = false;
             statsMap.forEach(p => p.r3_rounds_played = (p.r3_rounds_played || 0) + 1);
@@ -278,7 +263,6 @@ export const parseDemoJson = (data: DemoData): Match => {
                 if (winner === currentRosterSide) { if (isFirstHalf) s1++; else s3++; } 
                 else { if (isFirstHalf) s2++; else s4++; }
 
-                // RESOLVE CLUTCHES
                 roundClutchAttempts.forEach((data, sid) => {
                     const isRoster = rosterSteamIds.has(sid);
                     const playerSide = isRoster ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
@@ -295,43 +279,27 @@ export const parseDemoJson = (data: DemoData): Match => {
                          p.clutchHistory.push({ round: currentRound, opponentCount: data.opponents, result: won ? 'won' : (isSave ? 'saved' : 'lost'), kills: data.kills, side: playerSide });
                     }
                 });
-                
-                // RATING 3.0: Increment internal round counter in engine
-                ratingEngine.incrementRound(Array.from(activeSteamIds));
-
                 currentRound++;
             }
         }
-
-        // --- Death ---
         else if (type === 'player_death') {
             const vic = normalizeSteamId(e.user_steamid);
             const att = normalizeSteamId(e.attacker_steamid);
             const ast = normalizeSteamId(e.assister_steamid);
-            const tick = e.tick;
+            // const tick = e.tick; // unused
 
-            // Rating 3.0 Data Prep
-            const tAlivePre = aliveTs.size;
-            const ctAlivePre = aliveCTs.size;
-            const vicSide = aliveTs.has(vic) ? 'T' : (aliveCTs.has(vic) ? 'CT' : null);
-
-            // Update Alive Lists
+            // Remove victim from alive lists
             aliveTs.delete(vic);
             aliveCTs.delete(vic);
             
-            // RATING 3.0: Process Kill
-            if (vicSide) {
-                ratingEngine.processKill(vic, att, ast, tick, tAlivePre, ctAlivePre, vicSide);
-            }
+            // Rating Engine handles deaths via handleEvent
 
-            // Track Clutch Kills
             if (att && roundClutchAttempts.has(att) && att !== vic && att !== "BOT") {
                 const clutchData = roundClutchAttempts.get(att)!;
                 clutchData.kills++;
                 roundClutchAttempts.set(att, clutchData);
             }
             
-            // Stats Logic
             const pVic = statsMap.get(vic);
             const pAtt = statsMap.get(att);
             const pAst = statsMap.get(ast);
@@ -339,31 +307,22 @@ export const parseDemoJson = (data: DemoData): Match => {
             if (pVic) pVic.deaths++;
 
             if (pAtt && att !== vic && att !== "BOT") {
-                const isAttRoster = rosterSteamIds.has(att);
-                const isVicRoster = rosterSteamIds.has(vic);
-                if (isAttRoster !== isVicRoster) {
-                    pAtt.kills++;
-                    if (e.headshot) (pAtt as any).headshots++;
-                    if (pVic) {
-                        const vKey = pVic.steamid; 
-                        if (!pAtt.duels[vKey]) pAtt.duels[vKey] = { kills: 0, deaths: 0 };
-                        pAtt.duels[vKey].kills++;
-                        const aKey = pAtt.steamid;
-                        if (!pVic.duels[aKey]) pVic.duels[aKey] = { kills: 0, deaths: 0 };
-                        pVic.duels[aKey].deaths++;
-                    }
+                pAtt.kills++;
+                if (e.headshot) (pAtt as any).headshots++;
+                if (pVic) {
+                    const vKey = pVic.steamid; 
+                    if (!pAtt.duels[vKey]) pAtt.duels[vKey] = { kills: 0, deaths: 0 };
+                    pAtt.duels[vKey].kills++;
+                    const aKey = pAtt.steamid;
+                    if (!pVic.duels[aKey]) pVic.duels[aKey] = { kills: 0, deaths: 0 };
+                    pVic.duels[aKey].deaths++;
                 }
             }
             if (pAst && ast !== "BOT" && ast !== att && ast !== vic) {
-                 const isAstRoster = rosterSteamIds.has(ast);
-                 const isVicRoster = rosterSteamIds.has(vic);
-                 if (isAstRoster !== isVicRoster) {
-                     pAst.assists++;
-                     if (e.assistedflash) pAst.flash_assists = (pAst.flash_assists || 0) + 1;
-                 }
+                 pAst.assists++;
+                 if (e.assistedflash) pAst.flash_assists = (pAst.flash_assists || 0) + 1;
             }
             
-            // Check for Clutch Conditions
             if (aliveTs.size === 1 && aliveCTs.size >= 1) {
                 const survivor = Array.from(aliveTs)[0];
                 if (!roundClutchAttempts.has(survivor)) roundClutchAttempts.set(survivor, { opponents: aliveCTs.size, kills: 0 });
@@ -373,24 +332,18 @@ export const parseDemoJson = (data: DemoData): Match => {
                 if (!roundClutchAttempts.has(survivor)) roundClutchAttempts.set(survivor, { opponents: aliveTs.size, kills: 0 });
             }
         }
-        
-        // --- Damage ---
         else if (type === 'player_hurt') {
             const att = normalizeSteamId(e.attacker_steamid);
             const vic = normalizeSteamId(e.user_steamid);
             const dmg = parseInt(e.dmg_health || 0);
 
             if (att && att !== "BOT" && att !== "0" && att !== vic) {
-                const isAttRoster = rosterSteamIds.has(att);
-                const isVicRoster = rosterSteamIds.has(vic);
-                if (isAttRoster !== isVicRoster) {
-                    const p = statsMap.get(att);
-                    if (p) {
-                        p.total_damage += dmg;
-                        const w = (e.weapon || "").replace("weapon_", "");
-                        if (w === 'hegrenade') p.utility.heDamage += dmg;
-                        if (w === 'molotov' || w === 'incendiary' || w === 'inferno') p.utility.molotovDamage += dmg;
-                    }
+                const p = statsMap.get(att);
+                if (p) {
+                    p.total_damage += dmg;
+                    const w = (e.weapon || "").replace("weapon_", "");
+                    if (w === 'hegrenade') p.utility.heDamage += dmg;
+                    if (w === 'molotov' || w === 'incendiary' || w === 'inferno') p.utility.molotovDamage += dmg;
                 }
             }
         }
@@ -399,9 +352,7 @@ export const parseDemoJson = (data: DemoData): Match => {
             const vic = normalizeSteamId(e.user_steamid);
             const dur = parseFloat(e.blind_duration || 0);
             if (att && att !== "BOT" && att !== vic) {
-                const isAttRoster = rosterSteamIds.has(att);
-                const isVicRoster = rosterSteamIds.has(vic);
-                if (isAttRoster !== isVicRoster && isAttRoster && dur > 0) {
+                if (dur > 0) {
                     const p = statsMap.get(att);
                     if (p) {
                         p.utility.enemiesBlinded++;
@@ -421,15 +372,24 @@ export const parseDemoJson = (data: DemoData): Match => {
         }
     }
 
-    // RATING 3.0: Apply Final Calculations
     ratingEngine.applyStats(statsMap);
 
-    // Finalize Arrays
     const ourPlayers: PlayerMatchStats[] = [];
     const enemyPlayers: PlayerMatchStats[] = [];
     
     statsMap.forEach((stats, sid) => {
-        if (stats.kills === 0 && stats.deaths === 0 && stats.total_damage === 0 && stats.utility_count === 0) return;
+        const rounds = stats.r3_rounds_played || 1;
+        stats.adr = parseFloat((stats.total_damage / rounds).toFixed(1));
+        
+        const heads = (stats as any).headshots || 0;
+        if (stats.kills > 0) {
+            stats.hsRate = parseFloat(((heads / stats.kills) * 100).toFixed(1));
+        } else {
+            stats.hsRate = 0;
+        }
+
+        if (stats.kills === 0 && stats.deaths === 0 && stats.assists === 0 && stats.total_damage === 0 && stats.utility_count === 0) return;
+        
         if (rosterSteamIds.has(sid)) ourPlayers.push(stats);
         else enemyPlayers.push(stats);
     });
