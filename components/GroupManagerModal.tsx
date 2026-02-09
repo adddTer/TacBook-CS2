@@ -5,6 +5,7 @@ import { exportGroupToZip, importGroupFromZip } from '../utils/groupSerializer';
 import { generateGroupId } from '../utils/idGenerator';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
 import { ConfirmModal } from './ConfirmModal';
+import { ShareOptionsModal } from './ShareOptionsModal';
 
 interface GroupManagerModalProps {
     isOpen: boolean;
@@ -37,6 +38,9 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
     // Form State for Export
     const [exportTargetGroup, setExportTargetGroup] = useState<ContentGroup | null>(null);
     const [exportReadOnly, setExportReadOnly] = useState(true);
+    
+    // Share Modal State
+    const [showShareModal, setShowShareModal] = useState(false);
 
     // Confirm Modal State
     const [confirmConfig, setConfirmConfig] = useState<{
@@ -93,6 +97,7 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
         const result = await prepareExportBlob();
         if (result) {
             downloadBlob(result.blob, result.filename);
+            setShowShareModal(false);
             setView('list');
         }
     };
@@ -100,12 +105,9 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
     const handleShareExport = async () => {
         const result = await prepareExportBlob();
         if (result) {
-            const success = await shareFile(result.blob, result.filename, "分享战术包", `TacBook 战术包: ${result.name}`);
-            if (!success) {
-                alert("您的设备或浏览器暂不支持原生文件分享，请使用下载功能。");
-            } else {
-                setView('list');
-            }
+            await shareFile(result.blob, result.filename, "分享战术包", `TacBook 战术包: ${result.name}`);
+            setShowShareModal(false);
+            setView('list');
         }
     };
 
@@ -485,22 +487,13 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                             </div>
 
                             <div className="flex-1"></div>
-                            <div className="flex gap-3">
-                                <button 
-                                    onClick={handleShareExport}
-                                    className="flex-1 py-3 bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white font-bold rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-                                    分享文件 (.tacpack)
-                                </button>
-                                <button 
-                                    onClick={handleDownloadExport}
-                                    className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-colors shadow-lg shadow-green-500/20 flex items-center justify-center gap-2"
-                                >
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                                    下载文件 (.tacpack)
-                                </button>
-                            </div>
+                            
+                            <button 
+                                onClick={() => setShowShareModal(true)}
+                                className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
+                            >
+                                导出 / 分享
+                            </button>
                         </div>
                     )}
                 </div>
@@ -514,6 +507,14 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                 validationString={confirmConfig.validationString}
                 onConfirm={confirmConfig.onConfirm}
                 onCancel={closeConfirm}
+            />
+
+            <ShareOptionsModal 
+                isOpen={showShareModal}
+                onClose={() => setShowShareModal(false)}
+                onShareFile={handleShareExport}
+                onDownloadFile={handleDownloadExport}
+                title={`导出 "${exportTargetGroup?.metadata.name || '战术包'}"`}
             />
         </>
     );

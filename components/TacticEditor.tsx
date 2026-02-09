@@ -204,14 +204,21 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
           alert("请先填写战术标题");
           return;
       }
-      const success = await shareFile(result.blob, result.filename, "分享战术", `CS2战术分享：${result.title}`);
-      if (!success) {
-           downloadBlob(result.blob, result.filename);
-      }
+      await shareFile(result.blob, result.filename, "分享战术", `CS2战术分享：${result.title}`);
       setShowShareModal(false);
   };
 
-  const handleShareImage = async () => {
+  const handleDownloadFile = async () => {
+      const result = await prepareExport();
+      if (!result) {
+          alert("请先填写战术标题");
+          return;
+      }
+      downloadBlob(result.blob, result.filename);
+      setShowShareModal(false);
+  };
+
+  const generateImage = async (callback: (blob: Blob) => void) => {
       setIsGeneratingImage(true);
       try {
           const element = document.getElementById('editor-view-container');
@@ -224,18 +231,13 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                   ignoreElements: (el) => el.classList.contains('no-capture')
               });
               
-              canvas.toBlob(async (blob) => {
-                  if (blob) {
-                      const safeTitle = formData.title ? formData.title.replace(/\s+/g, '_') : 'tactic';
-                      const filename = `${safeTitle}_card.png`;
-                      const success = await shareFile(blob, filename, "分享战术图片", `CS2战术：${formData.title}`);
-                      if (!success) {
-                          downloadBlob(blob, filename);
-                      }
-                  }
+              canvas.toBlob((blob) => {
+                  if (blob) callback(blob);
                   setIsGeneratingImage(false);
                   setShowShareModal(false);
               }, 'image/png');
+          } else {
+             setIsGeneratingImage(false);
           }
       } catch (e) {
           console.error("Image generation failed", e);
@@ -243,6 +245,22 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
           setShowShareModal(false);
           alert("图片生成失败");
       }
+  };
+
+  const handleShareImage = () => {
+      generateImage(async (blob) => {
+          const safeTitle = formData.title ? formData.title.replace(/\s+/g, '_') : 'tactic';
+          const filename = `${safeTitle}_card.png`;
+          await shareFile(blob, filename, "分享战术图片", `CS2战术：${formData.title}`);
+      });
+  };
+
+  const handleDownloadImage = () => {
+      generateImage((blob) => {
+          const safeTitle = formData.title ? formData.title.replace(/\s+/g, '_') : 'tactic';
+          const filename = `${safeTitle}_card.png`;
+          downloadBlob(blob, filename);
+      });
   };
 
   // --- Constants ---
@@ -626,7 +644,9 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
             isOpen={showShareModal}
             onClose={() => setShowShareModal(false)}
             onShareFile={handleShareFile}
+            onDownloadFile={handleDownloadFile}
             onShareImage={handleShareImage}
+            onDownloadImage={handleDownloadImage}
             title={`分享 "${formData.title || '战术'}"`}
             isGenerating={isGeneratingImage}
         />

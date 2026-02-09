@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ROSTER } from '../constants/roster';
 import { Match, PlayerMatchStats, Rank, ContentGroup } from '../types';
 import { parseDemoJson } from '../utils/demoParser';
@@ -10,6 +10,9 @@ import { MatchDetail } from './review/MatchDetail';
 import { PlayerList } from './review/PlayerList';
 import { PlayerDetail } from './review/PlayerDetail';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
+import { ShareOptionsModal } from './ShareOptionsModal';
+import { ParseErrorModal, ParseError } from './ParseErrorModal';
+import html2canvas from 'html2canvas';
 
 // Helper to match roster IDs even if they vary slightly in legacy data
 const getRosterId = (name: string) => {
@@ -36,12 +39,31 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     // Import state
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDebuggerOpen, setIsDebuggerOpen] = useState(false);
+    const [isDebug, setIsDebug] = useState(false);
+
+    // Parsing Errors
+    const [parseErrors, setParseErrors] = useState<ParseError[]>([]);
+    const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+
     // Changed to support array of matches for bulk import
     const [saveModal, setSaveModal] = useState<{ matches: Match[], isOpen: boolean }>({ matches: [], isOpen: false });
     const [targetGroupId, setTargetGroupId] = useState(writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
 
     // Confirm Delete
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean, match: Match | null }>({ isOpen: false, match: null });
+
+    // Share State
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+    
+    // Context for sharing: 'all' (list view) or 'single' (specific match)
+    const [shareContext, setShareContext] = useState<{ type: 'all' | 'single', match?: Match }>({ type: 'all' });
+
+    useEffect(() => {
+        // Check for debug mode (API Key presence)
+        const hasKey = !!process.env.API_KEY || !!localStorage.getItem('tacbook_gemini_api_key');
+        setIsDebug(hasKey);
+    }, []);
 
     // --- Calculations ---
     const playerStats = useMemo(() => {
@@ -122,28 +144,43 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
+        interface ParseResult {
+            match: Match | null;
+            error?: string;
+            filename: string;
+            success: boolean;
+        }
+
         const promises = Array.from(files).map((file: File) => {
-            return new Promise<Match | null>((resolve) => {
+            return new Promise<ParseResult>((resolve) => {
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                     try {
                         const content = ev.target?.result as string;
                         const data = JSON.parse(content);
                         const matchData = parseDemoJson(data);
-                        resolve(matchData);
-                    } catch (err) {
+                        resolve({ match: matchData, filename: file.name, success: true });
+                    } catch (err: any) {
                         console.error(`Error parsing file ${file.name}:`, err);
-                        resolve(null);
+                        resolve({ match: null, error: err.message || "Unknown Format", filename: file.name, success: false });
                     }
                 };
-                reader.onerror = () => resolve(null);
+                reader.onerror = () => resolve({ match: null, error: "File Read Error", filename: file.name, success: false });
                 reader.readAsText(file);
             });
         });
 
         const results = await Promise.all(promises);
-        const validMatches = results.filter((m): m is Match => m !== null);
+        const validMatches = results.filter((r): r is ParseResult & { match: Match } => r.success && r.match !== null).map(r => r.match);
+        const errors = results.filter(r => !r.success).map(r => ({ filename: r.filename, error: r.error || "Unknown Error" }));
 
+        // Handle Errors
+        if (errors.length > 0) {
+            setParseErrors(errors);
+            setIsErrorModalOpen(true);
+        }
+
+        // Handle Successes
         if (validMatches.length > 0) {
             // Open save modal
             if (writableGroups.length > 0) {
@@ -152,7 +189,8 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             } else {
                 alert("请先创建一个可编辑的战术包来保存比赛记录");
             }
-        } else {
+        } else if (errors.length === 0) {
+            // Edge case: No errors but no valid matches (e.g., valid JSON but returned null?)
             alert('没有找到有效的 Demo JSON 数据');
         }
         
@@ -172,16 +210,99 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         setConfirmDelete({ isOpen: true, match });
     };
 
-    const handleShareMatch = async (match: Match) => {
-        const jsonString = JSON.stringify([match], null, 2); // Wrap in array for compatibility with older imports
-        const blob = new Blob([jsonString], { type: "application/json" });
-        const safeMap = match.mapId.replace(/\s+/g, '_');
-        const filename = `${match.date.split('T')[0]}_${safeMap}_${match.id.substring(0,6)}.json`;
-        
-        const success = await shareFile(blob, filename, "分享比赛记录", `TacBook Match: ${safeMap}`);
-        if (!success) {
-            downloadBlob(blob, filename);
+    const openShareModal = (type: 'all' | 'single', match?: Match) => {
+        setShareContext({ type, match });
+        setShowShareModal(true);
+    };
+
+    // --- Share Logic ---
+
+    const createJsonBlob = () => {
+        let data: any;
+        let filename = '';
+        let title = '';
+
+        if (shareContext.type === 'single' && shareContext.match) {
+            // Single Match
+            const m = shareContext.match;
+            data = [m]; // Array wrap for compatibility
+            const safeMap = m.mapId.replace(/\s+/g, '_');
+            filename = `${m.date.split('T')[0]}_${safeMap}_${m.id.substring(0,6)}.json`;
+            title = `TacBook Match: ${safeMap}`;
+        } else {
+            // All Matches
+            data = allMatches;
+            const dateStr = new Date().toISOString().split('T')[0];
+            filename = `TacBook_TeamData_${dateStr}.json`;
+            title = `TacBook Team Data (${allMatches.length} matches)`;
         }
+
+        const jsonString = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonString], { type: "application/json" });
+        return { blob, filename, title };
+    };
+
+    const handleShareJson = async () => {
+        const { blob, filename, title } = createJsonBlob();
+        await shareFile(blob, filename, "分享数据", title);
+        setShowShareModal(false);
+    };
+
+    const handleDownloadJson = () => {
+        const { blob, filename } = createJsonBlob();
+        downloadBlob(blob, filename);
+        setShowShareModal(false);
+    };
+
+    const generateImage = async (callback: (blob: Blob) => void) => {
+        setIsGeneratingImage(true);
+        try {
+            // Determine capture target based on context or current view
+            const elementId = 'review-content-capture'; 
+            // Note: If inside MatchDetail, it usually renders within the same container ID or needs its own
+            // For now, we capture the main view container which contains whatever is rendered
+            
+            const element = document.getElementById(elementId);
+            if (element) {
+                const canvas = await html2canvas(element, {
+                    backgroundColor: document.documentElement.classList.contains('dark') ? '#0a0a0a' : '#fafafa', // Match bg
+                    useCORS: true,
+                    scale: 2,
+                    ignoreElements: (el) => el.classList.contains('no-capture')
+                });
+                
+                canvas.toBlob((blob) => {
+                    if (blob) callback(blob);
+                    setIsGeneratingImage(false);
+                    setShowShareModal(false);
+                }, 'image/png');
+            } else {
+                setIsGeneratingImage(false);
+            }
+        } catch (e) {
+            console.error("Image generation failed", e);
+            setIsGeneratingImage(false);
+            setShowShareModal(false);
+            alert("图片生成失败");
+        }
+    };
+
+    const handleShareImage = () => {
+        generateImage(async (blob) => {
+            const dateStr = new Date().toISOString().split('T')[0];
+            const prefix = shareContext.type === 'single' ? 'MatchStats' : 'TeamStats';
+            const filename = `TacBook_${prefix}_${dateStr}.png`;
+            await shareFile(blob, filename, "分享战报图片", `TacBook Stats`);
+        });
+    };
+
+    const handleDownloadImage = () => {
+        generateImage((blob) => {
+            const dateStr = new Date().toISOString().split('T')[0];
+            const prefix = shareContext.type === 'single' ? 'MatchStats' : 'TeamStats';
+            const filename = `TacBook_${prefix}_${dateStr}.png`;
+            downloadBlob(blob, filename);
+        });
     };
 
     // --- Render Logic ---
@@ -206,14 +327,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     onBack={() => setSelectedMatch(null)}
                     onPlayerClick={(id) => { setSelectedMatch(null); setSelectedPlayerId(id); }}
                     onDelete={handleDeleteClick}
-                    onShare={handleShareMatch}
+                    onShare={(m) => openShareModal('single', m)}
                 />
             );
         }
 
         // 3. Main Dashboard View
         return (
-            <div className="space-y-6 px-4 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div id="review-content-capture" className="space-y-6 px-4 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 
                 {/* Header / Action Bar */}
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -233,15 +354,26 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     </div>
                     
                     <div className="flex gap-3 w-full sm:w-auto">
-                        <button 
-                            onClick={() => setIsDebuggerOpen(true)}
-                            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl flex items-center justify-center transition-colors text-xs font-bold flex-1 sm:flex-none"
+                         <button 
+                            onClick={() => openShareModal('all')}
+                            className="px-4 py-2 bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white rounded-xl flex items-center justify-center transition-colors text-xs font-bold flex-1 sm:flex-none no-capture"
                         >
-                            Debug JSON
+                             <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                             导出/分享
                         </button>
+                        
+                        {isDebug && (
+                            <button 
+                                onClick={() => setIsDebuggerOpen(true)}
+                                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl flex items-center justify-center transition-colors text-xs font-bold flex-1 sm:flex-none no-capture"
+                            >
+                                Debug JSON
+                            </button>
+                        )}
+
                         <button 
                             onClick={handleImportClick}
-                            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/20 gap-2 font-bold text-xs flex-1 sm:flex-none"
+                            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/20 gap-2 font-bold text-xs flex-1 sm:flex-none no-capture"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -283,6 +415,12 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             {/* Modals */}
             <JsonDebugger isOpen={isDebuggerOpen} onClose={() => setIsDebuggerOpen(false)} />
             
+            <ParseErrorModal 
+                isOpen={isErrorModalOpen} 
+                onClose={() => setIsErrorModalOpen(false)} 
+                errors={parseErrors} 
+            />
+
             {saveModal.isOpen && (
                 <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white dark:bg-neutral-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-neutral-200 dark:border-neutral-800">
@@ -340,6 +478,17 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     setConfirmDelete({ isOpen: false, match: null });
                 }}
                 onCancel={() => setConfirmDelete({ isOpen: false, match: null })}
+            />
+
+            <ShareOptionsModal 
+                isOpen={showShareModal}
+                onClose={() => setShowShareModal(false)}
+                onShareFile={handleShareJson}
+                onDownloadFile={handleDownloadJson}
+                onShareImage={handleShareImage}
+                onDownloadImage={handleDownloadImage}
+                title={shareContext.type === 'single' ? `分享 "${shareContext.match?.mapId}"` : "批量分享/导出"}
+                isGenerating={isGeneratingImage}
             />
         </>
     );

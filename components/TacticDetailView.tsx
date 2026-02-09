@@ -29,27 +29,38 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
       return { loadoutCosts: costs, totalTeamCost: total };
   }, [tactic.loadout]);
 
+  const createExportBlob = async () => {
+      const blob = await exportTacticToZip(tactic);
+      const safeTitle = tactic.title.replace(/\s+/g, '_');
+      const filename = `${tactic.mapId}_${tactic.side}_${safeTitle}_${tactic.id}.tactic`;
+      return { blob, filename };
+  };
+
   const handleShareFile = async () => {
       try {
-          const blob = await exportTacticToZip(tactic);
-          const safeTitle = tactic.title.replace(/\s+/g, '_');
-          const filename = `${tactic.mapId}_${tactic.side}_${safeTitle}_${tactic.id}.tactic`;
-          
-          const success = await shareFile(blob, filename, "分享战术", `CS2战术：${tactic.title}`);
-          if (!success) {
-              downloadBlob(blob, filename);
-          }
+          const { blob, filename } = await createExportBlob();
+          await shareFile(blob, filename, "分享战术", `CS2战术：${tactic.title}`);
+          setShowShareModal(false);
       } catch (e) {
           console.error("Share failed", e);
       }
   };
 
-  const handleShareImage = async () => {
+  const handleDownloadFile = async () => {
+      try {
+          const { blob, filename } = await createExportBlob();
+          downloadBlob(blob, filename);
+          setShowShareModal(false);
+      } catch (e) {
+          console.error("Download failed", e);
+      }
+  };
+
+  const generateImage = async (callback: (blob: Blob) => void) => {
       setIsGeneratingImage(true);
       try {
           const element = document.getElementById('tactic-view-container');
           if (element) {
-              // Ensure we capture nicely on mobile by momentarily modifying styling
               const canvas = await html2canvas(element, {
                   backgroundColor: document.documentElement.classList.contains('dark') ? '#0a0a0a' : '#ffffff',
                   useCORS: true,
@@ -57,13 +68,11 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                   onclone: (clonedDoc) => {
                       const clonedElement = clonedDoc.getElementById('tactic-view-container');
                       if (clonedElement) {
-                          // Force width to avoid mobile layout quirks
                           clonedElement.style.width = '600px'; 
                           clonedElement.style.height = 'auto';
                           clonedElement.style.overflow = 'visible';
                           clonedElement.style.position = 'static';
                           
-                          // Reset typography to system fonts to avoid misalignment of webfonts/letter-spacing in canvas
                           const allElements = clonedElement.querySelectorAll('*');
                           allElements.forEach((el) => {
                               const e = el as HTMLElement;
@@ -75,18 +84,13 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                   }
               });
               
-              canvas.toBlob(async (blob) => {
-                  if (blob) {
-                      const safeTitle = tactic.title.replace(/\s+/g, '_');
-                      const filename = `${safeTitle}_card.png`;
-                      const success = await shareFile(blob, filename, "分享战术图片", `CS2战术：${tactic.title}`);
-                      if (!success) {
-                          downloadBlob(blob, filename);
-                      }
-                  }
+              canvas.toBlob((blob) => {
+                  if (blob) callback(blob);
                   setIsGeneratingImage(false);
                   setShowShareModal(false);
               }, 'image/png');
+          } else {
+             setIsGeneratingImage(false);
           }
       } catch (e) {
           console.error("Image generation failed", e);
@@ -94,6 +98,22 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
           setShowShareModal(false);
           alert("图片生成失败");
       }
+  };
+
+  const handleShareImage = () => {
+      generateImage(async (blob) => {
+          const safeTitle = tactic.title.replace(/\s+/g, '_');
+          const filename = `${safeTitle}_card.png`;
+          await shareFile(blob, filename, "分享战术图片", `CS2战术：${tactic.title}`);
+      });
+  };
+
+  const handleDownloadImage = () => {
+      generateImage((blob) => {
+          const safeTitle = tactic.title.replace(/\s+/g, '_');
+          const filename = `${safeTitle}_card.png`;
+          downloadBlob(blob, filename);
+      });
   };
 
   return (
@@ -271,7 +291,9 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
             isOpen={showShareModal}
             onClose={() => setShowShareModal(false)}
             onShareFile={handleShareFile}
+            onDownloadFile={handleDownloadFile}
             onShareImage={handleShareImage}
+            onDownloadImage={handleDownloadImage}
             title={`分享 "${tactic.title}"`}
             isGenerating={isGeneratingImage}
         />

@@ -36,13 +36,13 @@ export const getMapTheme = (mapName: string) => {
 // --- Rating Color Logic ---
 export const getRatingColorClass = (rating: number, type: 'text' | 'bg' = 'text') => {
     if (type === 'text') {
-        if (rating > 1.05) return 'text-green-600 dark:text-green-400';
-        if (rating < 0.95) return 'text-red-500 dark:text-red-400';
+        if (rating > 1.1) return 'text-green-600 dark:text-green-400';
+        if (rating < 1.0) return 'text-red-500 dark:text-red-400';
         return 'text-neutral-900 dark:text-white';
     } else {
         // Background badges
-        if (rating > 1.05) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800';
-        if (rating < 0.95) return 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 border-red-100 dark:border-red-800';
+        if (rating > 1.1) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800';
+        if (rating < 1.0) return 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 border-red-100 dark:border-red-800';
         return 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700';
     }
 };

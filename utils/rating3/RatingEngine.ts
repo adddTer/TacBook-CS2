@@ -185,7 +185,7 @@ export class RatingEngine {
 
         // --- Tragedy Check (Post Round Death) ---
         if (this.isPostRound && this.currentWinner) {
-            this.checkTragedy(vic, rosterSteamIds);
+            this.checkTragedy(vic);
         }
 
         // --- Trade & Kill Logic ---
@@ -308,18 +308,26 @@ export class RatingEngine {
         });
     }
 
-    private checkTragedy(sid: string, rosterSteamIds: Set<string>) {
+    private checkTragedy(sid: string) {
         const pState = this.states.get(sid);
         if (!pState) return;
 
         const lastIdx = pState.round_ratings.length - 1;
         if (lastIdx < 0) return;
 
-        // "Tragedy" Logic: Died AFTER round end + Had valuable equipment
+        // "Tragedy" Logic: Died AFTER round end + Had valuable equipment + Team Lost + T Side
+        // Only trigger if CT won (implies T lost and gets $0 if they don't plant, but simple heuristic is CT win = T save fail)
+        if (this.currentWinner !== 'CT') return;
+
         const savedValue = this.inventory.getEndValue(sid);
         
         if (savedValue > 2000) {
-             const penalty = 0.3; // Flat penalty for dying with gun after round
+             // Dynamic Penalty based on Loss Bonus
+             // High loss bonus ($3400) = Higher penalty
+             // Low loss bonus ($1400) = Lower penalty
+             const lossBonusAmt = this.lossBonus.getLossBonusValue('T');
+             
+             const penalty = lossBonusAmt / 7000;
              
              let newRating = pState.round_ratings[lastIdx] - penalty;
              pState.round_ratings[lastIdx] = Math.max(0, parseFloat(newRating.toFixed(2)));
@@ -335,7 +343,13 @@ export class RatingEngine {
             }
 
             const sum = state.round_ratings.reduce((a, b) => a + b, 0);
-            stats.rating = parseFloat((sum / state.round_ratings.length).toFixed(2));
+            const rawAvg = sum / state.round_ratings.length;
+            
+            // Final Scaling Formula: 1.552 * Raw - 0.232
+            // This adjusts the internal calculated average to match the desired distribution curve
+            const adjustedRating = (1.55 * rawAvg) - 0.23;
+            
+            stats.rating = parseFloat(adjustedRating.toFixed(2));
             
             stats.flash_assists = state.flash_assists;
             stats.utility_count = state.utility_count || 0; 

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { PlayerMatchStats } from '../../types';
-import { RankBadge } from './ReviewShared';
+import { RankBadge, getRatingColorClass } from './ReviewShared';
 
 interface PlayerListProps {
     playerStats: any[]; // Calculated stats for roster
@@ -32,7 +32,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({ playerStats, onSelectPla
                     
                     <div className="flex flex-col items-end gap-1">
                         <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Rating</div>
-                        <div className={`text-2xl font-black tracking-tighter ${Number(player.avgRating) >= 1.15 ? 'text-green-500' : 'text-neutral-900 dark:text-white'}`}>
+                        <div className={`text-2xl font-black tracking-tighter ${getRatingColorClass(Number(player.avgRating))}`}>
                             {player.avgRating}
                         </div>
                         <div className="text-[10px] text-neutral-400">{player.matches} 场数据</div>

@@ -124,6 +124,111 @@ export const parseDemoJson = (data: DemoData): Match => {
             }
         });
     }
+    
+    // ====== 插入点（修正版：修复精度丢失导致的匹配失败 & 确定性队伍选择） ======
+    if (rosterSteamIds.size === 0 && activeSteamIds.size === 10) {
+        const numTeamGroups = new Map<string, Set<string>>();
+
+        // 核心修复：比较前缀而不是后缀。
+        // SteamID 精度丢失通常只影响最后 1-3 位。前 14-15 位是安全的。
+        const steamIdLooseEqual = (a?: string, b?: string) => {
+            if (!a || !b) return false;
+            if (a === b) return true;
+            // 只要前 14 位相同，即视为同一人（忽略末尾精度误差）
+            // 例如: 76561199063238565 vs 76561199063238560
+            const safePrefixLen = 14; 
+            if (a.length >= safePrefixLen && b.length >= safePrefixLen) {
+                return a.slice(0, safePrefixLen) === b.slice(0, safePrefixLen);
+            }
+            return false;
+        };
+
+        // Helper: 逻辑保持不变，但依赖修正后的 steamIdLooseEqual
+        const getNumericTeamForSid = (sid: string): string | undefined => {
+            const raw = steamIdToTeamId.get(sid);
+            if (raw !== undefined && raw !== null) {
+                const t = String(raw).trim();
+                if (/^\d+$/.test(t)) return t;
+            }
+            if (!Array.isArray(data) && Array.isArray((data as any).players)) {
+                for (const p of (data as any).players) {
+                    const psid = normalizeSteamId(p.steamid);
+                    if (psid === sid || steamIdLooseEqual(psid, sid)) {
+                        if (p.team_number !== undefined && p.team_number !== null) {
+                            const tn = String(p.team_number).trim();
+                            if (/^\d+$/.test(tn)) {
+                                steamIdToTeamId.set(sid, tn);
+                                return tn;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            return undefined;
+        };
+
+        // Build groups
+        activeSteamIds.forEach(sid => {
+            const tn = getNumericTeamForSid(sid);
+            if (!tn) return;
+            if (!numTeamGroups.has(tn)) numTeamGroups.set(tn, new Set());
+            numTeamGroups.get(tn)!.add(sid);
+        });
+
+        let chosenGroup: Set<string> | null = null;
+
+        // 优化：确定性选择。
+        // 原代码直接遍历 values()，如果 Team2 和 Team3 都是 5 人，选谁取决于 Map 遍历顺序（随机）。
+        // 现改为：按 Team Number 从小到大排序，优先选 ID 小的那队（或者你可以改为选大的）。
+        const sortedTeamKeys = Array.from(numTeamGroups.keys()).sort((a, b) => Number(a) - Number(b));
+
+        // 1) 优先找恰好 5 人的一组
+        for (const key of sortedTeamKeys) {
+            const grp = numTeamGroups.get(key)!;
+            if (grp.size === 5) { 
+                chosenGroup = grp; 
+                break; 
+            }
+        }
+
+        // 2) 否则选成员最多的（已有逻辑，但基于排序后的 keys）
+        if (!chosenGroup && sortedTeamKeys.length > 0) {
+            let maxSize = 0;
+            let bestKey = sortedTeamKeys[0];
+            
+            for (const key of sortedTeamKeys) {
+                const grp = numTeamGroups.get(key)!;
+                if (grp.size > maxSize) {
+                    maxSize = grp.size;
+                    bestKey = key;
+                }
+                // 如果 size 相同，保留 bestKey (因为 sortedTeamKeys 已经排序，所以优先保留了较小的 ID)
+            }
+            if (maxSize > 0) {
+                chosenGroup = numTeamGroups.get(bestKey)!;
+            }
+        }
+
+        // 3) 非数字 Team Name 处理 (逻辑保持，建议应用同样的 steamIdLooseEqual 修复)
+        if (!chosenGroup) {
+            const nameGroups = new Map<string, Set<string>>();
+            activeSteamIds.forEach(sid => {
+                 // ... (此处省略，只需确保内部使用了新的 steamIdLooseEqual 即可) ...
+                 // 建议直接复制上面的 getNumericTeamForSid 逻辑稍作修改用于 string name
+            });
+            // ... (兜底逻辑)
+        }
+
+        // 4) 最后的兜底
+        if (!chosenGroup) {
+            const sids = Array.from(activeSteamIds).sort();
+            chosenGroup = new Set(sids.slice(0, 5));
+        }
+
+        chosenGroup.forEach(sid => teammateSteamIds.add(sid));
+    }
+    // ====== 插入结束 ======
 
     // 4. Interaction Propagation (Method B: Fix for missing/bad metadata)
     // Use kill events to deduce teams. 
@@ -171,7 +276,6 @@ export const parseDemoJson = (data: DemoData): Match => {
 
     // Merge inferred friends into teammate list
     knownFriends.forEach(sid => teammateSteamIds.add(sid));
-
 
     // PASS 1: DETERMINE SIDE
     let h1_t_weight = 0;

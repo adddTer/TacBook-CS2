@@ -56,19 +56,27 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
       return allUtilities.filter(u => u.seriesId === utility.seriesId && u.id !== utility.id);
   }, [utility, allUtilities]);
 
-  const handleShareFile = async () => {
+  const createExportBlob = () => {
       const jsonString = JSON.stringify(utility, null, 2);
       const blob = new Blob([jsonString], { type: "application/json" });
       const safeTitle = utility.title.replace(/\s+/g, '_');
       const filename = `${utility.mapId}_${utility.type}_${safeTitle}_${utility.id}.utility`;
-      
-      const success = await shareFile(blob, filename, "分享道具", `CS2道具：${utility.title}`);
-      if (!success) {
-          downloadBlob(blob, filename);
-      }
+      return { blob, filename };
   };
 
-  const handleShareImage = async () => {
+  const handleShareFile = async () => {
+      const { blob, filename } = createExportBlob();
+      await shareFile(blob, filename, "分享道具", `CS2道具：${utility.title}`);
+      setShowShareModal(false);
+  };
+
+  const handleDownloadFile = () => {
+      const { blob, filename } = createExportBlob();
+      downloadBlob(blob, filename);
+      setShowShareModal(false);
+  };
+
+  const generateImage = async (callback: (blob: Blob) => void) => {
       setIsGeneratingImage(true);
       try {
           const element = document.getElementById('utility-view-container');
@@ -81,13 +89,11 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
                   onclone: (clonedDoc) => {
                       const clonedElement = clonedDoc.getElementById('utility-view-container');
                       if (clonedElement) {
-                          // Force width to avoid mobile layout quirks
                           clonedElement.style.width = '600px'; 
                           clonedElement.style.height = 'auto';
                           clonedElement.style.overflow = 'visible';
                           clonedElement.style.position = 'static';
                           
-                          // Reset typography to system fonts
                           const allElements = clonedElement.querySelectorAll('*');
                           allElements.forEach((el) => {
                               const e = el as HTMLElement;
@@ -99,18 +105,13 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
                   }
               });
               
-              canvas.toBlob(async (blob) => {
-                  if (blob) {
-                      const safeTitle = utility.title.replace(/\s+/g, '_');
-                      const filename = `${safeTitle}_card.png`;
-                      const success = await shareFile(blob, filename, "分享道具图片", `CS2道具：${utility.title}`);
-                      if (!success) {
-                          downloadBlob(blob, filename);
-                      }
-                  }
+              canvas.toBlob((blob) => {
+                  if (blob) callback(blob);
                   setIsGeneratingImage(false);
                   setShowShareModal(false);
               }, 'image/png');
+          } else {
+             setIsGeneratingImage(false);
           }
       } catch (e) {
           console.error("Image generation failed", e);
@@ -118,6 +119,22 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
           setShowShareModal(false);
           alert("图片生成失败");
       }
+  };
+
+  const handleShareImage = () => {
+      generateImage(async (blob) => {
+          const safeTitle = utility.title.replace(/\s+/g, '_');
+          const filename = `${safeTitle}_card.png`;
+          await shareFile(blob, filename, "分享道具图片", `CS2道具：${utility.title}`);
+      });
+  };
+
+  const handleDownloadImage = () => {
+      generateImage((blob) => {
+          const safeTitle = utility.title.replace(/\s+/g, '_');
+          const filename = `${safeTitle}_card.png`;
+          downloadBlob(blob, filename);
+      });
   };
 
   return (
@@ -369,7 +386,9 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
             isOpen={showShareModal}
             onClose={() => setShowShareModal(false)}
             onShareFile={handleShareFile}
+            onDownloadFile={handleDownloadFile}
             onShareImage={handleShareImage}
+            onDownloadImage={handleDownloadImage}
             title={`分享 "${utility.title}"`}
             isGenerating={isGeneratingImage}
         />
