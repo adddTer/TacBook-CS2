@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { PlayerMatchStats } from '../../types';
-import { RankBadge, getRatingColorClass } from './ReviewShared';
+import { getRatingColorClass } from './ReviewShared';
 
 interface PlayerListProps {
     playerStats: any[]; // Calculated stats for roster
@@ -24,7 +24,6 @@ export const PlayerList: React.FC<PlayerListProps> = ({ playerStats, onSelectPla
                         <div>
                             <div className="flex items-center gap-2 mb-0.5">
                                 <h4 className="font-bold text-lg text-neutral-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{player.name}</h4>
-                                <RankBadge rank={player.currentRank} />
                             </div>
                             <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{player.role.split(' ')[0]}</div>
                         </div>

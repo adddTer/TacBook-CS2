@@ -146,7 +146,7 @@ const ScoreboardTab = ({
                         const kdDiff = p.kills - p.deaths;
                         const rosterId = ROSTER.find(r => r.id === p.playerId || r.name === p.playerId)?.id || p.playerId;
                         const isRosterMember = ROSTER.some(r => r.id === rosterId);
-                        const ratingColor = getRatingColorClass(p.rating, 'bg');
+                        const ratingColor = getRatingColorClass(p.rating, 'text');
                         
                         // Calculated Data
                         const multiKills = p.multikills || { k2: 0, k3: 0, k4: 0, k5: 0 };
@@ -185,7 +185,7 @@ const ScoreboardTab = ({
                                     {p.kast ? p.kast.toFixed(0) : 0}%
                                 </td>
                                 <td className="px-2 py-3 text-center">
-                                    <div className={`inline-block px-1.5 py-0.5 rounded text-xs font-black min-w-[3.5em] text-center border ${ratingColor} font-sans tabular-nums`}>
+                                    <div className={`font-black text-center font-sans tabular-nums text-sm ${ratingColor}`}>
                                         {p.rating.toFixed(2)}
                                     </div>
                                 </td>
@@ -497,10 +497,6 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                     <div className={`absolute left-0 top-0 bottom-0 w-2 ${match.result === 'WIN' ? 'bg-green-500' : match.result === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
                     
                     <div className="p-6 text-center">
-                         <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-2 font-sans tabular-nums">
-                              <span>{match.date.split('T')[0]}</span>
-                              {/* Removed time display */}
-                         </div>
                          <h2 className="text-3xl font-black text-neutral-900 dark:text-white mb-2">{mapName}</h2>
                          <div className="flex justify-center mb-6">
                              <SourceBadge source={match.source} />

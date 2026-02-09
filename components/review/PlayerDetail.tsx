@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { PlayerMatchStats, Match } from '../../types';
-import { RankBadge, StatBox, getMapDisplayName, getRatingColorClass } from './ReviewShared';
+import { StatBox, getMapDisplayName, getRatingColorClass } from './ReviewShared';
 
 interface PlayerDetailProps {
     profile: any;
@@ -38,7 +38,6 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
                      <div className="flex-1 text-center md:text-left">
                          <h2 className="text-3xl font-black text-neutral-900 dark:text-white leading-none tracking-tight">{profile.id}</h2>
                          <div className="flex items-center justify-center md:justify-start gap-3 mt-2.5">
-                             <RankBadge rank={profile.currentRank} />
                              <span className="text-xs font-bold bg-neutral-100 dark:bg-neutral-800 px-2.5 py-1 rounded text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
                                  {profile.matches} Maps
                              </span>
