@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ROSTER } from '../constants/roster';
-import { Match, PlayerMatchStats, Rank, ContentGroup } from '../types';
+import { Match, PlayerMatchStats, Rank, ContentGroup, MatchSeries } from '../types';
 import { parseDemoJson } from '../utils/demoParser';
 import { JsonDebugger } from './JsonDebugger';
 import { ConfirmModal } from './ConfirmModal';
@@ -9,6 +9,7 @@ import { MatchList } from './review/MatchList';
 import { MatchDetail } from './review/MatchDetail';
 import { PlayerList } from './review/PlayerList';
 import { PlayerDetail } from './review/PlayerDetail';
+import { SeriesCreatorModal } from './SeriesCreatorModal';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
 import { ShareOptionsModal } from './ShareOptionsModal';
 import { ParseErrorModal, ParseError } from './ParseErrorModal';
@@ -21,6 +22,22 @@ const getRosterId = (name: string) => {
 
 interface ReviewViewProps {
     allMatches: Match[];
+    // We need allSeries passed from parent or access storage here. Parent is cleaner.
+    // However, App.tsx doesn't pass allSeries yet. We'll need to modify App.tsx too or assume useAppStorage.
+    // To minimize changes, let's assume `allMatches` is passed and we add `allSeries` to props if possible, 
+    // BUT since we are in `ReviewView`, we can't easily change App.tsx signature without touching App.tsx.
+    // Wait, useAppStorage is in App.tsx. I need to update App.tsx to pass allSeries.
+    // Or I can access the hook here? No, context is better, but props are used.
+    // I will look at App.tsx again. It passes props. I will update App.tsx to pass allSeries.
+    
+    // For this step, I will add `allSeries` and `onSaveSeries` `onDeleteSeries` to props.
+    // Note: The previous prompts provided App.tsx content, I will update that too.
+    
+    // TEMPORARY FIX: I will define the props here, and then update App.tsx in another change block.
+    allSeries?: MatchSeries[];
+    onSaveSeries?: (series: MatchSeries, targetGroupId: string) => void;
+    onDeleteSeries?: (series: MatchSeries) => void;
+
     onSaveMatch: (match: Match, targetGroupId: string) => void;
     onDeleteMatch: (match: Match) => void;
     writableGroups: ContentGroup[];
@@ -28,8 +45,11 @@ interface ReviewViewProps {
 
 export const ReviewView: React.FC<ReviewViewProps> = ({ 
     allMatches, 
+    allSeries = [],
     onSaveMatch, 
     onDeleteMatch,
+    onSaveSeries,
+    onDeleteSeries,
     writableGroups 
 }) => {
     const [activeTab, setActiveTab] = useState<'matches' | 'players'>('matches');
@@ -45,12 +65,15 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     const [parseErrors, setParseErrors] = useState<ParseError[]>([]);
     const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
 
-    // Changed to support array of matches for bulk import
+    // Save Modal
     const [saveModal, setSaveModal] = useState<{ matches: Match[], isOpen: boolean }>({ matches: [], isOpen: false });
     const [targetGroupId, setTargetGroupId] = useState(writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
 
+    // Series Creator
+    const [isSeriesCreatorOpen, setIsSeriesCreatorOpen] = useState(false);
+
     // Confirm Delete
-    const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean, match: Match | null }>({ isOpen: false, match: null });
+    const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean, match?: Match, series?: MatchSeries }>({ isOpen: false });
 
     // Share State
     const [showShareModal, setShowShareModal] = useState(false);
@@ -125,15 +148,59 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     const selectedPlayerStats = useMemo(() => {
         if (!selectedPlayerId) return null;
-        const profile = playerStats.find(p => p.id === selectedPlayerId);
-        const history = allMatches.filter(m => m.players.some(p => getRosterId(p.playerId) === selectedPlayerId))
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            .map(m => {
-                const stats = m.players.find(p => getRosterId(p.playerId) === selectedPlayerId)!;
-                return { match: m, stats };
-            });
+
+        // Find matches where the selected player participated
+        // Supports finding by SteamID (preferred) or PlayerName
+        const historyRaw = allMatches.map(m => {
+            let p = m.players.find(pl => pl.steamid === selectedPlayerId || pl.playerId === selectedPlayerId);
+            if (!p) p = m.enemyPlayers.find(pl => pl.steamid === selectedPlayerId || pl.playerId === selectedPlayerId);
+            return p ? { match: m, stats: p } : null;
+        }).filter(x => x !== null) as { match: Match, stats: PlayerMatchStats }[];
+
+        if (historyRaw.length === 0) return null;
+
+        // Sort by date desc
+        const history = historyRaw.sort((a, b) => new Date(b.match.date).getTime() - new Date(a.match.date).getTime());
+        const latestStats = history[0].stats;
+        
+        // Determine if Roster Member
+        // demoParser ensures stats.playerId matches Roster ID if applicable
+        const rosterMember = ROSTER.find(r => r.id === latestStats.playerId);
+
+        // Calculate Aggregate Stats
+        let sums = { k: 0, d: 0, a: 0, rating: 0, adr: 0, hsRate: 0, we: 0 };
+        const totalMatches = history.length;
+        
+        history.forEach(({ stats }) => {
+            sums.k += stats.kills;
+            sums.d += stats.deaths;
+            sums.a += stats.assists;
+            sums.rating += stats.rating;
+            sums.adr += stats.adr;
+            sums.hsRate += stats.hsRate;
+            sums.we += stats.we;
+        });
+
+        const profile = {
+            id: rosterMember ? rosterMember.id : latestStats.playerId,
+            name: rosterMember ? rosterMember.name : latestStats.playerId,
+            role: rosterMember ? rosterMember.role : "陌生人",
+            roleType: rosterMember ? rosterMember.roleType : "Player",
+            steamid: latestStats.steamid,
+            matches: totalMatches,
+            currentRank: latestStats.rank,
+            avgRating: (sums.rating / totalMatches).toFixed(2),
+            avgAdr: (sums.adr / totalMatches).toFixed(1),
+            avgHs: (sums.hsRate / totalMatches).toFixed(1),
+            avgWe: (sums.we / totalMatches).toFixed(2),
+            totalK: sums.k,
+            totalD: sums.d,
+            totalA: sums.a,
+            kdRatio: (sums.k / (sums.d || 1)).toFixed(2)
+        };
+
         return { profile, history };
-    }, [selectedPlayerId, playerStats, allMatches]);
+    }, [selectedPlayerId, allMatches]);
 
     // --- Handlers ---
     const handleImportClick = () => {
@@ -206,8 +273,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         }
     };
 
-    const handleDeleteClick = (match: Match) => {
+    const handleDeleteClick = (e: React.MouseEvent, match: Match) => {
+        e.stopPropagation();
         setConfirmDelete({ isOpen: true, match });
+    };
+
+    const handleDeleteSeriesClick = (e: React.MouseEvent, series: MatchSeries) => {
+        e.stopPropagation();
+        setConfirmDelete({ isOpen: true, series });
     };
 
     const openShareModal = (type: 'all' | 'single', match?: Match) => {
@@ -259,8 +332,6 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         try {
             // Determine capture target based on context or current view
             const elementId = 'review-content-capture'; 
-            // Note: If inside MatchDetail, it usually renders within the same container ID or needs its own
-            // For now, we capture the main view container which contains whatever is rendered
             
             const element = document.getElementById(elementId);
             if (element) {
@@ -326,7 +397,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     match={selectedMatch}
                     onBack={() => setSelectedMatch(null)}
                     onPlayerClick={(id) => { setSelectedMatch(null); setSelectedPlayerId(id); }}
-                    onDelete={handleDeleteClick}
+                    onDelete={(m) => handleDeleteClick({ stopPropagation: () => {} } as any, m)}
                     onShare={(m) => openShareModal('single', m)}
                 />
             );
@@ -354,6 +425,16 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     </div>
                     
                     <div className="flex gap-3 w-full sm:w-auto">
+                        {writableGroups.length > 0 && activeTab === 'matches' && (
+                             <button 
+                                onClick={() => setIsSeriesCreatorOpen(true)}
+                                className="px-3 py-2 bg-neutral-100 dark:bg-neutral-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl flex items-center justify-center transition-colors text-xs font-bold flex-1 sm:flex-none no-capture"
+                            >
+                                <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                                创建系列赛
+                            </button>
+                        )}
+                        
                          <button 
                             onClick={() => openShareModal('all')}
                             className="px-4 py-2 bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white rounded-xl flex items-center justify-center transition-colors text-xs font-bold flex-1 sm:flex-none no-capture"
@@ -367,7 +448,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                                 onClick={() => setIsDebuggerOpen(true)}
                                 className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl flex items-center justify-center transition-colors text-xs font-bold flex-1 sm:flex-none no-capture"
                             >
-                                Debug JSON
+                                Debug
                             </button>
                         )}
 
@@ -395,8 +476,11 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 {/* Content Tabs */}
                 {activeTab === 'matches' ? (
                     <MatchList 
-                        matches={allMatches} 
+                        matches={allMatches}
+                        series={allSeries}
                         onSelectMatch={setSelectedMatch}
+                        onDeleteMatch={handleDeleteClick}
+                        onDeleteSeries={handleDeleteSeriesClick}
                     />
                 ) : (
                     <PlayerList 
@@ -419,6 +503,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 isOpen={isErrorModalOpen} 
                 onClose={() => setIsErrorModalOpen(false)} 
                 errors={parseErrors} 
+            />
+
+            <SeriesCreatorModal 
+                isOpen={isSeriesCreatorOpen}
+                onClose={() => setIsSeriesCreatorOpen(false)}
+                availableMatches={allMatches}
+                writableGroups={writableGroups}
+                onSave={onSaveSeries ? onSaveSeries : () => alert('Storage not connected')}
             />
 
             {saveModal.isOpen && (
@@ -467,17 +559,21 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
             <ConfirmModal 
                 isOpen={confirmDelete.isOpen}
-                title="删除比赛记录"
-                message={`确定要删除 ${confirmDelete.match?.mapId} (${confirmDelete.match?.date.split('T')[0]}) 的记录吗？此操作不可恢复。`}
+                title={confirmDelete.series ? "删除系列赛" : "删除比赛记录"}
+                message={confirmDelete.series 
+                    ? `确定要删除系列赛 "${confirmDelete.series.title}" 吗？\n(单场比赛记录不会被删除)` 
+                    : `确定要删除 ${confirmDelete.match?.mapId} 的记录吗？此操作不可恢复。`}
                 isDangerous={true}
                 onConfirm={() => {
-                    if (confirmDelete.match) {
+                    if (confirmDelete.series && onDeleteSeries) {
+                        onDeleteSeries(confirmDelete.series);
+                    } else if (confirmDelete.match) {
                         onDeleteMatch(confirmDelete.match);
-                        setSelectedMatch(null); // Ensure detail view is closed
+                        setSelectedMatch(null); 
                     }
-                    setConfirmDelete({ isOpen: false, match: null });
+                    setConfirmDelete({ isOpen: false, match: undefined, series: undefined });
                 }}
-                onCancel={() => setConfirmDelete({ isOpen: false, match: null })}
+                onCancel={() => setConfirmDelete({ isOpen: false, match: undefined, series: undefined })}
             />
 
             <ShareOptionsModal 

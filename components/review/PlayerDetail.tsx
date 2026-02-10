@@ -24,7 +24,7 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
             {/* Profile Card */}
             <div className="bg-white dark:bg-neutral-900 rounded-3xl p-6 border border-neutral-200 dark:border-neutral-800 shadow-sm relative overflow-hidden">
                  {/* Background decoration */}
-                 <div className="absolute top-0 right-0 p-12 opacity-[0.03] font-black text-9xl text-black dark:text-white select-none pointer-events-none transform translate-x-10 -translate-y-12">
+                 <div className="absolute top-0 right-0 p-12 opacity-[0.03] font-black text-9xl text-black dark:text-white select-none pointer-events-none transform translate-x-10 -translate-y-12 whitespace-nowrap">
                      {profile.id}
                  </div>
                  
@@ -35,8 +35,11 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
                      </div>
                      
                      {/* Name & Stats */}
-                     <div className="flex-1 text-center md:text-left">
-                         <h2 className="text-3xl font-black text-neutral-900 dark:text-white leading-none tracking-tight">{profile.id}</h2>
+                     <div className="flex-1 text-center md:text-left min-w-0">
+                         <h2 className="text-3xl font-black text-neutral-900 dark:text-white leading-none tracking-tight truncate">{profile.id}</h2>
+                         {profile.steamid && (
+                             <div className="text-[10px] font-mono text-neutral-400 mt-1 select-all">{profile.steamid}</div>
+                         )}
                          <div className="flex items-center justify-center md:justify-start gap-3 mt-2.5">
                              <span className="text-xs font-bold bg-neutral-100 dark:bg-neutral-800 px-2.5 py-1 rounded text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
                                  {profile.matches} Maps
@@ -46,7 +49,7 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
                      </div>
 
                      {/* Main Rating */}
-                     <div className="text-center bg-neutral-50 dark:bg-neutral-800/50 p-4 rounded-2xl min-w-[120px] border border-neutral-100 dark:border-neutral-800">
+                     <div className="text-center bg-neutral-50 dark:bg-neutral-800/50 p-4 rounded-2xl min-w-[120px] border border-neutral-100 dark:border-neutral-800 shrink-0">
                          <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">Rating 4.0</div>
                          <div className={`text-5xl font-black tracking-tighter tabular-nums ${getRatingColorClass(Number(profile.avgRating))}`}>
                              {profile.avgRating}
@@ -69,8 +72,32 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
                     {history.map(({ match, stats }) => {
                         const mapName = getMapDisplayName(match.mapId);
                         const kdDiff = stats.kills - stats.deaths;
-                        const isWin = match.result === 'WIN';
+
+                        // Calculate Result relative to this player
+                        // Does match.players (My Team) contain this player?
+                        const isPlayerOnMyTeam = match.players.some(p => p.steamid === stats.steamid || p.playerId === stats.playerId);
+
+                        let resultForPlayer = match.result; // Default TIE or MyTeam result
+                        if (match.result !== 'TIE') {
+                            if (isPlayerOnMyTeam) {
+                                resultForPlayer = match.result;
+                            } else {
+                                // Flip result for enemy team player
+                                resultForPlayer = match.result === 'WIN' ? 'LOSS' : 'WIN';
+                            }
+                        }
+
+                        // Determine Score Order
+                        // If my team: US : THEM
+                        // If enemy team: THEM : US (show their score first)
+                        const scoreLeft = isPlayerOnMyTeam ? match.score.us : match.score.them;
+                        const scoreRight = isPlayerOnMyTeam ? match.score.them : match.score.us;
                         
+                        const barColor = resultForPlayer === 'WIN' ? 'bg-green-500' : resultForPlayer === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500';
+                        const badgeColor = resultForPlayer === 'WIN' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-500' : 
+                                           resultForPlayer === 'LOSS' ? 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800' : // Loss usually neutral grey for text
+                                           'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-500';
+
                         return (
                             <button 
                                 key={match.id} 
@@ -78,17 +105,15 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
                                 className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-4 rounded-xl flex items-center justify-between hover:border-blue-500/50 hover:shadow-md transition-all active:scale-[0.99] group"
                             >
                                 <div className="flex items-center gap-4">
-                                    <div className={`w-1 h-8 rounded-full ${isWin ? 'bg-green-500' : match.result === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
+                                    <div className={`w-1 h-8 rounded-full ${barColor}`}></div>
                                     <div className="text-left">
                                         <div className="text-base font-black text-neutral-900 dark:text-white flex items-center gap-2 mb-1">
                                             {mapName}
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isWin ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-500' : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800'}`}>
-                                                {match.score.us}:{match.score.them}
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${badgeColor}`}>
+                                                {scoreLeft}:{scoreRight}
                                             </span>
                                         </div>
-                                        <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider text-left tabular-nums">
-                                            {match.date.split('T')[0]}
-                                        </div>
+                                        {match.serverName && <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider text-left tabular-nums truncate max-w-[120px]">{match.serverName}</div>}
                                     </div>
                                 </div>
                                 

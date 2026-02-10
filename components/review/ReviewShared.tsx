@@ -1,23 +1,7 @@
-
 import React from 'react';
-import { MAPS } from '../../constants';
 
-// --- Map Name Helper ---
-export const getMapDisplayName = (rawId: string): string => {
-    if (!rawId) return 'Unknown';
-    // Normalize: remove 'de_', lowercase, trim
-    const cleanId = rawId.toLowerCase().replace(/^de_/, '').trim();
-    
-    const mapObj = MAPS.find(m => m.id === cleanId);
-    return mapObj ? mapObj.name : rawId; // Fallback to raw ID if not found
-};
-
-export const getMapEnName = (rawId: string): string => {
-    if (!rawId) return 'Unknown';
-    const cleanId = rawId.toLowerCase().replace(/^de_/, '').trim();
-    const mapObj = MAPS.find(m => m.id === cleanId);
-    return mapObj ? mapObj.enName : cleanId;
-};
+// Re-export map helpers from utils to maintain compatibility with existing review components
+export { getMapDisplayName, getMapEnName } from '../../utils/matchHelpers';
 
 // --- Maps Theme Helper ---
 export const getMapTheme = (mapName: string) => {

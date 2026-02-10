@@ -1,5 +1,4 @@
 
-
 export type Side = 'T' | 'CT';
 export type Site = 'A' | 'Mid' | 'B' | 'All';
 export type MapId = 'mirage' | 'inferno' | 'dust2' | 'ancient' | 'anubis' | 'overpass' | 'nuke';
@@ -106,6 +105,7 @@ export interface ContentGroup {
   tactics: Tactic[];
   utilities: Utility[];
   matches: Match[]; // Added Match support
+  series?: MatchSeries[]; // Added Series support
 }
 
 export interface FilterState {
@@ -184,6 +184,80 @@ export interface MultiKillBreakdown {
     k5: number;
 }
 
+// Detailed stats for a specific round for a player
+export interface PlayerRoundStats {
+    kills: number;
+    deaths: number;
+    assists: number;
+    damage: number;
+    headshot: boolean; // Died by HS or Got HS? Usually tracks if player got HS kills, or bool if simple per-kill
+    headshots: number; // Number of HS kills this round
+    
+    // Rating 3.0 Components
+    rating: number;
+    impact: number;
+    
+    // Mechanics
+    isEntryKill: boolean;
+    isEntryDeath: boolean;
+    traded: boolean; // Killed someone and was traded
+    wasTraded: boolean; // Died and was traded
+    
+    // Economy
+    equipmentValue: number;
+    remainingMoney?: number;
+    
+    // Objective
+    planted: boolean;
+    defused: boolean;
+    
+    // Utility
+    utility: UtilityStats;
+    utilityDamage: number;
+    
+    side: Side;
+    survived: boolean;
+}
+
+// Timeline event within a round
+export interface MatchTimelineEvent {
+    tick: number;
+    seconds: number; // Seconds from round start
+    type: 'damage' | 'kill' | 'assist' | 'flash_assist' | 'plant' | 'defuse' | 'explode' | 'round_end';
+    
+    // Subject (Actor)
+    subject?: { steamid: string; name: string; side: Side };
+    
+    // Target (Victim)
+    target?: { steamid: string; name: string; side: Side };
+    
+    // Details
+    weapon?: string;
+    damage?: number;
+    hitgroup?: number; // 1=Head, etc.
+    blindDuration?: number;
+    
+    // Metadata
+    isHeadshot?: boolean;
+    isWallbang?: boolean;
+    isBlind?: boolean;
+    isSmoke?: boolean;
+}
+
+export interface MatchRound {
+    roundNumber: number;
+    winnerSide: Side;
+    winReason: number; // CS GO/2 Reason ID
+    duration: number; // Seconds
+    endTick: number;
+    
+    // Detailed stats per player for this round
+    playerStats: Record<string, PlayerRoundStats>;
+    
+    // Chronological events
+    timeline: MatchTimelineEvent[];
+}
+
 export interface PlayerMatchStats {
     playerId: string;
     steamid?: string; // New: Link to demo data
@@ -232,13 +306,35 @@ export interface Match {
     source: 'PWA' | 'Official' | 'Demo'; // Added Demo source
     date: string;
     mapId: string; // Changed from MapId to string to accommodate raw map names
+    serverName?: string; // Server Name from Demo
     rank: string;
     result: 'WIN' | 'LOSS' | 'TIE';
     startingSide?: Side;
     score: MatchScore;
+    teamNameUs?: string;
+    teamNameThem?: string;
     players: PlayerMatchStats[];
     enemyPlayers: PlayerMatchStats[];
     groupId?: string; // Runtime link to parent group
+    
+    // NEW: Detailed Round History
+    rounds?: MatchRound[]; 
+}
+
+// --- Series Support ---
+
+export interface SeriesMatchRef {
+    matchId: string;
+    swapSides: boolean; // If true, in this match, "Us/Team A" is actually "Them/Team B" data
+}
+
+export interface MatchSeries {
+    id: string;
+    title: string; // e.g. "IEM Cologne Final vs G2"
+    format: 'BO1' | 'BO3' | 'BO5' | 'BO7';
+    matches: SeriesMatchRef[];
+    date: string;
+    groupId?: string;
 }
 
 // --- Demo JSON Specification Types ---

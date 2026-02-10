@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useMemo } from 'react';
-import { ContentGroup, Tactic, Utility, Match } from '../types';
+import { ContentGroup, Tactic, Utility, Match, MatchSeries } from '../types';
 import { generateGroupId } from '../utils/idGenerator';
 
 export const useAppStorage = () => {
@@ -19,10 +19,11 @@ export const useAppStorage = () => {
                 try {
                     const parsedGroups = JSON.parse(savedGroupsStr);
                     if (Array.isArray(parsedGroups) && parsedGroups.length > 0) {
-                        // Ensure all groups have a matches array (migration for old data)
+                        // Ensure all groups have a matches/series array (migration for old data)
                         const migratedGroups = parsedGroups.map((g: any) => ({
                             ...g,
-                            matches: Array.isArray(g.matches) ? g.matches : []
+                            matches: Array.isArray(g.matches) ? g.matches : [],
+                            series: Array.isArray(g.series) ? g.series : []
                         }));
                         setGroups(migratedGroups);
                         hasLoadedGroups = true;
@@ -55,6 +56,7 @@ export const useAppStorage = () => {
                     tactics: [],
                     utilities: [],
                     matches: [],
+                    series: [],
                 };
                 setGroups([defaultGroup]);
                 setActiveGroupIds([defaultId]);
@@ -91,12 +93,13 @@ export const useAppStorage = () => {
     }, [activeGroupIds, groups, isDataLoaded]);
 
     // --- Computed Data ---
-    const { allTactics, allUtilities, allMatches } = useMemo(() => {
+    const { allTactics, allUtilities, allMatches, allSeries } = useMemo(() => {
         const activeGroups = groups.filter(g => activeGroupIds.includes(g.metadata.id));
         const tactics = activeGroups.flatMap(g => g.tactics);
         const utilities = activeGroups.flatMap(g => g.utilities);
-        const matches = activeGroups.flatMap(g => g.matches || []); // Handle potential undefined in old data
-        return { allTactics: tactics, allUtilities: utilities, allMatches: matches };
+        const matches = activeGroups.flatMap(g => g.matches || []); 
+        const series = activeGroups.flatMap(g => g.series || []);
+        return { allTactics: tactics, allUtilities: utilities, allMatches: matches, allSeries: series };
     }, [groups, activeGroupIds]);
 
     const writableGroups = useMemo(() => {
@@ -162,8 +165,6 @@ export const useAppStorage = () => {
                 if(group.metadata.isReadOnly) return group;
 
                 const matchToSave = { ...newMatch, groupId: targetGroupId };
-                // Matches usually don't update like tactics, we usually just append, 
-                // but checking for ID existence prevents dupes if imported twice
                 const existsIndex = (group.matches || []).findIndex(m => m.id === matchToSave.id);
                 
                 let newMatches = group.matches || [];
@@ -177,6 +178,32 @@ export const useAppStorage = () => {
                 return { 
                     ...group, 
                     matches: newMatches,
+                    metadata: { ...group.metadata, version: group.metadata.version + 1, lastUpdated: Date.now() } 
+                };
+            }
+            return group;
+        }));
+    };
+    
+    const handleSaveSeries = (newSeries: MatchSeries, targetGroupId: string) => {
+        setGroups(prevGroups => prevGroups.map(group => {
+            if (group.metadata.id === targetGroupId) {
+                if(group.metadata.isReadOnly) return group;
+
+                const seriesToSave = { ...newSeries, groupId: targetGroupId };
+                let newSeriesList = group.series || [];
+                const existsIndex = newSeriesList.findIndex(s => s.id === seriesToSave.id);
+                
+                if (existsIndex >= 0) {
+                    newSeriesList = [...newSeriesList];
+                    newSeriesList[existsIndex] = seriesToSave;
+                } else {
+                    newSeriesList = [seriesToSave, ...newSeriesList];
+                }
+
+                return { 
+                    ...group, 
+                    series: newSeriesList,
                     metadata: { ...group.metadata, version: group.metadata.version + 1, lastUpdated: Date.now() } 
                 };
             }
@@ -223,6 +250,19 @@ export const useAppStorage = () => {
         }));
     };
 
+    const deleteSeries = (series: MatchSeries) => {
+        setGroups(prevGroups => prevGroups.map(g => {
+            if (g.metadata.id === series.groupId) {
+                return {
+                    ...g,
+                    series: (g.series || []).filter(s => s.id !== series.id),
+                    metadata: { ...g.metadata, lastUpdated: Date.now() }
+                };
+            }
+            return g;
+        }));
+    };
+
     return {
         groups,
         setGroups,
@@ -232,13 +272,16 @@ export const useAppStorage = () => {
         allTactics,
         allUtilities,
         allMatches,
+        allSeries,
         writableGroups,
         hasWritableGroups,
         handleSaveTactic,
         handleSaveUtility,
         handleSaveMatch,
+        handleSaveSeries,
         deleteTactic,
         deleteUtility,
-        deleteMatch
+        deleteMatch,
+        deleteSeries
     };
 };

@@ -1,88 +1,32 @@
 
-# TacBook Rating 4.0 (Balanced) 算法说明
+# TacBook Rating 4.0 (Balanced) Algorithm
 
-## 版本：v4.0 Balanced (2025-02)
+## Overview
+Rating 4.0 uses a round-by-round evaluation system to determine player performance, integrating economy, survival, damage, and teamwork (trades).
 
-### 核心设计哲学
-Rating 4.0 旨在解决传统 Rating 系统忽视“经济语境”的问题。它计算**每一个回合的独立表现评分**，并引入**对数经济修正**。
-"Balanced" 版本的数值目标是让单回合表现良好的评分落在 **1.15 - 1.20** 区间，使整场比赛的平均 Rating 回归到符合玩家直觉的 **1.0** 上下。
+### Key Updates (v4.1)
+1.  **Negative Rating Floor Removed**: Bad rounds (expensive death, no impact) can now yield negative scores, pulling down the average to penalize inconsistency.
+2.  **Dynamic Trade Logic**:
+    *   **Entry Bonus**: Players who die first but deal damage and are traded quickly receive a bonus.
+        *   `Bonus = (Damage / 100) * 0.20 * (1 - TimeDelta/4s)`
+    *   **Trade Penalty**: Players who trade kills receive a penalty proportional to the damage already dealt by teammates.
+        *   `Penalty = (TeammateDamage / 100) * 0.15`
 
----
+## Components
 
-## 评分构成
+| Component | Weight | Description |
+| :--- | :--- | :--- |
+| **Kill Rating** | 25% | Based on KPR (Baseline 0.75). |
+| **Survival** | Fixed | +0.30 for surviving the round. |
+| **Damage** | 15% | Based on ADR (Baseline 80). |
+| **Impact** | 25% | Multi-kills scale non-linearly (1K=1.0, 2K=2.2, 3K=3.5). Entry kills +0.5. |
+| **KAST** | Fixed | +0.20 if Kill, Assist, Survived, or Traded. |
+| **Economy** | Dynamic | Logarithmic ROI based on Equipment Value vs Kill Value. |
+| **Trade Adj.** | Dynamic | +/- based on trade kill participation. |
 
-最终 Rating = `Sum(Round Ratings) / Total Rounds`
-
-### 1. 基础表现 (Base Stats)
-基于单回合内的原始数据计算，权重分布经过微调以适应普通玩家习惯。
-
-| 指标 | 权重/分值 | 公式 / 说明 | 举例 (单回合) |
-| :--- | :--- | :--- | :--- |
-| **击杀 (Kill)** | **25%** | `(Kills / 0.80) * 0.25` | 1杀 = **0.31** |
-| **存活 (Surv)** | **Fixed** | `Survived ? 0.30 : 0` | 存活 = **0.30** |
-| **伤害 (Dmg)** | **15%** | `(Damage / 85.0) * 0.15` | 100伤害 = **0.17** |
-| **贡献 (KAST)** | **Fixed** | `KAST ? 0.20 : 0` | 满足条件 = **0.20** |
-| **影响力 (Imp)** | **25%** | `(ImpactScore / 1.3) * 0.25` | 1.0 Impact = **0.19** |
-
-*   **Impact Score 细则**:
-    *   多杀：1杀=1.0, 2杀=2.2, 3杀=3.5
-    *   关键：首杀(Entry) +0.5, 残局获胜(Clutch) +1.0
-    *   辅助：闪光助攻 +0.5
-
-### 2. 经济修正 (Economic Modifiers)
-Rating 4.0 的核心创新，使用对数函数 (`Log2`) 来平滑极端的经济翻盘数据，防止单回合 Rating 溢出。
-
-#### A. 投资回报修正 (Logarithmic ROI)
-衡量杀敌的“性价比”。手枪局翻盘或 Eco 局击杀全装敌人会有额外奖励。
-
-*   **公式**: `Math.log2(1 + (击杀价值 / (自身装备 + 500))) * 0.10`
-*   **效果**:
-    *   **长枪打长枪 (ROI ≈ 1)**: `log2(2) * 0.10` = **+0.10** (常规奖励)
-    *   **手枪打长枪 (ROI ≈ 10)**: `log2(11) * 0.10` ≈ **+0.35** (高光奖励，但不过分)
-    *   *注：原线性算法可能导致此处加分超过 1.0，破坏平衡。*
-
-#### B. 资产保值 (Scavenger Bonus)
-鼓励在存活的情况下保留高价值装备（保枪）。
-
-*   **公式**: `Min(回合结束装备价值 / 15000, 0.20)`
-*   **上限**: **+0.20** (相当于保下一把满配 M4/AK 的价值)
-
-#### C. 惨案惩罚 (The Tragedy Penalty)
-针对**T 阵营**“保枪失败被人缴”的灾难性场景进行动态扣分。
-
-*   **设计逻辑**:
-    只有 T 阵营在输掉回合且超时/死亡时才会获得 **$0 经济收入**。连败补偿越高（$3400），保枪失败导致的经济损失越惨重（直接蒸发 $3400 收入 + 武器价值）。因此惩罚值与当前连败补偿挂钩。
-
-*   **触发条件**:
-    1.  本方输掉回合且 **CT 获胜** (判定为 T 阵营劣势场景)
-    2.  死亡时间 > 回合结束时间 (Post-round death)
-    3.  死亡时持有高价值装备 (> $2000)
-
-*   **动态公式**: `Penalty = 连败补偿金 / 7000`
-
----
-
-## 典型回合模拟
-
-**场景：普通长枪局获胜**
-*   **表现**: 1 击杀, 100 伤害, 存活, KAST 满足。
-*   **计算**:
-    *   Kill: 0.31
-    *   Surv: 0.30
-    *   Dmg: 0.17
-    *   KAST: 0.20
-    *   Imp: 0.19 (1杀=1.0 impact)
-    *   Econ: +0.10 (常规击杀) + 0.10 (普通保枪)
-*   **总分**: **1.37** (表现优秀)
-
-**场景：T 阵营保枪惨案 (五连败)**
-*   **背景**: 身上 $4700 大狙，连败补偿 $3400。回合结束保枪失败被缴。
-*   **表现**: 0 击杀, 0 伤害, 死亡(回合后)。
-*   **计算**:
-    *   Base Stats: 0.00
-    *   Econ (Saving): 0.00 (死亡)
-    *   Tragedy Penalty: `3400 / 10000` = **-0.34**
-*   **总分**: **0.00** (Rating 不会为负，但在平均值中拉低分数)
-
-**全场平均**: 假设选手由上述两种回合各占一半组成，平均 Rating ≈ **0.68**。
-**优秀选手**: 如果能多拿几个 2 杀回合 (Score ~1.7)，平均 Rating 即可轻松突破 **1.10**。
+## Calculation
+1.  Events are processed sequentially.
+2.  Damage is tracked in a graph (Attacker -> Victim) per round.
+3.  On death, the system checks `recentDeaths` to identify trades.
+4.  At round end, components are summed up for the `RoundRating`.
+5.  Match Rating = `(Sum of RoundRatings / Rounds) * 1.30`.
