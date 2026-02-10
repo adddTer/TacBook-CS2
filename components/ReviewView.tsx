@@ -22,18 +22,6 @@ const getRosterId = (name: string) => {
 
 interface ReviewViewProps {
     allMatches: Match[];
-    // We need allSeries passed from parent or access storage here. Parent is cleaner.
-    // However, App.tsx doesn't pass allSeries yet. We'll need to modify App.tsx too or assume useAppStorage.
-    // To minimize changes, let's assume `allMatches` is passed and we add `allSeries` to props if possible, 
-    // BUT since we are in `ReviewView`, we can't easily change App.tsx signature without touching App.tsx.
-    // Wait, useAppStorage is in App.tsx. I need to update App.tsx to pass allSeries.
-    // Or I can access the hook here? No, context is better, but props are used.
-    // I will look at App.tsx again. It passes props. I will update App.tsx to pass allSeries.
-    
-    // For this step, I will add `allSeries` and `onSaveSeries` `onDeleteSeries` to props.
-    // Note: The previous prompts provided App.tsx content, I will update that too.
-    
-    // TEMPORARY FIX: I will define the props here, and then update App.tsx in another change block.
     allSeries?: MatchSeries[];
     onSaveSeries?: (series: MatchSeries, targetGroupId: string) => void;
     onDeleteSeries?: (series: MatchSeries) => void;
@@ -74,6 +62,9 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     // Confirm Delete
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean, match?: Match, series?: MatchSeries }>({ isOpen: false });
+    
+    // Batch Delete Confirm
+    const [confirmBatchDelete, setConfirmBatchDelete] = useState<{ isOpen: boolean, items: { type: 'match' | 'series', id: string }[] }>({ isOpen: false, items: [] });
 
     // Share State
     const [showShareModal, setShowShareModal] = useState(false);
@@ -278,9 +269,28 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         setConfirmDelete({ isOpen: true, match });
     };
 
-    const handleDeleteSeriesClick = (e: React.MouseEvent, series: MatchSeries) => {
-        e.stopPropagation();
-        setConfirmDelete({ isOpen: true, series });
+    // Triggered from MatchDetail (only for single delete)
+    // For Series deletion from MatchList, we handle it via handleBatchDelete or need a separate handler if single
+    // But since we removed single delete button from MatchList, this is mainly for MatchDetail view.
+
+    const handleBatchDelete = (items: { type: 'match' | 'series', id: string }[]) => {
+        setConfirmBatchDelete({ isOpen: true, items });
+    };
+
+    const confirmBatchDeleteAction = () => {
+        const { items } = confirmBatchDelete;
+        
+        items.forEach(item => {
+            if (item.type === 'match') {
+                const match = allMatches.find(m => m.id === item.id);
+                if (match) onDeleteMatch(match);
+            } else {
+                const series = allSeries.find(s => s.id === item.id);
+                if (series && onDeleteSeries) onDeleteSeries(series);
+            }
+        });
+        
+        setConfirmBatchDelete({ isOpen: false, items: [] });
     };
 
     const openShareModal = (type: 'all' | 'single', match?: Match) => {
@@ -479,8 +489,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                         matches={allMatches}
                         series={allSeries}
                         onSelectMatch={setSelectedMatch}
-                        onDeleteMatch={handleDeleteClick}
-                        onDeleteSeries={handleDeleteSeriesClick}
+                        onBatchDelete={handleBatchDelete}
                     />
                 ) : (
                     <PlayerList 
@@ -574,6 +583,15 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     setConfirmDelete({ isOpen: false, match: undefined, series: undefined });
                 }}
                 onCancel={() => setConfirmDelete({ isOpen: false, match: undefined, series: undefined })}
+            />
+            
+             <ConfirmModal 
+                isOpen={confirmBatchDelete.isOpen}
+                title="批量删除"
+                message={`确定要删除选中的 ${confirmBatchDelete.items.length} 个项目吗？\n此操作不可恢复。`}
+                isDangerous={true}
+                onConfirm={confirmBatchDeleteAction}
+                onCancel={() => setConfirmBatchDelete({ isOpen: false, items: [] })}
             />
 
             <ShareOptionsModal 

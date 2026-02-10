@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo } from 'react';
-import { Match, PlayerMatchStats, ClutchRecord, MultiKillBreakdown } from '../../types';
+import { Match, PlayerMatchStats, ClutchRecord, MultiKillBreakdown, PlayerRoundStats } from '../../types';
 import { ROSTER } from '../../constants/roster';
 import { getRatingColorClass } from './ReviewShared';
 
@@ -80,7 +79,7 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
 
         // 1. Pre-filter "Ghost Rounds": Rounds where NO ONE did anything (e.g. match paused/warmup glitch)
         const validRounds = match.rounds.filter(round => {
-            const allStats = Object.values(round.playerStats);
+            const allStats = Object.values(round.playerStats) as PlayerRoundStats[];
             if (allStats.length === 0) return false;
             
             // Check if EVERY player in this round has 0 impact

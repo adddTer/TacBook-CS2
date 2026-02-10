@@ -36,20 +36,69 @@ const getWinReasonText = (reason: number | string) => {
     return WIN_REASON_CN_MAP[String(reason)] || `Reason ${reason}`;
 };
 
+// Official CS2 Names aligned with data/weapons.ts
 const WEAPON_CN_MAP: Record<string, string> = {
-    'ak47': 'AK-47', 'm4a1': 'M4A4', 'm4a1_silencer': 'M4A1-S', 'galilar': 'Galil', 'famas': 'Famas',
-    'sg553': 'SG 553', 'aug': 'AUG', 'awp': 'AWP', 'ssg08': '鸟狙', 'g3sg1': 'T连狙', 'scar20': 'CT连狙',
-    'mac10': 'MAC-10', 'mp9': 'MP9', 'mp7': 'MP7', 'ump45': 'UMP-45', 'p90': 'P90', 'bizon': '野牛',
-    'glock': 'Glock', 'hkp2000': 'P2000', 'usp_silencer': 'USP-S', 'p250': 'P250', 'tec9': 'Tec-9',
-    'fiveseven': 'FN57', 'deagle': '沙鹰', 'cz75a': 'CZ75', 'elite': '双枪', 'revolver': 'R8',
-    'nova': 'Nova', 'xm1014': 'XM1014', 'mag7': '警喷', 'sawedoff': '匪喷', 'm249': 'M249', 'negev': '内格夫',
-    'hegrenade': '手雷', 'flashbang': '闪光', 'smokegrenade': '烟雾', 'incgrenade': '火', 'molotov': '火', 'decoy': '诱饵',
-    'inferno': '火', 'taser': '电击', 'knife': '刀', 'world': '世界'
+    // Pistols
+    'glock': '格洛克 18型', 
+    'hkp2000': 'P2000', 
+    'usp_silencer': 'USP-S', 
+    'p250': 'P250', 
+    'tec9': 'Tec-9',
+    'fiveseven': 'FN57', 
+    'deagle': '沙漠之鹰', 
+    'cz75a': 'CZ75 自动手枪', 
+    'elite': '双持贝瑞塔', 
+    'revolver': 'R8 左轮手枪',
+
+    // Rifles
+    'ak47': 'AK-47', 
+    'm4a1': 'M4A4', 
+    'm4a1_silencer': 'M4A1-S', 
+    'galilar': '加利尔 AR', 
+    'famas': '法玛斯',
+    'sg553': 'SG 553', 
+    'aug': 'AUG', 
+    'awp': 'AWP', 
+    'ssg08': 'SSG 08', 
+    'g3sg1': 'G3SG1', 
+    'scar20': 'SCAR-20',
+
+    // SMGs
+    'mac10': 'MAC-10', 
+    'mp9': 'MP9', 
+    'mp7': 'MP7', 
+    'mp5sd': 'MP5-SD', 
+    'ump45': 'UMP-45', 
+    'p90': 'P90', 
+    'bizon': 'PP-野牛',
+
+    // Heavy
+    'nova': '新星', 
+    'xm1014': 'XM1014', 
+    'mag7': 'MAG-7', 
+    'sawedoff': '截短霰弹枪', 
+    'm249': 'M249', 
+    'negev': '内格夫',
+
+    // Grenades & Gear
+    'hegrenade': '高爆手雷', 
+    'flashbang': '闪光震撼弹', 
+    'smokegrenade': '烟雾弹', 
+    'incgrenade': '燃烧弹', 
+    'molotov': '燃烧瓶', 
+    'decoy': '诱饵弹',
+    'inferno': '燃烧伤害', 
+    'taser': '电击枪 x27', 
+    'knife': '刀', 
+    'world': '世界'
 };
 
 const getWeaponName = (code?: string) => {
     if (!code) return '';
-    const clean = code.replace('weapon_', '').toLowerCase();
+    // 1. Remove 'weapon_' prefix
+    // 2. Remove suffixes like '_txz16' (custom skins/models often seen in demos)
+    const clean = code.toLowerCase().replace(/^weapon_/, '').replace(/_txz\d*$/, '');
+    
     return WEAPON_CN_MAP[clean] || clean.toUpperCase();
 };
 
@@ -161,7 +210,16 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({ match }) => {
     );
 };
 
-const RoundCard = ({ round, isExpanded, onToggle, match, showDetails, timeMode }: { round: MatchRound, isExpanded: boolean, onToggle: () => void, match: Match, showDetails: boolean, timeMode: 'elapsed' | 'countdown' }) => {
+interface RoundCardProps {
+    round: MatchRound;
+    isExpanded: boolean;
+    onToggle: () => void;
+    match: Match;
+    showDetails: boolean;
+    timeMode: 'elapsed' | 'countdown';
+}
+
+const RoundCard: React.FC<RoundCardProps> = ({ round, isExpanded, onToggle, match, showDetails, timeMode }) => {
     const isCTWin = round.winnerSide === 'CT';
     
     // Style configurations based on winner
@@ -203,7 +261,7 @@ const RoundCard = ({ round, isExpanded, onToggle, match, showDetails, timeMode }
             const roster = ROSTER.find(r => r.id === sid || r.name === sid);
             if (roster) name = roster.id;
         }
-        return { name, ...stats, steamid: sid };
+        return { name, ...(stats as any), steamid: sid };
     });
 
     const sidePlayers = {
@@ -310,7 +368,14 @@ const RoundCard = ({ round, isExpanded, onToggle, match, showDetails, timeMode }
     );
 };
 
-const TimelineEventRow = ({ event, timeMode, plantTime, bombEndTime }: { event: MatchTimelineEvent, timeMode: 'elapsed' | 'countdown', plantTime?: number, bombEndTime?: number }) => {
+interface TimelineEventRowProps {
+    event: MatchTimelineEvent;
+    timeMode: 'elapsed' | 'countdown';
+    plantTime?: number;
+    bombEndTime?: number;
+}
+
+const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeMode, plantTime, bombEndTime }) => {
     const timeStr = formatTime(event.seconds, timeMode, plantTime);
     
     // Only show red if:

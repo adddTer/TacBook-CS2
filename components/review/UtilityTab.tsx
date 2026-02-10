@@ -7,60 +7,96 @@ interface UtilityTabProps {
 }
 
 export const UtilityTab: React.FC<UtilityTabProps> = ({ players }) => {
+    // Sort by Total Utility Damage (HE + Fire)
+    const sortedPlayers = [...players].sort((a,b) => (b.utility.heDamage + b.utility.molotovDamage) - (a.utility.heDamage + a.utility.molotovDamage));
+    
+    // Find max values for bars
+    const maxDamage = Math.max(...sortedPlayers.map(p => p.utility.heDamage + p.utility.molotovDamage), 1);
+
     return (
-        <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
-             <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left whitespace-nowrap min-w-[700px] font-sans">
-                    <thead>
-                        <tr className="text-[10px] uppercase font-bold text-neutral-400 border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950/30">
-                            <th className="px-3 py-2 sticky left-0 z-10 bg-white dark:bg-neutral-900">选手</th>
-                            <th className="px-2 py-2 text-center text-blue-500 bg-blue-50/10" colSpan={3}>闪光效果</th>
-                            <th className="px-2 py-2 text-center text-red-500 bg-red-50/10" colSpan={2}>伤害输出</th>
-                            <th className="px-2 py-2 text-center text-neutral-500" colSpan={4}>投掷数</th>
-                        </tr>
-                        <tr className="text-[10px] uppercase font-bold text-neutral-400 border-b border-neutral-100 dark:border-neutral-800">
-                            <th className="px-3 py-2 sticky left-0 z-10 bg-white dark:bg-neutral-900"></th>
-                            <th className="px-2 py-2 text-center w-16 bg-blue-50/10">助攻</th>
-                            <th className="px-2 py-2 text-center w-16 bg-blue-50/10">致盲人数</th>
-                            <th className="px-2 py-2 text-center w-20 bg-blue-50/10">时间</th>
-                            <th className="px-2 py-2 text-center w-16 bg-red-50/10">雷伤</th>
-                            <th className="px-2 py-2 text-center w-16 bg-red-50/10">火伤</th>
-                            <th className="px-1 py-2 text-center w-10">S</th>
-                            <th className="px-1 py-2 text-center w-10">F</th>
-                            <th className="px-1 py-2 text-center w-10">H</th>
-                            <th className="px-1 py-2 text-center w-10">M</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-50 dark:divide-neutral-800/50">
-                        {[...players].sort((a,b) => (b.utility.heDamage + b.utility.molotovDamage) - (a.utility.heDamage + a.utility.molotovDamage)).map((p, idx) => (
-                            <tr key={idx} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
-                                <td className="px-3 py-3 font-bold sticky left-0 z-10 bg-white dark:bg-neutral-900 border-r border-transparent text-neutral-800 dark:text-neutral-200 truncate max-w-[120px]">
-                                    {p.playerId}
-                                </td>
-                                <td className="px-2 py-3 text-center font-sans tabular-nums font-bold text-blue-600 dark:text-blue-400 bg-blue-50/10 border-l border-neutral-100 dark:border-neutral-800/50">
-                                    {p.flash_assists || 0}
-                                </td>
-                                <td className="px-2 py-3 text-center font-sans tabular-nums text-neutral-600 dark:text-neutral-400 bg-blue-50/10">
-                                    {p.utility.enemiesBlinded}
-                                </td>
-                                <td className="px-2 py-3 text-center font-sans tabular-nums text-neutral-600 dark:text-neutral-400 bg-blue-50/10 border-r border-neutral-100 dark:border-neutral-800/50">
-                                    {p.utility.blindDuration.toFixed(1)}s
-                                </td>
-                                <td className="px-2 py-3 text-center font-sans tabular-nums font-bold text-red-600 dark:text-red-400 bg-red-50/10">
-                                    {p.utility.heDamage}
-                                </td>
-                                <td className="px-2 py-3 text-center font-sans tabular-nums font-bold text-orange-600 dark:text-orange-400 bg-red-50/10 border-r border-neutral-100 dark:border-neutral-800/50">
-                                    {p.utility.molotovDamage}
-                                </td>
-                                <td className="px-1 py-3 text-center text-xs text-neutral-400 font-sans tabular-nums">{p.utility.smokesThrown}</td>
-                                <td className="px-1 py-3 text-center text-xs text-neutral-400 font-sans tabular-nums">{p.utility.flashesThrown}</td>
-                                <td className="px-1 py-3 text-center text-xs text-neutral-400 font-sans tabular-nums">{p.utility.heThrown}</td>
-                                <td className="px-1 py-3 text-center text-xs text-neutral-400 font-sans tabular-nums">{p.utility.molotovsThrown}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+        <div className="space-y-4 font-sans">
+            {/* Header / Legend */}
+            <div className="flex justify-end gap-4 text-[10px] text-neutral-400 font-bold uppercase tracking-widest px-2">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> 伤害</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> 闪光</span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {sortedPlayers.map((p, idx) => {
+                    const totalDmg = p.utility.heDamage + p.utility.molotovDamage;
+                    const dmgPercent = (totalDmg / maxDamage) * 100;
+                    
+                    return (
+                        <div key={idx} className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 shadow-sm hover:border-blue-500/30 transition-colors">
+                            <div className="flex items-start gap-4">
+                                {/* Rank/Avatar */}
+                                <div className="w-12 h-12 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-lg font-black text-neutral-400">
+                                    {p.playerId[0]}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                    {/* Name & Basic Stats */}
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h4 className="font-bold text-sm text-neutral-900 dark:text-white truncate pr-2">
+                                            {p.playerId}
+                                        </h4>
+                                        <div className="flex items-center gap-3">
+                                            {/* Throws Icons */}
+                                            <div className="flex gap-2">
+                                                 <ThrowStat label="烟" count={p.utility.smokesThrown} />
+                                                 <ThrowStat label="闪" count={p.utility.flashesThrown} />
+                                                 <ThrowStat label="雷" count={p.utility.heThrown} />
+                                                 <ThrowStat label="火" count={p.utility.molotovsThrown} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Damage Bars */}
+                                    <div className="space-y-3">
+                                        {/* HE/Fire Damage */}
+                                        <div>
+                                            <div className="flex justify-between text-[10px] font-bold text-neutral-500 mb-1">
+                                                <span>道具总伤害</span>
+                                                <span className="text-neutral-900 dark:text-white">{totalDmg}</span>
+                                            </div>
+                                            <div className="h-2 w-full bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+                                                <div className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full" style={{ width: `${dmgPercent}%` }}></div>
+                                            </div>
+                                            <div className="flex gap-3 mt-1 text-[9px] text-neutral-400 font-mono">
+                                                <span>手雷: {p.utility.heDamage}</span>
+                                                <span>燃烧: {p.utility.molotovDamage}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Flash Stats */}
+                                        <div className="flex gap-2 mt-2">
+                                            <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg px-2 py-1.5 flex-1 border border-blue-100 dark:border-blue-900/20 text-center">
+                                                <div className="text-[9px] font-bold text-blue-400 mb-0.5">闪光助攻</div>
+                                                <div className="text-lg font-black text-blue-600 dark:text-blue-400 leading-none">{p.flash_assists || 0}</div>
+                                            </div>
+                                            <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg px-2 py-1.5 flex-1 border border-blue-100 dark:border-blue-900/20 text-center">
+                                                <div className="text-[9px] font-bold text-blue-400 mb-0.5">致盲敌人数</div>
+                                                <div className="text-lg font-black text-blue-600 dark:text-blue-400 leading-none">{p.utility.enemiesBlinded}</div>
+                                            </div>
+                                            <div className="bg-blue-50 dark:bg-blue-900/10 rounded-lg px-2 py-1.5 flex-1 border border-blue-100 dark:border-blue-900/20 text-center">
+                                                <div className="text-[9px] font-bold text-blue-400 mb-0.5">致盲时长</div>
+                                                <div className="text-lg font-black text-blue-600 dark:text-blue-400 leading-none">{p.utility.blindDuration.toFixed(1)}s</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
 };
+
+const ThrowStat = ({ label, count }: { label: string, count: number }) => (
+    <div className={`flex flex-col items-center w-5 ${count > 0 ? 'opacity-100' : 'opacity-20'}`}>
+        <span className="text-[9px] font-black text-neutral-400">{label}</span>
+        <span className="text-[10px] font-bold text-neutral-700 dark:text-neutral-300 font-mono">{count}</span>
+    </div>
+);

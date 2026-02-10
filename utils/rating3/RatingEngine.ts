@@ -13,6 +13,7 @@ const normalizeId = (id: string | number | null | undefined): string => {
 export interface RoundContext {
     kills: number;
     deaths: number;
+    assists: number; // Added assists
     damage: number;
     survived: boolean;
     isEntryKill: boolean;
@@ -48,7 +49,7 @@ export class RatingEngine {
     private getRoundStats(sid: string): RoundContext {
         if (!this.roundStats.has(sid)) {
             this.roundStats.set(sid, {
-                kills: 0, deaths: 0, damage: 0, survived: true,
+                kills: 0, deaths: 0, assists: 0, damage: 0, survived: true,
                 isEntryKill: false, isEntryDeath: false,
                 traded: false, wasTraded: false,
                 tradeBonus: 0, tradePenalty: 0, 
@@ -115,6 +116,7 @@ export class RatingEngine {
         if (type === 'player_death') {
             const att = normalizeId(event.attacker_steamid);
             const vic = normalizeId(event.user_steamid);
+            const ast = normalizeId(event.assister_steamid);
             
             this.inventory.handlePlayerDeath(vic);
             const vicStats = this.getRoundStats(vic);
@@ -168,11 +170,14 @@ export class RatingEngine {
                 }
             }
             
+            // Handle Assists
+            if (ast !== "BOT" && ast !== vic && ast !== att && ast !== "0") {
+                const astStats = this.getRoundStats(ast);
+                astStats.assists++;
+            }
+            
             this.recentDeaths.push({ victim: vic, killer: att, tick });
         }
-        
-        // REMOVED: Auto-finalize on 'round_end'. 
-        // This is now handled manually by the parser to account for garbage time events.
     }
 
     /**
@@ -219,7 +224,8 @@ export class RatingEngine {
             stats.impactPoints = scoreImpact;
 
             // 5. KAST-like (Fixed reward)
-            const isKast = stats.kills > 0 || stats.survived || stats.traded || stats.wasTraded;
+            // KAST includes Kills, Assists, Survived, Traded
+            const isKast = stats.kills > 0 || stats.assists > 0 || stats.survived || stats.traded || stats.wasTraded;
             const scoreKast = isKast ? 0.20 : 0.0;
 
             // 6. Econ Rating (Dynamic)
