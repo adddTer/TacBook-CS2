@@ -149,7 +149,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                     {detailTab === 'overview' && <ScoreboardTab match={match} players={match.players} enemyPlayers={match.enemyPlayers} onPlayerClick={onPlayerClick} filter={sideFilter} />}
                     {detailTab === 'timeline' && <TimelineTab match={match} />}
                     {detailTab === 'duels' && <DuelsTab players={match.players} enemyPlayers={match.enemyPlayers} />}
-                    {detailTab === 'utility' && <UtilityTab players={match.players} />}
+                    {detailTab === 'utility' && <UtilityTab players={match.players} enemyPlayers={match.enemyPlayers} />}
                     {detailTab === 'clutches' && <ClutchesTab players={match.players} enemyPlayers={match.enemyPlayers} />}
                 </div>
 
