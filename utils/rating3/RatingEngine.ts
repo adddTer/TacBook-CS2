@@ -3,8 +3,9 @@ import { PlayerMatchStats } from "../../types";
 import { WIN_PROB_MATRIX, WEAPON_VALUES } from "./constants";
 import { InventoryTracker } from "./InventoryTracker";
 import { HealthTracker } from "./HealthTracker";
+import { WPAEngine, WPAUpdate } from "./WPAEngine";
 
-// Helper for normalizing IDs
+// Helper for normalizeId
 const normalizeId = (id: string | number | null | undefined): string => {
     if (id === null || id === undefined || id === 0 || id === "0" || id === "BOT") return "BOT";
     return String(id).trim();
@@ -13,7 +14,7 @@ const normalizeId = (id: string | number | null | undefined): string => {
 export interface RoundContext {
     kills: number;
     deaths: number;
-    assists: number; // Added assists
+    assists: number; 
     damage: number;
     survived: boolean;
     isEntryKill: boolean;
@@ -24,25 +25,29 @@ export interface RoundContext {
     tradePenalty: number;
     impactPoints: number;
     killValue: number; // For Econ Rating
-    rating: number; // Calculated at end of round
+    rating: number; 
+    wpa: number; // Accumulated WPA for this round
 }
 
 export class RatingEngine {
     private inventory = new InventoryTracker();
     private health = new HealthTracker();
+    private wpaEngine = new WPAEngine();
+    
     private roundStats = new Map<string, RoundContext>();
     private recentDeaths: { victim: string, killer: string, tick: number }[] = [];
     
     // AttackerID -> VictimID -> DamageDealt
     private damageGraph = new Map<string, Map<string, number>>();
     private firstKillHappened = false;
+    private roundStartTick = 0;
     
-    // Accumulators: SteamID -> { sumRating, rounds, impactSum }
-    private playerRatings = new Map<string, { sumRating: number, rounds: number, impactSum: number }>();
+    // Accumulators: SteamID -> { sumRating, rounds, impactSum, sumWPA }
+    private playerRatings = new Map<string, { sumRating: number, rounds: number, impactSum: number, sumWPA: number }>();
 
     public getOrInitState(sid: string) {
         if (!this.playerRatings.has(sid)) {
-            this.playerRatings.set(sid, { sumRating: 0, rounds: 0, impactSum: 0 });
+            this.playerRatings.set(sid, { sumRating: 0, rounds: 0, impactSum: 0, sumWPA: 0 });
         }
     }
 
@@ -53,13 +58,13 @@ export class RatingEngine {
                 isEntryKill: false, isEntryDeath: false,
                 traded: false, wasTraded: false,
                 tradeBonus: 0, tradePenalty: 0, 
-                impactPoints: 0, killValue: 0, rating: 0
+                impactPoints: 0, killValue: 0, rating: 0,
+                wpa: 0
             });
         }
         return this.roundStats.get(sid)!;
     }
 
-    // Accessor for the parser to retrieve calculated stats before reset
     public getCurrentRoundContext(sid: string): RoundContext | undefined {
         return this.roundStats.get(sid);
     }
@@ -67,56 +72,132 @@ export class RatingEngine {
     public getInventoryValue(sid: string, type: 'start' | 'end'): number {
         return type === 'start' ? this.inventory.getStartValue(sid) : this.inventory.getEndValue(sid);
     }
+    
+    public getRoundWinProb(): number {
+        // Expose current probability for debugging/UI
+        return this.wpaEngine.getCurrentWinProb();
+    }
 
-    public handleEvent(event: any, currentRound: number, teammateSteamIds: Set<string>) {
+    public handleEvent(
+        event: any, 
+        currentRound: number, 
+        teammateSteamIds: Set<string>,
+        aliveTs: Set<string>,
+        aliveCTs: Set<string>,
+        roundTs: Set<string>, // All T players this round
+        roundCTs: Set<string> // All CT players this round
+    ) {
         const type = event.event_name;
         const tick = event.tick || 0;
+        const TICK_RATE = 64; 
 
         if (['item_pickup', 'item_drop', 'item_purchase'].includes(type)) {
             this.inventory.handleItemEvent(event);
         }
 
-        if (type === 'round_start' || type === 'round_freeze_end' || type === 'round_announce_match_start') {
-            if (type === 'round_announce_match_start') {
-                this.playerRatings.clear();
+        if (type === 'round_announce_match_start') {
+            this.playerRatings.clear();
+            this.roundStats.clear();
+            this.wpaEngine.startNewRound();
+            this.inventory.reset(); 
+            return;
+        }
+
+        // Logic for round start / freeze end
+        if (type === 'round_start' || type === 'round_freeze_end') {
+            if (type === 'round_start') {
+                 this.wpaEngine.startNewRound();
             }
-            // Reset Round State
+
+            if (type === 'round_freeze_end') {
+                this.roundStartTick = tick;
+                
+                // 1. Inventory Snapshot
+                const activeIds = Array.from(this.playerRatings.keys());
+                this.inventory.snapshotRoundStart(activeIds);
+
+                // 2. Calculate Team Equip Values for WPA v3.3
+                let tVal = 0;
+                let ctVal = 0;
+                
+                // Use the round roster sets passed from parser
+                roundTs.forEach(sid => tVal += this.inventory.getStartValue(sid));
+                roundCTs.forEach(sid => ctVal += this.inventory.getStartValue(sid));
+
+                // Fallback for empty sets (e.g. pistol round or parsing error)
+                if (tVal === 0 && ctVal === 0) {
+                    tVal = 4000; ctVal = 4000;
+                }
+
+                // 3. Initialize WPA Engine with Economy Context
+                this.wpaEngine.startNewRound(); // Ensure clean slate
+                this.wpaEngine.initializeRound(tVal, ctVal); 
+            }
+            
             this.roundStats.clear();
             this.recentDeaths = [];
             this.damageGraph.clear();
             this.health.reset();
             this.firstKillHappened = false;
-            
-            // Snapshot Economy at start
-            const activeIds = Array.from(this.playerRatings.keys());
-            this.inventory.snapshotRoundStart(activeIds);
             return;
         }
 
+        const timeElapsed = Math.max(0, (tick - this.roundStartTick) / TICK_RATE);
+        
+        // Arrays for WPA Engine (Symmetric Distribution to ALL team members)
+        const tPlayers = Array.from(roundTs);
+        const ctPlayers = Array.from(roundCTs);
+
         if (type === 'player_hurt') {
-            const att = normalizeId(event.attacker_steamid);
-            const vic = normalizeId(event.user_steamid);
+            // Use userid fallback if steamid is missing
+            const att = normalizeId(event.attacker_steamid || event.attacker);
+            const vic = normalizeId(event.user_steamid || event.userid);
             const rawDmg = parseInt(event.dmg_health || 0);
             
-            // Track actual damage (capped at HP)
             const actualDmg = this.health.recordDamage(vic, rawDmg);
 
             if (att !== "BOT" && vic !== "BOT" && att !== vic && att !== "0") {
-                // Record Damage for Stats
                 const stats = this.getRoundStats(att);
                 stats.damage += actualDmg;
 
-                // Record Damage for Trade Logic
                 if (!this.damageGraph.has(att)) this.damageGraph.set(att, new Map());
                 const vMap = this.damageGraph.get(att)!;
                 vMap.set(vic, (vMap.get(vic) || 0) + actualDmg);
+                
+                // WPA for Damage
+                // Robust Side Detection
+                let attSide: 'T' | 'CT' | undefined;
+                if (roundTs.has(att)) attSide = 'T';
+                else if (roundCTs.has(att)) attSide = 'CT';
+                // Fallback to event data
+                if (!attSide && event.attacker_team_num == 2) attSide = 'T';
+                if (!attSide && event.attacker_team_num == 3) attSide = 'CT';
+
+                if (attSide) {
+                    const wpaUpdates = this.wpaEngine.handleDamage(
+                        att, vic, attSide, actualDmg, timeElapsed,
+                        tPlayers, ctPlayers
+                    );
+                    this.wpaEngine.commitUpdates(wpaUpdates);
+                }
             }
         }
 
+        if (type === 'bomb_planted' || type === 'bomb_defused') {
+            const sid = normalizeId(event.user_steamid || event.userid);
+            const isPlant = type === 'bomb_planted';
+            
+            const wpaUpdates = this.wpaEngine.handleObjective(
+                sid, isPlant ? 'plant' : 'defuse', timeElapsed, 
+                tPlayers, ctPlayers
+            );
+            this.wpaEngine.commitUpdates(wpaUpdates);
+        }
+
         if (type === 'player_death') {
-            const att = normalizeId(event.attacker_steamid);
-            const vic = normalizeId(event.user_steamid);
-            const ast = normalizeId(event.assister_steamid);
+            const att = normalizeId(event.attacker_steamid || event.attacker);
+            const vic = normalizeId(event.user_steamid || event.userid);
+            const ast = normalizeId(event.assister_steamid || event.assister);
             
             this.inventory.handlePlayerDeath(vic);
             const vicStats = this.getRoundStats(vic);
@@ -127,10 +208,44 @@ export class RatingEngine {
                 vicStats.isEntryDeath = true;
             }
 
+            // --- WPA Calculation ---
+            // Robust Side Detection for Victim
+            let victimSide: 'T' | 'CT' | undefined;
+            
+            // 1. Check alive sets first (most accurate for current state tracking)
+            if (aliveTs.has(vic)) victimSide = 'T';
+            else if (aliveCTs.has(vic)) victimSide = 'CT';
+            
+            // 2. Then round roster (static list)
+            else if (roundTs.has(vic)) victimSide = 'T';
+            else if (roundCTs.has(vic)) victimSide = 'CT';
+            
+            // 3. Fallback to event properties (least reliable but necessary for incomplete data)
+            if (!victimSide) {
+                const teamNum = event.user_team_num || event.team_num || event.team;
+                if (teamNum == 2) victimSide = 'T';
+                if (teamNum == 3) victimSide = 'CT';
+            }
+            
+            if (victimSide) {
+                const assisters = [];
+                if (ast && ast !== "BOT" && ast !== "0") {
+                    const isFlash = event.assistedflash;
+                    assisters.push({ sid: ast, isFlash });
+                }
+                
+                const updates = this.wpaEngine.handleKill(
+                    att, vic, victimSide, assisters, timeElapsed,
+                    tPlayers, ctPlayers
+                );
+                this.wpaEngine.commitUpdates(updates);
+            } else {
+                console.warn("[RatingEngine] Could not determine victim side for WPA:", vic);
+            }
+
             if (att !== "BOT" && att !== vic && att !== "0") {
                 const attStats = this.getRoundStats(att);
                 attStats.kills++;
-                // Track economy value killed
                 attStats.killValue += this.inventory.getStartValue(vic);
 
                 if (!this.firstKillHappened) {
@@ -138,10 +253,9 @@ export class RatingEngine {
                     this.firstKillHappened = true;
                 }
 
-                // --- Dynamic Trade Logic ---
-                const TRADE_WINDOW_TICKS = 256; // ~4s (64 tick)
+                // --- Trade Logic ---
+                const TRADE_WINDOW_TICKS = 256; 
                 
-                // Find if the current victim killed a teammate of the attacker recently
                 const avengedDeath = this.recentDeaths.find(d => 
                     d.killer === vic && (tick - d.tick) <= TRADE_WINDOW_TICKS
                 );
@@ -150,27 +264,25 @@ export class RatingEngine {
                     const teammateId = avengedDeath.victim;
                     const tickDiff = tick - avengedDeath.tick;
                     
-                    // Mark flags
                     attStats.traded = true;
                     const mateStats = this.getRoundStats(teammateId);
                     mateStats.wasTraded = true;
 
-                    // Calculate Trade Factor
+                    // WPA Trade Restoration
+                    const tradeRestore = this.wpaEngine.getTradeRestoration(teammateId);
+                    this.wpaEngine.commitUpdates([tradeRestore]);
+
+                    // Old Rating 3.0 Logic
                     const damageToEnemy = this.damageGraph.get(teammateId)?.get(vic) || 0;
                     const cappedDmg = Math.min(damageToEnemy, 100);
-
-                    // 1. Bonus for Entry/Victim
                     const timeFactor = Math.max(0, 1.0 - (tickDiff / TRADE_WINDOW_TICKS));
                     const entryBonus = (cappedDmg / 100.0) * 0.20 * timeFactor;
                     mateStats.tradeBonus += entryBonus;
-
-                    // 2. Penalty for Trader (Attacker)
                     const tradePenalty = (cappedDmg / 100.0) * 0.15;
                     attStats.tradePenalty += tradePenalty;
                 }
             }
             
-            // Handle Assists
             if (ast !== "BOT" && ast !== vic && ast !== att && ast !== "0") {
                 const astStats = this.getRoundStats(ast);
                 astStats.assists++;
@@ -180,55 +292,47 @@ export class RatingEngine {
         }
     }
 
-    /**
-     * Must be called explicitly by the parser when the round is fully over (post-garbage time).
-     * @param activeSteamIds List of all players currently in the match
-     */
-    public finalizeRound(activeSteamIds: string[]) {
-        // 1. Snapshot Economy (End of Round / Post-Garbage Time)
+    public finalizeRound(
+        activeSteamIds: string[], 
+        allTs: string[], 
+        allCTs: string[], 
+        winnerSide: 'T' | 'CT'
+    ) {
+        // 1. WPA Round Closure (Distribute remaining probability symmetrically to ALL players)
+        const closureUpdates = this.wpaEngine.finalizeRound(winnerSide, allTs, allCTs);
+        this.wpaEngine.commitUpdates(closureUpdates);
+
+        // 2. Inventory Snapshots
         this.inventory.snapshotRoundEnd(activeSteamIds);
 
-        // 2. Fix Ghost Players: Ensure everyone has a context
         activeSteamIds.forEach(sid => {
             if (!this.roundStats.has(sid)) {
-                // This initializes a default context (0 kills, 0 deaths, survived=true)
                 this.getRoundStats(sid); 
             }
         });
 
-        // 3. Calculate Ratings
         this.roundStats.forEach((stats, sid) => {
-            // Only rate players we are tracking
+            // FIX: Populate WPA from Engine Accumulator
+            stats.wpa = this.wpaEngine.getPlayerRoundWPA(sid);
+            
             if (!this.playerRatings.has(sid)) return;
 
-            // 1. Kill Rating (Weight 0.25, Baseline ~0.75 KPR)
+            // Rating 3.0 Calculation (Preserved)
             const scoreKill = (stats.kills / 0.75) * 0.25;
-
-            // 2. Survival Rating (Fixed reward)
             const scoreSurv = stats.survived ? 0.30 : 0.0;
-
-            // 3. Damage Rating (Weight 0.15, Baseline ~80 ADR)
             const scoreDmg = (stats.damage / 80.0) * 0.15;
-
-            // 4. Impact Rating (Weight 0.25)
+            
             let impactVal = 0;
             if (stats.kills === 1) impactVal = 1.0;
             else if (stats.kills === 2) impactVal = 2.2;
             else if (stats.kills >= 3) impactVal = 3.5;
-            
             if (stats.isEntryKill) impactVal += 0.5;
-            
             const scoreImpact = (impactVal / 1.3) * 0.25;
-            
-            // Save impact for display
             stats.impactPoints = scoreImpact;
 
-            // 5. KAST-like (Fixed reward)
-            // KAST includes Kills, Assists, Survived, Traded
             const isKast = stats.kills > 0 || stats.assists > 0 || stats.survived || stats.traded || stats.wasTraded;
             const scoreKast = isKast ? 0.20 : 0.0;
 
-            // 6. Econ Rating (Dynamic)
             const startValue = this.inventory.getStartValue(sid) + 500; 
             const valueGenerated = stats.killValue; 
             let scoreEcon = 0;
@@ -236,16 +340,14 @@ export class RatingEngine {
                  scoreEcon = Math.log2(1 + (valueGenerated / startValue)) * 0.10;
             }
 
-            // 7. Trade Adjustments
             const tradeScore = stats.tradeBonus - stats.tradePenalty;
-
-            // Final Sum
             let roundRating = scoreKill + scoreSurv + scoreDmg + scoreImpact + scoreKast + scoreEcon + tradeScore;
             
             stats.rating = parseFloat(roundRating.toFixed(3));
 
             const p = this.playerRatings.get(sid)!;
             p.sumRating += roundRating;
+            p.sumWPA += stats.wpa; // Accumulate WPA
             p.rounds++;
         });
     }
@@ -255,15 +357,17 @@ export class RatingEngine {
             const ratingData = this.playerRatings.get(sid);
             if (ratingData && ratingData.rounds > 0) {
                 const avgRating = ratingData.sumRating / ratingData.rounds;
-                
-                // Final Scale Calibration
                 const finalRating = avgRating * 1.30; 
                 
                 playerStats.rating = parseFloat(finalRating.toFixed(2));
                 
-                playerStats.we = parseFloat(((playerStats.rating * 0.9) + 0.1).toFixed(2));
+                // New WPA Field
+                playerStats.wpa = parseFloat(ratingData.sumWPA.toFixed(2));
+                playerStats.we = playerStats.wpa;
+                
             } else {
                 playerStats.rating = 0.00;
+                playerStats.wpa = 0.00;
             }
         });
     }

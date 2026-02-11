@@ -1,42 +1,14 @@
 
-import { DemoData, Match, PlayerMatchStats, ClutchAttempt, MatchRound, MatchTimelineEvent, PlayerRoundStats, UtilityStats, Side } from "../types";
+import { DemoData, Match, PlayerMatchStats, MatchRound, MatchTimelineEvent, PlayerRoundStats, Side } from "../types";
 import { generateId } from "./idGenerator";
 import { ROSTER } from "../constants/roster";
 import { RatingEngine } from "./rating3/RatingEngine";
 import { HealthTracker } from "./rating3/HealthTracker";
 
-// --- Helpers ---
-
-const normalizeSteamId = (id: string | number | null | undefined): string => {
-    if (id === null || id === undefined || id === 0 || id === "0" || id === "BOT") return "BOT";
-    return String(id).trim();
-};
-
-const NAME_ALIASES: Record<string, string> = {
-    'forsakenN': 'F1oyd',
-    '冥医': 'Sanatio',
-    'addd_233': 'addd',
-    'Ser1EN': 'Ser1EN',
-    'ClayDEN': 'Ser1EN', 
-    'FuNct1on': 'FuNct1on',
-    'R\u2061\u2061\u2061ain\u2061\u2061\u2061\u2061\u2061': 'Rain' 
-};
-
-const WEAPON_SIDE_MAP: Record<string, 'T' | 'CT'> = {
-    'glock': 'T', 'ak47': 'T', 'galilar': 'T', 'sg553': 'T', 'tec9': 'T', 'mac10': 'T', 'molotov': 'T', 'g3sg1': 'T',
-    'usp_silencer': 'CT', 'hkp2000': 'CT', 'm4a1': 'CT', 'm4a1_silencer': 'CT', 'm4a4': 'CT', 'famas': 'CT', 'aug': 'CT', 'fiveseven': 'CT', 'mp9': 'CT', 'incendiary': 'CT', 'scar20': 'CT'
-};
-
-const resolveName = (rawName: string | null): string => {
-    if (!rawName) return "Unknown";
-    const clean = rawName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-    if (NAME_ALIASES[clean]) return NAME_ALIASES[clean];
-    const rosterMatch = ROSTER.find(r => r.id.toLowerCase() === clean.toLowerCase() || r.name.toLowerCase() === clean.toLowerCase());
-    if (rosterMatch) return rosterMatch.id;
-    return clean;
-};
-
-// --- Main Logic ---
+// Import split modules
+import { normalizeSteamId, resolveName } from "./demo/helpers";
+import { determineTeammates } from "./demo/teamLogic";
+import { determineStartingSide } from "./demo/sideLogic";
 
 export const parseDemoJson = (data: DemoData): Match => {
     const events = Array.isArray(data) ? data : (data.events || []);
@@ -44,256 +16,20 @@ export const parseDemoJson = (data: DemoData): Match => {
     
     events.sort((a: any, b: any) => (a.tick || 0) - (b.tick || 0));
 
-    const rosterSteamIds = new Set<string>();
-    const allSteamIds = new Set<string>(); 
-    const activeSteamIds = new Set<string>();
+    // --- PHASE 1-4: Identify Players & Teams (Extracted) ---
+    const { 
+        teammateSteamIds, 
+        steamIdToName, 
+        activeSteamIds, 
+        allSteamIds 
+    } = determineTeammates(data, events);
+
+    // --- PHASE 5: Determine Starting Side (Extracted) ---
+    const initialRosterSide = determineStartingSide(events, teammateSteamIds);
+
+    // --- PHASE 6: CALCULATE STATS (Engine Loop) ---
+    // Note: The rest of this function is largely preserved to ensure exact metric behavior
     
-    const steamIdToName = new Map<string, string>();
-    const steamIdToTeamId = new Map<string, string | number>(); 
-
-    const collectPlayerInfo = (sid: string, name: string | null, teamIdentifier?: number | string) => {
-        if (sid === "BOT") return;
-        allSteamIds.add(sid);
-        if (name) {
-            if (!steamIdToName.has(sid) || steamIdToName.get(sid) === "Unknown") {
-                steamIdToName.set(sid, name);
-            }
-        }
-        if (teamIdentifier !== undefined && teamIdentifier !== null) {
-            steamIdToTeamId.set(sid, teamIdentifier);
-        }
-    };
-
-    if (!Array.isArray(data) && data.players) {
-        data.players.forEach((p: any) => {
-            const sid = normalizeSteamId(p.steamid);
-            const teamId = p.team_name || p.team_number;
-            collectPlayerInfo(sid, p.name, teamId);
-        });
-    }
-
-    events.forEach((e: any) => {
-        if (e.user_steamid) {
-            const sid = normalizeSteamId(e.user_steamid);
-            collectPlayerInfo(sid, e.user_name);
-            activeSteamIds.add(sid);
-        }
-        if (e.attacker_steamid) {
-            const sid = normalizeSteamId(e.attacker_steamid);
-            collectPlayerInfo(sid, e.attacker_name);
-            activeSteamIds.add(sid);
-        }
-    });
-
-    // 1. Identify Roster Members (Anchors)
-    allSteamIds.forEach(sid => {
-        const rawName = steamIdToName.get(sid) || "Unknown";
-        const resolved = resolveName(rawName);
-        const isRoster = ROSTER.some(r => r.id === resolved);
-        if (isRoster) rosterSteamIds.add(sid);
-    });
-
-    // 2. Identify "My Team" ID based on metadata
-    const teamCounts = new Map<string | number, number>();
-    rosterSteamIds.forEach(sid => {
-        const tid = steamIdToTeamId.get(sid);
-        if (tid !== undefined) {
-            teamCounts.set(tid, (teamCounts.get(tid) || 0) + 1);
-        }
-    });
-
-    let myTeamIdentifier: string | number | null = null;
-    let maxCount = 0;
-    
-    teamCounts.forEach((count, tid) => {
-        if (count > maxCount) {
-            maxCount = count;
-            myTeamIdentifier = tid;
-        }
-    });
-
-    // 3. Build Initial Teammate Set
-    const teammateSteamIds = new Set<string>(rosterSteamIds);
-    
-    if (myTeamIdentifier !== null) {
-        allSteamIds.forEach(sid => {
-            if (steamIdToTeamId.get(sid) === myTeamIdentifier) {
-                teammateSteamIds.add(sid);
-            }
-        });
-    }
-    
-    // Fallback: 5-man stack logic
-    if (rosterSteamIds.size === 0 && activeSteamIds.size === 10) {
-        const numTeamGroups = new Map<string, Set<string>>();
-        const steamIdLooseEqual = (a?: string, b?: string) => {
-            if (!a || !b) return false;
-            if (a === b) return true;
-            const safePrefixLen = 14; 
-            if (a.length >= safePrefixLen && b.length >= safePrefixLen) {
-                return a.slice(0, safePrefixLen) === b.slice(0, safePrefixLen);
-            }
-            return false;
-        };
-
-        const getNumericTeamForSid = (sid: string): string | undefined => {
-            const raw = steamIdToTeamId.get(sid);
-            if (raw !== undefined && raw !== null) {
-                const t = String(raw).trim();
-                if (/^\d+$/.test(t)) return t;
-            }
-            if (!Array.isArray(data) && Array.isArray((data as any).players)) {
-                for (const p of (data as any).players) {
-                    const psid = normalizeSteamId(p.steamid);
-                    if (psid === sid || steamIdLooseEqual(psid, sid)) {
-                        if (p.team_number !== undefined && p.team_number !== null) {
-                            const tn = String(p.team_number).trim();
-                            if (/^\d+$/.test(tn)) {
-                                steamIdToTeamId.set(sid, tn);
-                                return tn;
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-            return undefined;
-        };
-
-        activeSteamIds.forEach(sid => {
-            const tn = getNumericTeamForSid(sid);
-            if (!tn) return;
-            if (!numTeamGroups.has(tn)) numTeamGroups.set(tn, new Set());
-            numTeamGroups.get(tn)!.add(sid);
-        });
-
-        let chosenGroup: Set<string> | null = null;
-        const sortedTeamKeys = Array.from(numTeamGroups.keys()).sort((a, b) => Number(a) - Number(b));
-
-        for (const key of sortedTeamKeys) {
-            const grp = numTeamGroups.get(key)!;
-            if (grp.size === 5) { 
-                chosenGroup = grp; 
-                break; 
-            }
-        }
-
-        if (!chosenGroup && sortedTeamKeys.length > 0) {
-            let maxSize = 0;
-            let bestKey = sortedTeamKeys[0];
-            
-            for (const key of sortedTeamKeys) {
-                const grp = numTeamGroups.get(key)!;
-                if (grp.size > maxSize) {
-                    maxSize = grp.size;
-                    bestKey = key;
-                }
-            }
-            if (maxSize > 0) {
-                chosenGroup = numTeamGroups.get(bestKey)!;
-            }
-        }
-
-        if (!chosenGroup) {
-            const sids = Array.from(activeSteamIds).sort();
-            chosenGroup = new Set(sids.slice(0, 5));
-        }
-
-        chosenGroup.forEach(sid => teammateSteamIds.add(sid));
-    }
-
-    // 4. Interaction Propagation
-    const knownFriends = new Set<string>(teammateSteamIds);
-    const knownEnemies = new Set<string>();
-    let changed = true;
-    let iterations = 0;
-    while (changed && iterations < 5) {
-        changed = false;
-        events.forEach((e: any) => {
-            if (e.event_name === 'player_death') {
-                const vic = normalizeSteamId(e.user_steamid);
-                const att = normalizeSteamId(e.attacker_steamid);
-                if (att && vic && att !== vic && att !== 'BOT' && vic !== 'BOT') {
-                    if (knownFriends.has(att) && !knownEnemies.has(vic) && !knownFriends.has(vic)) {
-                        knownEnemies.add(vic);
-                        changed = true;
-                    }
-                    if (knownFriends.has(vic) && !knownEnemies.has(att) && !knownFriends.has(att)) {
-                        knownEnemies.add(att);
-                        changed = true;
-                    }
-                    if (knownEnemies.has(att) && !knownFriends.has(vic) && !knownEnemies.has(vic)) {
-                        knownFriends.add(vic);
-                        changed = true;
-                    }
-                    if (knownEnemies.has(vic) && !knownFriends.has(att) && !knownEnemies.has(att)) {
-                        knownFriends.add(att);
-                        changed = true;
-                    }
-                }
-            }
-        });
-        iterations++;
-    }
-    knownFriends.forEach(sid => teammateSteamIds.add(sid));
-
-    // PASS 1: DETERMINE SIDE
-    let h1_t_weight = 0;
-    let h1_ct_weight = 0;
-    let h2_t_weight = 0;
-    let h2_ct_weight = 0;
-    let p1_matchStarted = false;
-    let p1_round = 1;
-    const hasMatchStart = events.some(e => e.event_name === 'round_announce_match_start');
-    if (!hasMatchStart) p1_matchStarted = true; 
-
-    for (const e of events) {
-        if (e.event_name === 'round_announce_match_start') {
-            p1_matchStarted = true;
-            p1_round = 1;
-            h1_t_weight = 0; h1_ct_weight = 0; h2_t_weight = 0; h2_ct_weight = 0;
-            continue;
-        }
-        if (!p1_matchStarted) continue;
-        if (e.event_name === 'round_end') {
-            p1_round++;
-            continue;
-        }
-        let side: 'T' | 'CT' | null = null;
-        let weight = 0;
-        if (e.event_name === 'bomb_planted') {
-            const sid = normalizeSteamId(e.user_steamid);
-            if (teammateSteamIds.has(sid)) { side = 'T'; weight = 100; }
-        }
-        else if (e.event_name === 'bomb_defused') {
-            const sid = normalizeSteamId(e.user_steamid);
-            if (teammateSteamIds.has(sid)) { side = 'CT'; weight = 100; }
-        }
-        else if (e.event_name === 'player_death' || e.event_name === 'player_hurt') {
-            const sid = normalizeSteamId(e.attacker_steamid);
-            if (teammateSteamIds.has(sid) && e.weapon) {
-                const w = e.weapon.replace("weapon_", "");
-                if (WEAPON_SIDE_MAP[w]) { side = WEAPON_SIDE_MAP[w]; weight = 1; }
-            }
-        }
-        if (side) {
-            if (p1_round <= 12) {
-                if (side === 'T') h1_t_weight += weight; else h1_ct_weight += weight;
-            } else {
-                if (side === 'T') h2_t_weight += weight; else h2_ct_weight += weight;
-            }
-        }
-    }
-
-    let initialRosterSide: 'T' | 'CT' = 'T';
-    if (h1_ct_weight > h1_t_weight) initialRosterSide = 'CT';
-    else if (h1_t_weight > h1_ct_weight) initialRosterSide = 'T';
-    else {
-        if (h2_ct_weight > h2_t_weight) initialRosterSide = 'T';
-        else if (h2_t_weight > h2_ct_weight) initialRosterSide = 'CT';
-    }
-
-    // PASS 2: CALCULATE STATS
     const statsMap = new Map<string, PlayerMatchStats>();
     const ratingEngine = new RatingEngine();
     const healthTracker = new HealthTracker();
@@ -314,6 +50,9 @@ export const parseDemoJson = (data: DemoData): Match => {
         reason: number, 
         endTick: number
     } | null = null;
+
+    // Track dynamic team assignments from events
+    const playerSideMap = new Map<string, 'T' | 'CT'>();
     
     const getOrInitStats = (sid: string, fallbackName: string | null) => {
         if (sid === "BOT") return null;
@@ -327,7 +66,7 @@ export const parseDemoJson = (data: DemoData): Match => {
                 steamid: sid,
                 rank: '-', 
                 kills: 0, deaths: 0, assists: 0,
-                adr: 0, hsRate: 0, rating: 0, we: 0,
+                adr: 0, hsRate: 0, rating: 0, we: 0, wpa: 0,
                 total_damage: 0,
                 utility_count: 0,
                 flash_assists: 0,
@@ -365,7 +104,13 @@ export const parseDemoJson = (data: DemoData): Match => {
 
     let aliveTs = new Set<string>();
     let aliveCTs = new Set<string>();
+    let roundTs = new Set<string>(); // New: Track all T players
+    let roundCTs = new Set<string>(); // New: Track all CT players
+
     let roundClutchAttempts = new Map<string, { opponents: number, kills: number }>();
+    
+    // Check match start availability same as before
+    const hasMatchStart = events.some(e => e.event_name === 'round_announce_match_start');
     let matchStarted = !hasMatchStart;
 
     const tickRate = 64; 
@@ -373,6 +118,9 @@ export const parseDemoJson = (data: DemoData): Match => {
     const resetRoundState = () => {
         aliveTs.clear();
         aliveCTs.clear();
+        roundTs.clear();
+        roundCTs.clear();
+
         roundClutchAttempts.clear();
         healthTracker.reset(); 
         currentRoundPlayerStats.clear();
@@ -382,11 +130,27 @@ export const parseDemoJson = (data: DemoData): Match => {
         currentFreezeEndTick = null;
 
         const currentRosterSide = (currentRound <= 12) ? initialRosterSide : (initialRosterSide === 'T' ? 'CT' : 'T');
+        
         activeSteamIds.forEach(sid => {
-            const isTeammate = teammateSteamIds.has(sid);
-            const side = isTeammate ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
-            if (side === 'T') aliveTs.add(sid);
-            else aliveCTs.add(sid);
+            // Priority: Use the definitive side from playerSideMap
+            const realSide = playerSideMap.get(sid);
+            let side: 'T' | 'CT';
+
+            if (realSide) {
+                side = realSide;
+            } else {
+                // Fallback to roster logic if not yet seen in team events
+                const isTeammate = teammateSteamIds.has(sid);
+                side = isTeammate ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
+            }
+
+            if (side === 'T') {
+                aliveTs.add(sid);
+                roundTs.add(sid);
+            } else {
+                aliveCTs.add(sid);
+                roundCTs.add(sid);
+            }
         });
     };
 
@@ -397,18 +161,41 @@ export const parseDemoJson = (data: DemoData): Match => {
         const { winner, reason, endTick } = pendingRoundEnd;
         const currentRosterSide = (currentRound <= 12) ? initialRosterSide : (initialRosterSide === 'T' ? 'CT' : 'T');
 
-        // 1. Finalize Rating Engine (Calculates ratings + Econ Snapshot)
-        ratingEngine.finalizeRound(Array.from(activeSteamIds));
+        let targetTs = Array.from(roundTs);
+        let targetCTs = Array.from(roundCTs);
+
+        // Fallback logic for empty sets
+        if (targetTs.length === 0 || targetCTs.length === 0) {
+            const fallbackTs: string[] = [];
+            const fallbackCTs: string[] = [];
+            activeSteamIds.forEach(sid => {
+                const side = playerSideMap.get(sid);                    
+                if (!side) console.log('[Debug] ID missing in map:', sid);
+                if (side === 'T') fallbackTs.push(sid);
+                else if (side === 'CT') fallbackCTs.push(sid);
+            });
+            if (targetTs.length === 0) targetTs = fallbackTs;
+            if (targetCTs.length === 0) targetCTs = fallbackCTs;
+        }
+
+        // console.log('[WPA] Distributing WPA:', { T: targetTs.length, CT: targetCTs.length, winner });
+
+        ratingEngine.finalizeRound(Array.from(activeSteamIds), targetTs, targetCTs, winner);
         
-        // 2. Compile Detailed Stats
         const roundPlayerStatsRecord: Record<string, PlayerRoundStats> = {};
         
         activeSteamIds.forEach(sid => {
             const ratingCtx = ratingEngine.getCurrentRoundContext(sid);
             const tempStats = getRoundPlayerStats(sid);
             
-            const isTeammate = teammateSteamIds.has(sid);
-            const pSide = isTeammate ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
+            let pSide: 'T' | 'CT' = 'CT';
+            if (playerSideMap.has(sid)) pSide = playerSideMap.get(sid)!;
+            else if (roundTs.has(sid)) pSide = 'T';
+            else if (roundCTs.has(sid)) pSide = 'CT';
+            else {
+                 const isTeammate = teammateSteamIds.has(sid);
+                 pSide = isTeammate ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
+            }
 
             if (ratingCtx) {
                 roundPlayerStatsRecord[sid] = {
@@ -420,6 +207,7 @@ export const parseDemoJson = (data: DemoData): Match => {
                     headshots: tempStats.headshots || 0,
                     rating: ratingCtx.rating,
                     impact: ratingCtx.impactPoints,
+                    wpa: ratingCtx.wpa,
                     isEntryKill: ratingCtx.isEntryKill,
                     isEntryDeath: ratingCtx.isEntryDeath,
                     traded: ratingCtx.traded,
@@ -435,13 +223,10 @@ export const parseDemoJson = (data: DemoData): Match => {
             }
         });
 
-        // Correct Relative Times for Timeline
-        // Anchor is FreezeEnd (Live start). If missing, fallback to RoundStart.
         const anchorTick = currentFreezeEndTick ?? currentRoundStartTick;
         const roundDuration = Math.max(0, (endTick - anchorTick) / tickRate);
 
         currentRoundEvents.forEach(ev => {
-            // Recalculate relative seconds based on final anchor
             ev.seconds = (ev.tick - anchorTick) / tickRate;
         });
 
@@ -455,7 +240,6 @@ export const parseDemoJson = (data: DemoData): Match => {
             timeline: [...currentRoundEvents]
         });
 
-        // 3. Update Aggregates
         scores[winner]++;
         statsMap.forEach(p => p.r3_rounds_played = (p.r3_rounds_played || 0) + 1);
 
@@ -463,16 +247,13 @@ export const parseDemoJson = (data: DemoData): Match => {
         if (winner === currentRosterSide) { if (isFirstHalf) s1++; else s3++; } 
         else { if (isFirstHalf) s2++; else s4++; }
 
-        // Clutch Logic
         roundClutchAttempts.forEach((data, sid) => {
             const isTeammate = teammateSteamIds.has(sid);
             const playerSide = isTeammate ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
             const won = (playerSide === winner);
             
-            // Check alive status at FINALIZATION (correctly accounts for post-round deaths)
             let isSave = false;
             if (!won) {
-                // aliveTs/aliveCTs are updated by player_death events even in garbage time
                 const isAlive = (playerSide === 'T' && aliveTs.has(sid)) || (playerSide === 'CT' && aliveCTs.has(sid));
                 if (isAlive) isSave = true;
             }
@@ -488,9 +269,57 @@ export const parseDemoJson = (data: DemoData): Match => {
         currentRound++;
     };
 
+    // --- Main Event Loop ---
     for (const e of events) {
         const type = e.event_name;
         const tick = e.tick || 0;
+
+        // Side Map Updates
+        if (type === 'player_team') {
+            const sid = normalizeSteamId(e.user_steamid || e.player || e.userid); 
+            const tm = e.team || e.team_num; 
+            
+            // WPA FIX: Sync round rosters immediately when team changes
+            roundTs.delete(sid);
+            roundCTs.delete(sid);
+
+            if (tm == 2) { 
+                playerSideMap.set(sid, 'T');
+                roundTs.add(sid);
+            }
+            else if (tm == 3) { 
+                playerSideMap.set(sid, 'CT');
+                roundCTs.add(sid);
+            }
+        }
+        if (type === 'player_spawn') {
+            const sid = normalizeSteamId(e.user_steamid || e.userid);
+            const tm = e.team_num || e.team;
+            
+            // WPA FIX: Sync round rosters immediately on spawn
+            if (tm == 2) { 
+                playerSideMap.set(sid, 'T');
+                roundCTs.delete(sid);
+                roundTs.add(sid);
+            }
+            else if (tm == 3) { 
+                playerSideMap.set(sid, 'CT');
+                roundTs.delete(sid);
+                roundCTs.add(sid);
+            }
+        }
+        if (e.user_steamid) {
+            const sid = normalizeSteamId(e.user_steamid);
+            const tm = e.user_team_num || e.team_num;
+            if (tm == 2) playerSideMap.set(sid, 'T');
+            else if (tm == 3) playerSideMap.set(sid, 'CT');
+        }
+        if (e.attacker_steamid) {
+            const sid = normalizeSteamId(e.attacker_steamid);
+            const tm = e.attacker_team_num;
+            if (tm == 2) playerSideMap.set(sid, 'T');
+            else if (tm == 3) playerSideMap.set(sid, 'CT');
+        }
 
         if (type === 'round_announce_match_start') {
             matchStarted = true;
@@ -515,29 +344,33 @@ export const parseDemoJson = (data: DemoData): Match => {
 
         if (!matchStarted) continue;
 
-        // Check if we need to finalize previous round BEFORE passing new round start to engine
         if (type === 'round_start' || type === 'round_freeze_end') {
             if (pendingRoundEnd) {
                 processRoundEnd();
                 resetRoundState();
                 pendingRoundEnd = null;
             } else if (currentRoundEvents.length > 0 && type === 'round_start') {
-                // Round started but no round end from previous? Safety reset.
                 resetRoundState();
             }
             
-            // Update Time Anchors
             if (type === 'round_start') {
                 currentRoundStartTick = tick;
-                // If it's a new round, clear freeze end until we see it
                 if (!pendingRoundEnd) currentFreezeEndTick = null; 
             } else if (type === 'round_freeze_end') {
                 currentFreezeEndTick = tick;
+                // Add Round Start Event with Win Probability
+                currentRoundEvents.push({
+                    tick,
+                    seconds: 0,
+                    type: 'damage', // Using generic type for start event, strictly logic only
+                    subject: { steamid: '0', name: 'Round Start', side: 'CT' },
+                    weapon: 'init',
+                    winProb: ratingEngine.getRoundWinProb() // Initial Win Prob
+                });
             }
         }
 
-        // Pass event to Rating Engine (it tracks damage, trades, inventory)
-        ratingEngine.handleEvent(e, currentRound, teammateSteamIds);
+        ratingEngine.handleEvent(e, currentRound, teammateSteamIds, aliveTs, aliveCTs, roundTs, roundCTs);
 
         if (type === 'round_end') {
             let winner: 'T' | 'CT' | null = null;
@@ -556,18 +389,16 @@ export const parseDemoJson = (data: DemoData): Match => {
             }
 
             if (winner) {
-                // Delay finalization to capture garbage time
                 pendingRoundEnd = {
                     winner,
                     reason: e.reason || 0,
                     endTick: tick
                 };
-                
-                // Add marker to timeline
                 currentRoundEvents.push({
                     tick,
-                    seconds: 0, // Will be updated in processRoundEnd
-                    type: 'round_end'
+                    seconds: 0,
+                    type: 'round_end',
+                    winProb: winner === 'T' ? 1.0 : 0.0
                 });
             }
         }
@@ -590,7 +421,7 @@ export const parseDemoJson = (data: DemoData): Match => {
 
             currentRoundEvents.push({
                 tick,
-                seconds: 0, // Placeholder
+                seconds: 0, 
                 type: 'kill',
                 subject: att ? getTimelineInfo(att) : undefined,
                 target: getTimelineInfo(vic),
@@ -598,7 +429,8 @@ export const parseDemoJson = (data: DemoData): Match => {
                 isHeadshot: e.headshot,
                 isWallbang: e.penetrated > 0,
                 isBlind: e.attackerblind,
-                isSmoke: e.thrusmoke
+                isSmoke: e.thrusmoke,
+                winProb: ratingEngine.getRoundWinProb()
             });
 
             if (att && roundClutchAttempts.has(att) && att !== vic && att !== "BOT") {
@@ -641,12 +473,14 @@ export const parseDemoJson = (data: DemoData): Match => {
                      pAst.flash_assists = (pAst.flash_assists || 0) + 1;
                      currentRoundEvents.push({
                          tick, seconds: 0, type: 'flash_assist',
-                         subject: getTimelineInfo(ast), target: getTimelineInfo(vic)
+                         subject: getTimelineInfo(ast), target: getTimelineInfo(vic),
+                         winProb: ratingEngine.getRoundWinProb()
                      });
                  } else {
                      currentRoundEvents.push({
                          tick, seconds: 0, type: 'assist',
-                         subject: getTimelineInfo(ast), target: getTimelineInfo(vic)
+                         subject: getTimelineInfo(ast), target: getTimelineInfo(vic),
+                         winProb: ratingEngine.getRoundWinProb()
                      });
                  }
             }
@@ -684,7 +518,8 @@ export const parseDemoJson = (data: DemoData): Match => {
                     target: getTimelineInfo(vic),
                     weapon: (e.weapon || "").replace("weapon_", ""),
                     damage: actualDmg,
-                    hitgroup: e.hitgroup
+                    hitgroup: e.hitgroup,
+                    winProb: ratingEngine.getRoundWinProb()
                 });
             }
 
@@ -745,7 +580,8 @@ export const parseDemoJson = (data: DemoData): Match => {
                 return { steamid: s, name: n, side: 'T' as Side };
             };
             currentRoundEvents.push({
-                tick, seconds: 0, type: 'plant', subject: getTimelineInfo(sid)
+                tick, seconds: 0, type: 'plant', subject: getTimelineInfo(sid),
+                winProb: ratingEngine.getRoundWinProb()
             });
         }
         else if (type === 'bomb_defused') {
@@ -758,17 +594,18 @@ export const parseDemoJson = (data: DemoData): Match => {
                 return { steamid: s, name: n, side: 'CT' as Side };
             };
             currentRoundEvents.push({
-                tick, seconds: 0, type: 'defuse', subject: getTimelineInfo(sid)
+                tick, seconds: 0, type: 'defuse', subject: getTimelineInfo(sid),
+                winProb: ratingEngine.getRoundWinProb()
             });
         }
         else if (type === 'bomb_exploded') {
             currentRoundEvents.push({
-                tick, seconds: 0, type: 'explode'
+                tick, seconds: 0, type: 'explode',
+                winProb: ratingEngine.getRoundWinProb()
             });
         }
     }
 
-    // Handle end of match (last round)
     if (pendingRoundEnd) {
         processRoundEnd();
     }
@@ -789,7 +626,6 @@ export const parseDemoJson = (data: DemoData): Match => {
             stats.hsRate = 0;
         }
 
-        // Ghost filtering for overall stats
         if (stats.kills === 0 && stats.deaths === 0 && stats.assists === 0 && stats.total_damage === 0 && stats.utility_count === 0) return;
         
         const isRosterByName = ROSTER.some(r => r.id === stats.playerId);
@@ -809,7 +645,7 @@ export const parseDemoJson = (data: DemoData): Match => {
         source: 'Demo',
         date: new Date().toISOString(),
         mapId: meta.map_name || 'Unknown',
-        serverName: meta.server_name, // Add this
+        serverName: meta.server_name, 
         rank: 'N/A',
         result: finalScoreUs > finalScoreThem ? 'WIN' : finalScoreUs < finalScoreThem ? 'LOSS' : 'TIE',
         startingSide: initialRosterSide,

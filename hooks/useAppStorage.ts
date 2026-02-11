@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ContentGroup, Tactic, Utility, Match, MatchSeries } from '../types';
 import { generateGroupId } from '../utils/idGenerator';
+import { loadGroupsFromDB, saveGroupsToDB } from '../utils/db';
 
 export const useAppStorage = () => {
     const [groups, setGroups] = useState<ContentGroup[]>([]);
@@ -11,37 +12,61 @@ export const useAppStorage = () => {
     // --- Initialization ---
     useEffect(() => {
         const initData = async () => {
-            const savedGroupsStr = localStorage.getItem('tacbook_groups');
-            const savedActiveIdsStr = localStorage.getItem('tacbook_active_group_ids');
-            
-            let hasLoadedGroups = false;
-            if (savedGroupsStr) {
-                try {
-                    const parsedGroups = JSON.parse(savedGroupsStr);
-                    if (Array.isArray(parsedGroups) && parsedGroups.length > 0) {
-                        // Ensure all groups have a matches/series array (migration for old data)
-                        const migratedGroups = parsedGroups.map((g: any) => ({
-                            ...g,
-                            matches: Array.isArray(g.matches) ? g.matches : [],
-                            series: Array.isArray(g.series) ? g.series : []
-                        }));
-                        setGroups(migratedGroups);
-                        hasLoadedGroups = true;
+            let loadedGroups: ContentGroup[] | null = null;
+
+            // 1. Try Load from IndexedDB (New Storage)
+            try {
+                loadedGroups = await loadGroupsFromDB();
+            } catch (e) {
+                console.error("Failed to load from DB", e);
+            }
+
+            // 2. Migration: If DB is empty, check LocalStorage (Old Storage)
+            if (!loadedGroups) {
+                const savedGroupsStr = localStorage.getItem('tacbook_groups');
+                if (savedGroupsStr) {
+                    try {
+                        const parsedGroups = JSON.parse(savedGroupsStr);
+                        if (Array.isArray(parsedGroups) && parsedGroups.length > 0) {
+                            loadedGroups = parsedGroups;
+                            // Migrate: Save to DB immediately
+                            await saveGroupsToDB(loadedGroups!);
+                            // Clear legacy storage to free up space/memory
+                            localStorage.removeItem('tacbook_groups');
+                            console.log("Migrated data from LocalStorage to IndexedDB");
+                        }
+                    } catch (e) {
+                        console.error("Failed to parse legacy localStorage groups", e);
                     }
-                } catch (e) {
-                    console.error("Failed to load saved groups", e);
                 }
-            } 
+            }
+
+            if (loadedGroups) {
+                // Ensure schema compatibility
+                const migratedGroups = loadedGroups.map((g: any) => ({
+                    ...g,
+                    matches: Array.isArray(g.matches) ? g.matches : [],
+                    series: Array.isArray(g.series) ? g.series : []
+                }));
+                setGroups(migratedGroups);
+            }
+
+            // Load Active IDs (Keep this in localStorage as it's small config data)
+            const savedActiveIdsStr = localStorage.getItem('tacbook_active_group_ids');
+            let hasLoadedActiveIds = false;
             
-            if (savedActiveIdsStr && hasLoadedGroups) {
+            if (savedActiveIdsStr) {
                 try {
                     const parsedIds = JSON.parse(savedActiveIdsStr);
-                    if (Array.isArray(parsedIds)) setActiveGroupIds(parsedIds);
+                    if (Array.isArray(parsedIds)) {
+                        setActiveGroupIds(parsedIds);
+                        hasLoadedActiveIds = true;
+                    }
                 } catch(e) {}
             }
 
             // Create Default Group if none exist
-            if (!hasLoadedGroups) {
+            if (!loadedGroups || loadedGroups.length === 0) {
                 const defaultId = generateGroupId(); 
                 const defaultGroup: ContentGroup = {
                     metadata: {
@@ -60,11 +85,8 @@ export const useAppStorage = () => {
                 };
                 setGroups([defaultGroup]);
                 setActiveGroupIds([defaultId]);
-            } else if (activeGroupIds.length === 0 && hasLoadedGroups) {
-                 if (savedGroupsStr) { 
-                     const parsed = JSON.parse(savedGroupsStr);
-                     if (parsed[0]) setActiveGroupIds([parsed[0].metadata.id]);
-                 }
+            } else if (!hasLoadedActiveIds && loadedGroups.length > 0) {
+                 setActiveGroupIds([loadedGroups[0].metadata.id]);
             }
             setIsDataLoaded(true);
         };
@@ -74,7 +96,8 @@ export const useAppStorage = () => {
     // --- Persistence ---
     useEffect(() => {
         if (isDataLoaded && groups.length > 0) {
-            localStorage.setItem('tacbook_groups', JSON.stringify(groups));
+            // Save to IndexedDB (Async, Non-blocking)
+            saveGroupsToDB(groups);
         }
     }, [groups, isDataLoaded]);
 

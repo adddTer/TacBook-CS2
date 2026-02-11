@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 // Re-export map helpers from utils to maintain compatibility with existing review components
@@ -89,7 +90,7 @@ export const DataDefinitionsModal = ({ isOpen, onClose }: { isOpen: boolean, onC
                 </div>
                 <div className="space-y-3 overflow-y-auto pr-2 pb-4 font-sans">
                     <DefinitionItem title="Rating 4.0" color="text-blue-600 dark:text-blue-400" desc="基于 KPR、存活、ADR、多杀和经济修正计算。Balanced版本将平均分校准至1.0左右。包含'被补枪'补偿机制。" />
-                    <DefinitionItem title="ADR" color="text-green-600 dark:text-green-400" desc="场均造成伤害。80+ 是优秀输出手的标准（已剔除队友伤害）。" />
+                    <DefinitionItem title="WPA" color="text-green-600 dark:text-green-400" desc="Win Probability Added (胜率贡献)。量化每名玩家的行动（击杀、下包等）对团队获胜概率的改变幅度。正值为正面贡献，负值为失误。" />
                     <DefinitionItem title="KAST%" color="text-orange-600 dark:text-orange-400" desc="击杀、助攻、存活或被交换的回合占比。衡量对团队贡献的稳定性。" />
                     <div className="grid grid-cols-2 gap-3">
                         <DefinitionItem title="F.Ast" color="text-purple-600 dark:text-purple-400" desc="闪光助攻数。" />

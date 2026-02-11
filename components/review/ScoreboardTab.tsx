@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Match, PlayerMatchStats, ClutchRecord, MultiKillBreakdown, PlayerRoundStats } from '../../types';
 import { ROSTER } from '../../constants/roster';
@@ -99,7 +100,7 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
             let roundsPlayed = 0;
             let acc = {
                 kills: 0, deaths: 0, assists: 0, damage: 0, 
-                ratingSum: 0, entryKills: 0,
+                ratingSum: 0, entryKills: 0, wpaSum: 0,
                 k2: 0, k3: 0, k4: 0, k5: 0,
                 kastCount: 0,
                 heDamage: 0, fireDamage: 0,
@@ -127,10 +128,6 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
                 if (filter !== 'ALL' && pRound.side !== filter) return;
 
                 // 3. Individual "Did Not Play" Check
-                // RatingEngine only counts rounds where the player had an event (kill/death/dmg/etc).
-                // If a player saves with 0 damage/kills/deaths, RatingEngine effectively ignores that round for the average.
-                // We must mirror that logic here to match the "Correct Data".
-                // Note: If a player dies (deaths > 0), they participated.
                 if (pRound.rating === 0 && 
                     pRound.kills === 0 && 
                     pRound.deaths === 0 && 
@@ -146,6 +143,12 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
                 acc.damage += pRound.damage;
                 acc.ratingSum += pRound.rating;
                 acc.headshots += pRound.headshots;
+                
+                // Safe WPA accumulation (handle undefined or NaN)
+                const wpa = pRound.wpa;
+                if (typeof wpa === 'number' && !isNaN(wpa)) {
+                    acc.wpaSum += wpa;
+                }
                 
                 if (pRound.utility) {
                     acc.heDamage += pRound.utility.heDamage || 0;
@@ -171,7 +174,7 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
                     ...p,
                     kills: 0, deaths: 0, assists: 0, adr: 0, rating: 0, kast: 0,
                     entry_kills: 0, multikills: { k2: 0, k3: 0, k4: 0, k5: 0 },
-                    hsRate: 0,
+                    hsRate: 0, wpa: 0,
                     utility: { ...p.utility, heDamage: 0, molotovDamage: 0 },
                     clutches: accClutches
                 };
@@ -179,6 +182,9 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
 
             // Corrected Rating Calculation: Average Round Rating * 1.30 Scaling Factor
             const calculatedRating = (acc.ratingSum / roundsPlayed) * 1.30;
+            
+            // Average WPA calculation
+            const avgWpa = acc.wpaSum / roundsPlayed;
 
             return {
                 ...p,
@@ -192,6 +198,7 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
                 multikills: { k2: acc.k2, k3: acc.k3, k4: acc.k4, k5: acc.k5 },
                 hsRate: acc.kills > 0 ? parseFloat(((acc.headshots / acc.kills) * 100).toFixed(1)) : 0,
                 utility: { ...p.utility, heDamage: acc.heDamage, molotovDamage: acc.fireDamage },
+                wpa: parseFloat(avgWpa.toFixed(2)), // Avg WPA
                 clutches: accClutches
             };
         });
@@ -240,7 +247,7 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
                         <th className="px-2 py-3 text-center w-12" title="多杀 (Multi-Kills)">多杀</th>
                         <th className="px-2 py-3 text-center w-12" title="残局获胜 (1vN Wins)">残局</th>
                         <th className="px-2 py-3 text-center w-14">爆头</th>
-                        <th className="px-2 py-3 text-center w-14">道具伤</th>
+                        <th className="px-2 py-3 text-center w-14" title="Win Probability Added Avg per Round (Total Points)">WPA%</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-50 dark:divide-neutral-800/50">
@@ -257,6 +264,10 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
                         const clutchWinCount = clutches['1v1'].won + clutches['1v2'].won + clutches['1v3'].won + clutches['1v4'].won + clutches['1v5'].won;
 
                         const popupAlign = idx >= sortedPlayers.length - 2 ? 'top' : 'bottom';
+                        
+                        // Safety check for WPA value
+                        const wpaVal = (typeof p.wpa === 'number' && !isNaN(p.wpa)) ? p.wpa : 0;
+                        const wpaDisplay = wpaVal.toFixed(1);
 
                         return (
                             <tr 
@@ -324,8 +335,8 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
                                 <td className="px-2 py-3 text-center font-sans tabular-nums text-xs text-neutral-400">
                                     {p.hsRate}%
                                 </td>
-                                <td className="px-2 py-3 text-center font-sans tabular-nums text-xs text-neutral-400">
-                                    {p.utility.heDamage + p.utility.molotovDamage}
+                                <td className={`px-2 py-3 text-center font-sans tabular-nums text-xs font-bold ${wpaVal > 0 ? 'text-green-500' : wpaVal < 0 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                    {wpaVal > 0 ? '+' : ''}{wpaDisplay}%
                                 </td>
                             </tr>
                         );

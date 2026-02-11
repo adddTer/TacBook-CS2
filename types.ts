@@ -196,6 +196,7 @@ export interface PlayerRoundStats {
     // Rating 3.0 Components
     rating: number;
     impact: number;
+    wpa: number; // Win Probability Added (New)
     
     // Mechanics
     isEntryKill: boolean;
@@ -242,6 +243,9 @@ export interface MatchTimelineEvent {
     isWallbang?: boolean;
     isBlind?: boolean;
     isSmoke?: boolean;
+    
+    // WPA
+    winProb?: number; // T Win Probability after this event (0-1)
 }
 
 export interface MatchRound {
@@ -268,7 +272,8 @@ export interface PlayerMatchStats {
     adr: number;
     hsRate: number;
     rating: number; // Rating 3.0
-    we: number; // Win Effect / Impact (Old WE or WPA)
+    we: number; // Win Effect (Legacy)
+    wpa: number; // Win Probability Added (New)
     
     // Detailed Stats from Demo
     total_damage?: number;
@@ -279,7 +284,7 @@ export interface PlayerMatchStats {
     multikills: MultiKillBreakdown;
     
     // RATING 3.0 Internal Accumulators
-    r3_wpa_accum?: number; // Total Win Probability Added
+    r3_wpa_accum?: number; // Total Win Probability Added (Internal)
     r3_impact_accum?: number; // Raw Impact score accumulator
     r3_econ_accum?: number; // Economy weighted score
     r3_rounds_played?: number;

@@ -8,11 +8,11 @@ interface MatchListProps {
     matches: Match[];
     series?: MatchSeries[];
     onSelectMatch: (match: Match) => void;
+    onSelectSeries?: (series: MatchSeries) => void;
     onBatchDelete?: (items: { type: 'match' | 'series', id: string }[]) => void;
 }
 
-export const MatchList: React.FC<MatchListProps> = ({ matches, series = [], onSelectMatch, onBatchDelete }) => {
-    const [expandedSeries, setExpandedSeries] = useState<string | null>(null);
+export const MatchList: React.FC<MatchListProps> = ({ matches, series = [], onSelectMatch, onSelectSeries, onBatchDelete }) => {
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -102,7 +102,6 @@ export const MatchList: React.FC<MatchListProps> = ({ matches, series = [], onSe
 
                     if (item.type === 'series') {
                         const s = item.data as MatchSeries;
-                        const isExpanded = expandedSeries === s.id;
                         
                         // Calculate series stats
                         const subMatches = s.matches.map(ref => matches.find(m => m.id === ref.matchId)).filter(Boolean) as Match[];
@@ -121,7 +120,7 @@ export const MatchList: React.FC<MatchListProps> = ({ matches, series = [], onSe
                                 className={`relative rounded-2xl bg-neutral-900 border transition-all overflow-hidden flex flex-col group
                                     ${isSelected ? 'border-blue-500 ring-2 ring-blue-500' : 'border-neutral-800'}
                                 `}
-                                onClick={() => isSelectMode ? toggleSelection(s.id) : undefined}
+                                onClick={() => isSelectMode ? toggleSelection(s.id) : onSelectSeries && onSelectSeries(s)}
                             >
                                  {/* Selection Overlay */}
                                  {isSelectMode && (
@@ -135,11 +134,6 @@ export const MatchList: React.FC<MatchListProps> = ({ matches, series = [], onSe
                                  {/* Series Header */}
                                  <div 
                                     className="p-5 pl-6 cursor-pointer bg-gradient-to-br from-neutral-800 to-neutral-900 hover:from-neutral-700 transition-all"
-                                    onClick={(e) => {
-                                        if (isSelectMode) return;
-                                        e.stopPropagation();
-                                        setExpandedSeries(isExpanded ? null : s.id);
-                                    }}
                                  >
                                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-600"></div>
                                      <div className="flex justify-between items-start mb-3">
@@ -170,38 +164,6 @@ export const MatchList: React.FC<MatchListProps> = ({ matches, series = [], onSe
                                          </div>
                                      </div>
                                  </div>
-
-                                 {/* Expanded Matches */}
-                                 {isExpanded && !isSelectMode && (
-                                     <div className="border-t border-neutral-800 bg-neutral-950/50 p-2 space-y-1">
-                                         {subMatches.map((m, i) => {
-                                             const mapName = getMapDisplayName(m.mapId);
-                                             const ref = s.matches.find(r => r.matchId === m.id);
-                                             const scoreUs = ref?.swapSides ? m.score.them : m.score.us;
-                                             const scoreThem = ref?.swapSides ? m.score.us : m.score.them;
-                                             const isWin = scoreUs > scoreThem;
-
-                                             return (
-                                                 <div 
-                                                    key={m.id}
-                                                    onClick={() => onSelectMatch(m)}
-                                                    className="flex items-center justify-between p-2 rounded-lg hover:bg-neutral-800 cursor-pointer transition-colors"
-                                                 >
-                                                     <div className="flex items-center gap-3">
-                                                         <div className={`w-1 h-8 rounded-full ${isWin ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                                         <div>
-                                                             <div className="text-xs font-bold text-neutral-300">{mapName}</div>
-                                                             <div className="text-[10px] text-neutral-500 font-mono">Map {i+1}</div>
-                                                         </div>
-                                                     </div>
-                                                     <div className="font-mono font-bold text-neutral-400">
-                                                         <span className={isWin ? 'text-green-500' : ''}>{scoreUs}</span> : <span className={!isWin ? 'text-red-500' : ''}>{scoreThem}</span>
-                                                     </div>
-                                                 </div>
-                                             );
-                                         })}
-                                     </div>
-                                 )}
                             </div>
                         );
                     }

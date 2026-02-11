@@ -11,6 +11,11 @@ export class InventoryTracker {
     // SteamID -> Value at round end (RoundEnd event)
     private endValues: Map<string, number> = new Map();
 
+    private normalizeId(id: string | number | null | undefined): string {
+        if (id === null || id === undefined || id === 0 || id === "0" || id === "BOT") return "BOT";
+        return String(id).trim();
+    }
+
     public reset() {
         this.inventory.clear();
         this.startValues.clear();
@@ -71,8 +76,8 @@ export class InventoryTracker {
              rawSid = event.steamid; 
         }
         
-        if (!rawSid || rawSid === "0" || rawSid === "BOT") return;
-        const sid = String(rawSid);
+        const sid = this.normalizeId(rawSid);
+        if (sid === "BOT") return;
 
         // 2. Resolve Item Name securely
         let rawItem = event.item;
@@ -99,18 +104,14 @@ export class InventoryTracker {
         if (!items) return 200; // Default glock/usp value assumption
 
         let value = 0;
-        let hasPistol = false;
         
         items.forEach(item => {
             if (WEAPON_VALUES[item]) {
                 value += WEAPON_VALUES[item];
-                // Check if it's a pistol to avoid double counting default pistol if purchased one
-                if (['glock', 'hkp2000', 'usp_silencer'].includes(item)) hasPistol = true;
             }
         });
 
         // Basic correction: If value is 0, they probably have a default pistol that wasn't picked up explicitly
-        // (spawned with). But to be safe, we assume min 200 if alive.
         if (value < 200) value = 200;
         
         return value;
