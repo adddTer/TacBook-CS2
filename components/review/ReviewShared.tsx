@@ -1,7 +1,8 @@
 
 import React from 'react';
+import { getRatingStyle } from '../../utils/styleConstants';
 
-// Re-export map helpers from utils to maintain compatibility with existing review components
+// Re-export map helpers from utils to maintain compatibility
 export { getMapDisplayName, getMapEnName } from '../../utils/matchHelpers';
 
 // --- Maps Theme Helper ---
@@ -18,20 +19,9 @@ export const getMapTheme = (mapName: string) => {
     return 'from-gray-50 to-neutral-50 dark:from-neutral-900 dark:to-neutral-900 border-neutral-200 dark:border-neutral-800';
 };
 
-// --- Rating Color Logic ---
+// --- Rating Color Logic Wrapper ---
 export const getRatingColorClass = (rating: number, type: 'text' | 'bg' = 'text') => {
-    if (type === 'text') {
-        if (rating >= 1.45) return 'text-yellow-500 dark:text-yellow-400';
-        if (rating >= 1.15) return 'text-green-600 dark:text-green-400';
-        if (rating < 0.95) return 'text-red-500 dark:text-red-400';
-        return 'text-neutral-900 dark:text-white';
-    } else {
-        // Background badges
-        if (rating >= 1.45) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800';
-        if (rating >= 1.15) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800';
-        if (rating < 0.95) return 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 border-red-100 dark:border-red-800';
-        return 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700';
-    }
+    return getRatingStyle(rating, type);
 };
 
 // --- Badges ---
@@ -69,7 +59,7 @@ export const SourceBadge = ({ source }: { source: 'PWA' | 'Official' | 'Demo' })
 export const StatBox = ({ label, value, subValue, colorClass, highlight }: any) => (
     <div className={`p-3 rounded-xl text-center border transition-all ${highlight ? 'bg-white dark:bg-neutral-800 shadow-sm border-neutral-200 dark:border-neutral-700' : 'bg-neutral-50 dark:bg-neutral-900 border-transparent'}`}>
         <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider mb-1 font-sans">{label}</div>
-        <div className={`text-xl font-black font-sans tabular-nums tracking-tight ${colorClass || 'text-neutral-900 dark:text-white'}`}>{value}</div>
+        <div className={`text-xl font-sans tabular-nums tracking-tight ${colorClass || 'text-neutral-900 dark:text-white font-black'}`}>{value}</div>
         {subValue && <div className="text-[10px] text-neutral-500 font-sans tabular-nums mt-0.5">{subValue}</div>}
     </div>
 );

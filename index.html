@@ -51,6 +51,30 @@
           -ms-overflow-style: none;  /* IE and Edge */
           scrollbar-width: none;  /* Firefox */
       }
+
+      /* Custom Flowing Gradient Animation */
+      @keyframes flowGradient {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+      }
+
+      /* Custom Flowing Gradient Classes - Epic Purple/Pink Theme */
+      .text-flow-pink {
+          /* Fuchsia-600 -> Pink-400 -> Fuchsia-600 loop. Distinct from Red. Slow 8s animation. */
+          background: linear-gradient(90deg, #c026d3 0%, #f472b6 50%, #c026d3 100%); 
+          background-size: 200% auto;
+          color: transparent;
+          -webkit-text-fill-color: transparent;
+          -webkit-background-clip: text;
+          background-clip: text;
+          animation: flowGradient 8s linear infinite;
+      }
+      
+      .bg-flow-pink {
+          background: linear-gradient(90deg, #c026d3 0%, #f472b6 50%, #c026d3 100%);
+          background-size: 200% auto;
+          animation: flowGradient 8s linear infinite;
+      }
     </style>
   <script type="importmap">
 {

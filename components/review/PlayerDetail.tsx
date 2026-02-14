@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { PlayerMatchStats, Match } from '../../types';
 import { getMapDisplayName, getRatingColorClass } from './ReviewShared';
 import { usePlayerStats } from '../../hooks/usePlayerStats';
+import { getScoreStyle, getValueStyleClass, getScoreHex } from '../../utils/styleConstants';
 
 interface PlayerDetailProps {
     profile: any;
@@ -106,15 +107,6 @@ const ABILITY_INFO: Record<AbilityType, { title: string, color: string, desc: st
             { label: "回合致盲敌人时间", key: "blindTimePerRound", format: "0.00s" },
         ]
     },
-};
-
-// --- Helpers ---
-
-const getScoreColorHex = (score: number) => {
-    if (score >= 80) return '#eab308'; // yellow-500
-    if (score >= 60) return '#22c55e'; // green-500
-    if (score >= 40) return '#a3a3a3'; // neutral-400
-    return '#ef4444'; // red-500
 };
 
 // --- Sub Components ---
@@ -221,7 +213,7 @@ const RadarChart = ({ data, size = 260 }: { data: { value: number; label: string
                         cx={p.x} 
                         cy={p.y} 
                         r="3" 
-                        fill={getScoreColorHex(data[i].value)} 
+                        fill={getScoreHex(data[i].value)} 
                         stroke="white" 
                         strokeWidth="1"
                         className="dark:stroke-neutral-900"
@@ -243,20 +235,8 @@ interface AbilityRowProps {
 const AbilityRow: React.FC<AbilityRowProps> = ({ label, value, isPercentage = false, isSelected, onClick }) => {
     const intValue = Math.round(Math.max(0, Math.min(100, value)));
     
-    // Determine tier color logic (consistent with LeaderboardTab)
-    let barColor = 'bg-red-500';
-    let textColor = 'text-red-500';
-    
-    if (intValue >= 80) {
-        barColor = 'bg-yellow-500';
-        textColor = 'text-yellow-500';
-    } else if (intValue >= 60) {
-        barColor = 'bg-green-500';
-        textColor = 'text-green-600 dark:text-green-400';
-    } else if (intValue >= 40) {
-        barColor = 'bg-neutral-400';
-        textColor = 'text-neutral-600 dark:text-neutral-400';
-    }
+    const barClass = getScoreStyle(value, 'bar');
+    const textClass = getScoreStyle(value, 'text');
 
     return (
         <div 
@@ -283,24 +263,24 @@ const AbilityRow: React.FC<AbilityRowProps> = ({ label, value, isPercentage = fa
 
                  {/* Fill */}
                  <div 
-                    className={`h-full rounded-sm transition-all duration-1000 ease-out relative ${barColor}`} 
+                    className={`h-full rounded-sm transition-all duration-1000 ease-out relative ${barClass}`} 
                     style={{ width: `${intValue}%` }}
                  >
                  </div>
              </div>
              
              {/* Score Value - Larger and Colored */}
-             <div className={`w-12 shrink-0 text-right font-mono font-black text-lg leading-none ${textColor}`}>
+             <div className={`w-12 shrink-0 text-right font-mono font-black text-lg leading-none ${textClass}`}>
                  {intValue}{isPercentage ? <span className="text-xs align-top text-neutral-400">%</span> : ''}
              </div>
         </div>
     );
 };
 
-const StatCard = ({ label, value, subLabel, highlight = false }: { label: string, value: string | number, subLabel?: string, highlight?: boolean }) => (
-    <div className={`relative p-4 rounded-xl border flex flex-col items-center justify-center transition-all ${highlight ? 'bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 shadow-sm' : 'bg-neutral-50 dark:bg-neutral-900 border-transparent'}`}>
+const StatCard = ({ label, value, subLabel, colorClass }: { label: string, value: string | number, subLabel?: string, colorClass?: string }) => (
+    <div className={`relative p-4 rounded-xl border flex flex-col items-center justify-center transition-all bg-neutral-50 dark:bg-neutral-900 border-transparent`}>
         <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider mb-1">{label}</div>
-        <div className={`text-2xl font-black font-mono tabular-nums leading-none tracking-tight ${highlight ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-900 dark:text-white'}`}>
+        <div className={`text-2xl font-black font-mono tabular-nums leading-none tracking-tight ${colorClass || 'text-neutral-900 dark:text-white'}`}>
             {value}
         </div>
         {subLabel && <div className="text-[9px] text-neutral-400 font-medium mt-1">{subLabel}</div>}
@@ -446,12 +426,12 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
 
             {/* 3. Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <StatCard label="ADR" value={filtered.adr.toFixed(1)} subLabel="Damage / Round" highlight={filtered.adr > 85} />
-                <StatCard label="K/D Ratio" value={filtered.kdr.toFixed(2)} subLabel="Kill / Death" highlight={filtered.kdr > 1.2} />
-                <StatCard label="KAST" value={`${filtered.kast.toFixed(1)}%`} subLabel="Consistency" highlight={filtered.kast > 72} />
-                <StatCard label="WPA" value={(filtered.wpaAvg > 0 ? '+' : '') + filtered.wpaAvg.toFixed(1) + '%'} subLabel="Win Prob Added" highlight={filtered.wpaAvg > 15} />
-                <StatCard label="Multi-Kill" value={`${filtered.multiKillRate.toFixed(1)}%`} subLabel="2+ Kills Rounds" />
-                <StatCard label="DPR" value={filtered.dpr.toFixed(2)} subLabel="Deaths / Round" highlight={filtered.dpr < 0.65} />
+                <StatCard label="ADR" value={filtered.adr.toFixed(1)} subLabel="Damage / Round" colorClass={getValueStyleClass(filtered.adr, [95, 80, 65])} />
+                <StatCard label="K/D Ratio" value={filtered.kdr.toFixed(2)} subLabel="Kill / Death" colorClass={getValueStyleClass(filtered.kdr, [1.3, 1.1, 0.9])} />
+                <StatCard label="KAST" value={`${filtered.kast.toFixed(1)}%`} subLabel="Consistency" colorClass={getValueStyleClass(filtered.kast, [78, 72, 65])} />
+                <StatCard label="WPA" value={(filtered.wpaAvg > 0 ? '+' : '') + filtered.wpaAvg.toFixed(1) + '%'} subLabel="Win Prob Added" colorClass={getValueStyleClass(filtered.wpaAvg, [5, 2, -2])} />
+                <StatCard label="Multi-Kill" value={`${filtered.multiKillRate.toFixed(1)}%`} subLabel="2+ Kills Rounds" colorClass={getValueStyleClass(filtered.multiKillRate, [22, 17, 12])} />
+                <StatCard label="DPR" value={filtered.dpr.toFixed(2)} subLabel="Deaths / Round" colorClass={getValueStyleClass(filtered.dpr, [0.58, 0.66, 0.75], 'text', true)} />
             </div>
 
             {/* 4. Ability Analysis (Split Layout) */}

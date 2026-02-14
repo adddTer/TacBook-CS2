@@ -11,6 +11,7 @@ import { calculateOpening } from '../../utils/analytics/calculateOpening';
 import { calculateClutch } from '../../utils/analytics/calculateClutch';
 import { calculateSniper } from '../../utils/analytics/calculateSniper';
 import { calculateUtility } from '../../utils/analytics/calculateUtility';
+import { getScoreStyle, getRatingStyle, getWpaStyle, TIER_CLASSES } from '../../utils/styleConstants';
 
 interface LeaderboardTabProps {
     allMatches: Match[];
@@ -177,28 +178,6 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
         </th>
     );
 
-    // Color Logic: Gold / Green / White / Red
-    const getScoreStyle = (score: number) => {
-        if (score >= 80) return 'text-yellow-500 dark:text-yellow-400 font-black'; // Outstanding
-        if (score >= 60) return 'text-green-600 dark:text-green-400 font-bold'; // Excellent
-        if (score >= 40) return 'text-neutral-900 dark:text-white font-medium'; // Average
-        return 'text-red-500 dark:text-red-400'; // Poor
-    };
-
-    const getRatingStyle = (rating: number) => {
-        if (rating >= 1.45) return 'text-yellow-500 dark:text-yellow-400 font-black';
-        if (rating >= 1.15) return 'text-green-600 dark:text-green-400 font-bold';
-        if (rating < 0.95) return 'text-red-500 dark:text-red-400';
-        return 'text-neutral-900 dark:text-white font-medium';
-    };
-
-    const getWpaStyle = (wpa: number) => {
-        if (wpa >= 2.0) return 'text-yellow-500 dark:text-yellow-400 font-black';
-        if (wpa > 0) return 'text-green-600 dark:text-green-400 font-bold';
-        if (wpa < -1.0) return 'text-red-500 dark:text-red-400';
-        return 'text-neutral-500 dark:text-neutral-400';
-    };
-
     // Leader Card Logic (Independent of sort order)
     const leader = useMemo(() => {
         if (leaderboardData.length === 0) return null;
@@ -363,10 +342,10 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
             </div>
             
             <div className="mt-6 flex justify-center gap-6 text-[10px] text-neutral-400">
-                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500"></span> 杰出 (80+)</div>
-                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500"></span> 优秀 (60-79)</div>
-                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-neutral-400"></span> 普通 (40-59)</div>
-                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500"></span> 需提升 (&lt;40)</div>
+                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.OUTSTANDING.bar}`}></span> 杰出 (80+)</div>
+                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.EXCELLENT.bar}`}></span> 优秀 (60-79)</div>
+                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.ORDINARY.bar}`}></span> 普通 (40-59)</div>
+                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.POOR.bar}`}></span> 需提升 (&lt;40)</div>
             </div>
         </div>
     );
