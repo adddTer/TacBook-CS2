@@ -149,7 +149,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
         
         <div className="pt-4 text-center">
-            <p className="text-[10px] text-neutral-300">TacBook CS2 v1.2.1</p>
+            <p className="text-[10px] text-neutral-300">TacBook CS2 v1.3.0</p>
         </div>
 
       </div>

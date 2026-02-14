@@ -1,4 +1,3 @@
-
 import { Side } from "../../types";
 
 export interface WPAUpdate {
@@ -58,6 +57,7 @@ export class WPAEngine {
     private currentWinProb: number = 0.5;
     
     private roundStartEconMod: number = 0;
+    private ctKits: number = 0; // Track defuse kits for Post-Plant calc
 
     // Accumulators
     private playerRoundWPA = new Map<string, number>();
@@ -76,6 +76,7 @@ export class WPAEngine {
         this.roundTime = 115;
         this.currentWinProb = 0.5;
         this.roundStartEconMod = 0;
+        this.ctKits = 0;
         this.playerRoundWPA.clear();
     }
 
@@ -120,8 +121,19 @@ export class WPAEngine {
             // Post-Plant Logic
             p = MATRIX_POST[tIdx][ctIdx];
 
+            // [Bug Fix] Include dampened Economy Modifier in Post-Plant
+            // Guns still matter in retakes, but less than in open play.
+            p += (this.roundStartEconMod * 0.3);
+
             const maxC4 = COEFF.C4_TIME;
-            if (this.roundTime < maxC4) {
+            
+            // [Bug Fix] No Kit Penalty
+            // If CT has 0 kits and time < 10s, defuse is mathematically impossible (needs 10s).
+            // T win probability becomes 100%.
+            if (this.ctKits === 0 && this.roundTime < 10) {
+                 p = 1.0;
+            } else if (this.roundTime < maxC4) {
+                // Standard Time Pressure
                 const timeFactor = (maxC4 - this.roundTime) / maxC4;
                 const boost = Math.pow(timeFactor, 2) * 0.5; 
                 p = p + (1.0 - p) * boost;
@@ -171,13 +183,17 @@ export class WPAEngine {
         killerSid: string, victimSid: string, victimSide: 'T' | 'CT',
         assisters: { sid: string, isFlash?: boolean }[], 
         timeElapsed: number,
-        allTs: string[], allCTs: string[]
+        allTs: string[], allCTs: string[],
+        kitsLost: boolean = false // [Bug Fix] Track kit loss
     ): WPAUpdate[] {
         this.updateRoundTime(timeElapsed); 
 
         // Update Alive Counts BEFORE calculation to get new state probability
         if (victimSide === 'T') this.tAlive--;
-        else this.ctAlive--;
+        else {
+            this.ctAlive--;
+            if (kitsLost) this.ctKits = Math.max(0, this.ctKits - 1);
+        }
         
         return this.generateUpdates(
             [killerSid], 
@@ -190,7 +206,8 @@ export class WPAEngine {
 
     public handleObjective(
         playerSid: string, type: 'plant' | 'defuse', timeElapsed: number,
-        allTs: string[], allCTs: string[]
+        allTs: string[], allCTs: string[],
+        ctKitsCount?: number // [Bug Fix] Initial kit count on plant
     ): WPAUpdate[] {
         this.updateRoundTime(timeElapsed);
 
@@ -198,6 +215,7 @@ export class WPAEngine {
             this.isPlanted = true;
             this.plantTime = timeElapsed; 
             this.roundTime = COEFF.C4_TIME; 
+            if (ctKitsCount !== undefined) this.ctKits = ctKitsCount;
         } else {
             this.tAlive = 0; // Defuse = Immediate Loss for T
         }

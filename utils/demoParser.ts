@@ -270,9 +270,15 @@ export const parseDemoJson = (data: DemoData): Match => {
     };
 
     // --- Main Event Loop ---
+    let latestFreezeEndTick = 0; // Track last freeze_end seen (even in warmup)
+
     for (const e of events) {
         const type = e.event_name;
         const tick = e.tick || 0;
+
+        if (type === 'round_freeze_end') {
+            latestFreezeEndTick = tick;
+        }
 
         // Side Map Updates
         if (type === 'player_team') {
@@ -340,6 +346,34 @@ export const parseDemoJson = (data: DemoData): Match => {
             matchRounds.length = 0;
             pendingRoundEnd = null;
             resetRoundState();
+
+            // Notify Engine of Match Start (Clear State)
+            ratingEngine.handleEvent(e, currentRound, teammateSteamIds, aliveTs, aliveCTs, roundTs, roundCTs);
+
+            // FIX: Initialize Round 1 if round_freeze_end was skipped (happened before match start)
+            // Many demos have round_freeze_end BEFORE match_start, causing WPA to fail (0% win prob due to time panic)
+            // We use the last seen freeze_end if it was recent, otherwise current tick
+            const isRecent = (tick - latestFreezeEndTick) < (64 * 20); // 20s tolerance
+            const effectiveStart = (latestFreezeEndTick > 0 && isRecent) ? latestFreezeEndTick : tick;
+
+            // Synthesize freeze_end to initialize WPA Engine time tracking
+            ratingEngine.handleEvent(
+                { event_name: 'round_freeze_end', tick: effectiveStart },
+                currentRound, teammateSteamIds, aliveTs, aliveCTs, roundTs, roundCTs
+            );
+
+            // Add visual start event
+            currentFreezeEndTick = effectiveStart;
+            currentRoundEvents.push({
+                tick: effectiveStart,
+                seconds: 0,
+                type: 'damage', // Logic-only type
+                subject: { steamid: '0', name: 'Round Start (Est)', side: 'CT' },
+                weapon: 'init',
+                winProb: ratingEngine.getRoundWinProb()
+            });
+
+            continue;
         }
 
         if (!matchStarted) continue;
@@ -358,19 +392,40 @@ export const parseDemoJson = (data: DemoData): Match => {
                 if (!pendingRoundEnd) currentFreezeEndTick = null; 
             } else if (type === 'round_freeze_end') {
                 currentFreezeEndTick = tick;
-                // Add Round Start Event with Win Probability
-                currentRoundEvents.push({
+            }
+        }
+        
+        // LAZY INIT FIX: For visual timeline
+        // If we missed the start/freeze_end events (broken demo), initialize anchor now
+        // so we don't get huge negative numbers or absurd durations
+        if (currentRoundStartTick === 0 && currentFreezeEndTick === null && tick > 0) {
+             // Only for gameplay events
+             if (type === 'player_death' || type === 'player_hurt' || type === 'bomb_planted' || type.includes('grenade')) {
+                 currentFreezeEndTick = tick;
+                 currentRoundEvents.push({
                     tick,
                     seconds: 0,
-                    type: 'damage', // Using generic type for start event, strictly logic only
-                    subject: { steamid: '0', name: 'Round Start', side: 'CT' },
+                    type: 'damage',
+                    subject: { steamid: '0', name: 'Round Start (Auto-Fix)', side: 'CT' },
                     weapon: 'init',
-                    winProb: ratingEngine.getRoundWinProb() // Initial Win Prob
+                    winProb: 0.5
                 });
-            }
+             }
         }
 
         ratingEngine.handleEvent(e, currentRound, teammateSteamIds, aliveTs, aliveCTs, roundTs, roundCTs);
+
+        // MOVED: Win Probability Event generation AFTER handleEvent so engine is initialized
+        if (type === 'round_freeze_end') {
+            currentRoundEvents.push({
+                tick,
+                seconds: 0,
+                type: 'damage', // Using generic type for start event, strictly logic only
+                subject: { steamid: '0', name: 'Round Start', side: 'CT' },
+                weapon: 'init',
+                winProb: ratingEngine.getRoundWinProb() // Initial Win Prob
+            });
+        }
 
         if (type === 'round_end') {
             let winner: 'T' | 'CT' | null = null;

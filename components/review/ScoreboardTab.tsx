@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Match, PlayerMatchStats, ClutchRecord, MultiKillBreakdown, PlayerRoundStats } from '../../types';
 import { ROSTER } from '../../constants/roster';
@@ -273,7 +272,7 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
                             <tr 
                                 key={idx} 
                                 className={`group transition-colors cursor-pointer ${isRosterMember ? 'hover:bg-blue-50/50 dark:hover:bg-blue-900/10' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/30'}`}
-                                onClick={() => onPlayerClick(p.steamid || p.playerId)}
+                                onClick={() => onPlayerClick(isRosterMember ? rosterId : (p.steamid || p.playerId))}
                             >
                                 <td className={`px-3 py-3 font-bold sticky left-0 z-10 bg-white dark:bg-neutral-900 border-r border-transparent group-hover:border-neutral-100 dark:group-hover:border-neutral-800 truncate flex items-center gap-2 ${isRosterMember ? 'text-blue-600 dark:text-blue-400 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10' : 'text-neutral-800 dark:text-neutral-200 group-hover:bg-neutral-50 dark:group-hover:bg-neutral-800/30'}`}>
                                     {isRosterMember && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}

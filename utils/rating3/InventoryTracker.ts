@@ -1,4 +1,3 @@
-
 import { WEAPON_VALUES } from "./constants";
 
 export class InventoryTracker {
@@ -115,6 +114,11 @@ export class InventoryTracker {
         if (value < 200) value = 200;
         
         return value;
+    }
+    
+    public hasKit(sid: string): boolean {
+        const items = this.inventory.get(String(sid));
+        return items ? items.includes("defuser") : false;
     }
 
     public getTrackedIds(): string[] {

@@ -100,13 +100,19 @@ export class RatingEngine {
             this.roundStats.clear();
             this.wpaEngine.startNewRound();
             this.inventory.reset(); 
+            this.roundStartTick = 0; // Reset timer anchor
             return;
         }
 
         // Logic for round start / freeze end
         if (type === 'round_start' || type === 'round_freeze_end') {
             if (type === 'round_start') {
-                 this.wpaEngine.startNewRound();
+                 // FIX: Do NOT call startNewRound() here. It wipes the economy state set by synthetic freeze_end.
+                 // The parser/engine logic relies on round_freeze_end (real or synthetic) to init the WPA engine.
+                 // this.wpaEngine.startNewRound(); 
+                 
+                 // FIX: Initialize with current tick to avoid 0-based time panic if freeze_end is missing
+                 this.roundStartTick = tick;
             }
 
             if (type === 'round_freeze_end') {
@@ -129,6 +135,14 @@ export class RatingEngine {
                     tVal = 4000; ctVal = 4000;
                 }
 
+                // [Bug Fix] Pistol Round Force Equal
+                // Demo parsing often misses initial purchases before freeze_end due to tick timing.
+                // Assuming MR12 for CS2 (Pistols at 1 and 13).
+                const isPistol = (currentRound === 1 || currentRound === 13);
+                if (isPistol) {
+                    tVal = 4000; ctVal = 4000;
+                }
+
                 // 3. Initialize WPA Engine with Economy Context
                 this.wpaEngine.startNewRound(); // Ensure clean slate
                 this.wpaEngine.initializeRound(tVal, ctVal); 
@@ -142,7 +156,18 @@ export class RatingEngine {
             return;
         }
 
-        const timeElapsed = Math.max(0, (tick - this.roundStartTick) / TICK_RATE);
+        // FIX: Time Safety Valve
+        // If timeElapsed is excessively large (e.g. > 300s), it means roundStartTick is 0 or invalid (Time Panic).
+        // We forcibly snap the start time to now to prevent WPA flatlining at 0.0%.
+        let timeElapsed = Math.max(0, (tick - this.roundStartTick) / TICK_RATE);
+        if (timeElapsed > 300) {
+            this.roundStartTick = tick;
+            timeElapsed = 0;
+            // Optionally attempt late init if it looks like round 1
+            if (currentRound === 1 && this.wpaEngine.getCurrentWinProb() === 0.5) {
+                this.wpaEngine.initializeRound(4000, 4000);
+            }
+        }
         
         // Arrays for WPA Engine (Symmetric Distribution to ALL team members)
         const tPlayers = Array.from(roundTs);
@@ -187,9 +212,19 @@ export class RatingEngine {
             const sid = normalizeId(event.user_steamid || event.userid);
             const isPlant = type === 'bomb_planted';
             
+            // [Bug Fix] Calculate Active Kits for Post-Plant WPA
+            let activeKits = 0;
+            if (isPlant) {
+                // Count kits for all currently alive CTs
+                roundCTs.forEach(ctId => {
+                    if (aliveCTs.has(ctId) && this.inventory.hasKit(ctId)) activeKits++;
+                });
+            }
+            
             const wpaUpdates = this.wpaEngine.handleObjective(
                 sid, isPlant ? 'plant' : 'defuse', timeElapsed, 
-                tPlayers, ctPlayers
+                tPlayers, ctPlayers,
+                isPlant ? activeKits : undefined
             );
             this.wpaEngine.commitUpdates(wpaUpdates);
         }
@@ -199,6 +234,9 @@ export class RatingEngine {
             const vic = normalizeId(event.user_steamid || event.userid);
             const ast = normalizeId(event.assister_steamid || event.assister);
             
+            // [Bug Fix] Check if victim had kit BEFORE clearing inventory
+            const hasKit = this.inventory.hasKit(vic);
+
             this.inventory.handlePlayerDeath(vic);
             const vicStats = this.getRoundStats(vic);
             vicStats.deaths++;
@@ -236,7 +274,8 @@ export class RatingEngine {
                 
                 const updates = this.wpaEngine.handleKill(
                     att, vic, victimSide, assisters, timeElapsed,
-                    tPlayers, ctPlayers
+                    tPlayers, ctPlayers,
+                    hasKit // Pass kit loss info to WPA
                 );
                 this.wpaEngine.commitUpdates(updates);
             } else {

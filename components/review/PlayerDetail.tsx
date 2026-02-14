@@ -1,7 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
-import { PlayerMatchStats, Match, PlayerRoundStats } from '../../types';
-import { StatBox, getMapDisplayName, getRatingColorClass, RankBadge } from './ReviewShared';
+import React, { useState } from 'react';
+import { PlayerMatchStats, Match } from '../../types';
+import { getMapDisplayName, getRatingColorClass } from './ReviewShared';
+import { usePlayerStats } from '../../hooks/usePlayerStats';
 
 interface PlayerDetailProps {
     profile: any;
@@ -11,316 +12,489 @@ interface PlayerDetailProps {
 }
 
 type SideFilter = 'ALL' | 'CT' | 'T';
+type AbilityType = 'firepower' | 'entry' | 'trade' | 'opening' | 'clutch' | 'sniper' | 'utility';
 
-// --- Helper Components ---
+// --- Configuration ---
 
-const SkillBar = ({ label, value, max = 100, colorClass }: { label: string, value: number, max?: number, colorClass: string }) => {
-    const percent = Math.min(100, Math.max(0, (value / max) * 100));
+const ABILITY_INFO: Record<AbilityType, { title: string, color: string, desc: string, metrics: { label: string, key: string, format?: string }[] }> = {
+    firepower: {
+        title: "火力",
+        color: "#ef4444",
+        desc: "玩家的原始输出能力，得分基于击杀、伤害和多杀。这是属于明星选手的指标——或者那些手感正热的玩家。在这里生存率完全不重要；这纯粹是关于杀敌。",
+        metrics: [
+            { label: "回合击杀", key: "kpr", format: "0.00" },
+            { label: "有击杀回合", key: "roundsWithKills", format: "0" },
+            { label: "胜局击杀", key: "kprWin", format: "0.00" },
+            { label: "Rating", key: "rating", format: "0.00" },
+            { label: "回合伤害", key: "dpr", format: "0.0" },
+            { label: "多杀回合", key: "multiKillRounds", format: "0" },
+            { label: "胜局伤害", key: "dprWin", format: "0.0" },
+            { label: "手枪局评分", key: "pistolRating", format: "0.00" },
+        ]
+    },
+    entry: {
+        title: "破点",
+        color: "#f97316",
+        desc: "玩家为了队友而被牺牲的可能性。高分玩家通常是那些率先通过危险拐角（往往知道必死无疑）的人，或者是回合中期为了给明星队友拉扯空间而冲进包点的人。得分基于被补枪的死亡以及每回合被队友“救援”的频率。",
+        metrics: [
+            { label: "回合被队友救援数", key: "savedByTeammatePerRound", format: "0.00" },
+            { label: "回合被补枪死亡数", key: "tradedDeathsPerRound", format: "0.00" },
+            { label: "被补枪死亡占比", key: "tradedDeathsPct", format: "0.0%" },
+            { label: "首死被补枪占比", key: "openingDeathsTradedPct", format: "0.0%" },
+            { label: "回合助攻", key: "assistsPerRound", format: "0.00" },
+            { label: "辅助回合", key: "supportRounds", format: "0" },
+        ]
+    },
+    trade: {
+        title: "补枪",
+        color: "#3b82f6",
+        desc: "通常被称为“卖队友的人”，但这并非贬义词。能够通过补枪置换对手是职业 CS 中的一项关键技能。这里的关键在于补枪击杀，以及在队友受到伤害时及时救援队友的能力。",
+        metrics: [
+            { label: "回合救援队友数", key: "savedTeammatePerRound", format: "0.00" },
+            { label: "回合补枪数", key: "tradeKillsPerRound", format: "0.00" },
+            { label: "补枪占比", key: "tradeKillsPct", format: "0.0%" },
+            { label: "助攻占比", key: "assistPct", format: "0.0%" },
+            { label: "单杀伤害", key: "damagePerKill", format: "0.0" },
+        ]
+    },
+    opening: {
+        title: "开局",
+        color: "#6366f1",
+        desc: "玩家通过回合早期的首杀来改变战局的可能性。鉴于职业比赛中 5 打 4 的胜率平均超过 70%，侵略性是每支队伍都需要的技能组合。得分基于每回合首杀和首杀尝试。",
+        metrics: [
+            { label: "回合首杀", key: "openingKillsPerRound", format: "0.00" },
+            { label: "回合首死", key: "openingDeathsPerRound", format: "0.00" },
+            { label: "首杀尝试", key: "openingAttempts", format: "0" },
+            { label: "首杀成功率", key: "openingSuccessPct", format: "0.0%" },
+            { label: "首杀后胜率", key: "winPctAfterOpening", format: "0.0%" },
+            { label: "回合进攻次数", key: "attacksPerRound", format: "0.00" },
+        ]
+    },
+    clutch: {
+        title: "残局",
+        color: "#eab308",
+        desc: "回合后期选手和 1vN 专家，那些在下包后的防守和回防中值得信赖、能扭转乾坤的玩家。得分主要基于赢下的残局，并加入了一项风格化的衡量标准——“每回合存活时间”，以识别那些擅长活到最后的专家。",
+        metrics: [
+            { label: "回合残局分", key: "clutchPointsPerRound", format: "0.00" },
+            { label: "存活至最后占比", key: "lastAlivePct", format: "0.0%" },
+            { label: "1v1 胜率", key: "win1v1Pct", format: "0.0%" },
+            { label: "回合存活时间", key: "timeAlivePerRound", format: "0.0s" },
+            { label: "败局保枪数", key: "savesPerLoss", format: "0.00" },
+        ]
+    },
+    sniper: {
+        title: "狙击",
+        color: "#22c55e",
+        desc: "主狙击手。基于使用 AWP 和 SSG-08 的击杀及多杀数据。低分代表步枪手，中分代表混合型选手，高分则代表纯粹的专职狙击手。",
+        metrics: [
+            { label: "回合狙杀", key: "sniperKillsPerRound", format: "0.00" },
+            { label: "狙杀占比", key: "sniperKillsPct", format: "0.0%" },
+            { label: "有狙杀回合占比", key: "roundsWithSniperKillsPct", format: "0.0%" },
+            { label: "狙击多杀回合", key: "sniperMultiKillRounds", format: "0" },
+            { label: "回合狙击首杀", key: "sniperOpeningKillsPerRound", format: "0.00" },
+        ]
+    },
+    utility: {
+        title: "道具",
+        color: "#a855f7",
+        desc: "一方的投掷手。在现代 CS 中有多种方式来提供“辅助”，但道具的使用仍然是其中的核心特征。总分结合了闪光弹统计数据和每回合的手雷伤害。",
+        metrics: [
+            { label: "回合道具伤害", key: "utilDmgPerRound", format: "0.0" },
+            { label: "每百回合道具击杀", key: "utilKillsPer100", format: "0.00" },
+            { label: "回合投掷闪光数", key: "flashesPerRound", format: "0.00" },
+            { label: "回合闪光助攻", key: "flashAssistsPerRound", format: "0.00" },
+            { label: "回合致盲敌人时间", key: "blindTimePerRound", format: "0.00s" },
+        ]
+    },
+};
+
+// --- Helpers ---
+
+const getScoreColorHex = (score: number) => {
+    if (score >= 80) return '#eab308'; // yellow-500
+    if (score >= 60) return '#22c55e'; // green-500
+    if (score >= 40) return '#a3a3a3'; // neutral-400
+    return '#ef4444'; // red-500
+};
+
+// --- Sub Components ---
+
+const RadarChart = ({ data, size = 260 }: { data: { value: number; label: string; [key: string]: any }[]; size?: number }) => {
+    const center = size / 2;
+    // Reduce padding to make chart bigger within the SVG
+    const radius = size / 2 - 20; 
+    const sides = 7;
+    const angleStep = (2 * Math.PI) / sides;
+
+    const getPoint = (index: number, val: number, offsetRadius: number = 0) => {
+        // -Math.PI / 2 starts at top (12 o'clock)
+        const angle = -Math.PI / 2 + index * angleStep;
+        // Clamp value to 0-100 visually for the chart shape
+        const clampedVal = Math.min(100, Math.max(0, val));
+        const effectiveRadius = (radius + offsetRadius) * (clampedVal / 100);
+        return {
+            x: center + effectiveRadius * Math.cos(angle),
+            y: center + effectiveRadius * Math.sin(angle),
+            angle: angle
+        };
+    };
+
+    // Generate grid points (25, 50, 75, 100)
+    const gridLevels = [25, 50, 75, 100];
+    
+    // Generate data points
+    const dataPoints = data.map((d, i) => getPoint(i, d.value));
+    const pointsStr = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
+
     return (
-        <div className="flex flex-col gap-1">
-            <div className="flex justify-between text-[10px] font-bold text-neutral-500 uppercase">
-                <span>{label}</span>
-                <span className="font-mono">{value.toFixed(1)}</span>
-            </div>
-            <div className="h-1.5 w-full bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-500 ${colorClass}`} style={{ width: `${percent}%` }}></div>
+        <div className="flex items-center justify-center">
+            <svg width={size} height={size} className="overflow-visible">
+                {/* Background Grid */}
+                {gridLevels.map((level, lvlIdx) => (
+                    <polygon
+                        key={level}
+                        points={Array.from({ length: sides }).map((_, i) => {
+                            const p = getPoint(i, level);
+                            return `${p.x},${p.y}`;
+                        }).join(' ')}
+                        fill={lvlIdx === gridLevels.length - 1 ? "rgba(100,100,100,0.05)" : "none"}
+                        stroke="currentColor"
+                        className="text-neutral-200 dark:text-neutral-800"
+                        strokeWidth="1"
+                        strokeDasharray={lvlIdx < gridLevels.length - 1 ? "2,2" : ""}
+                    />
+                ))}
+                
+                {/* Axes and Labels */}
+                {Array.from({ length: sides }).map((_, i) => {
+                    const p = getPoint(i, 100);
+                    const labelPos = getPoint(i, 100, 20); // Push text out further
+                    
+                    // Determine text anchor based on position relative to center
+                    let textAnchor: "middle" | "end" | "start" = "middle";
+                    if (labelPos.x < center - 10) textAnchor = "end";
+                    if (labelPos.x > center + 10) textAnchor = "start";
+                    
+                    // Determine baseline
+                    let baseline: "middle" | "auto" | "hanging" = "middle";
+                    if (labelPos.y < center - 10) baseline = "auto"; // Top
+                    if (labelPos.y > center + 10) baseline = "hanging"; // Bottom
+
+                    return (
+                        <React.Fragment key={i}>
+                            <line
+                                x1={center}
+                                y1={center}
+                                x2={p.x}
+                                y2={p.y}
+                                stroke="currentColor"
+                                className="text-neutral-200 dark:text-neutral-800"
+                                strokeWidth="1"
+                            />
+                            <text
+                                x={labelPos.x}
+                                y={labelPos.y}
+                                textAnchor={textAnchor}
+                                dominantBaseline={baseline}
+                                className="text-[10px] font-bold fill-neutral-500 dark:fill-neutral-400 font-sans"
+                            >
+                                {data[i].label}
+                            </text>
+                        </React.Fragment>
+                    );
+                })}
+
+                {/* Data Shape */}
+                <polygon
+                    points={pointsStr}
+                    fill="rgba(59, 130, 246, 0.2)" 
+                    stroke="#3b82f6"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                    className="drop-shadow-sm"
+                />
+                
+                {/* Data Points */}
+                 {dataPoints.map((p, i) => (
+                    <circle 
+                        key={i} 
+                        cx={p.x} 
+                        cy={p.y} 
+                        r="3" 
+                        fill={getScoreColorHex(data[i].value)} 
+                        stroke="white" 
+                        strokeWidth="1"
+                        className="dark:stroke-neutral-900"
+                    />
+                 ))}
+            </svg>
+        </div>
+    );
+};
+
+interface AbilityRowProps {
+    label: string;
+    value: number;
+    isPercentage?: boolean;
+    isSelected: boolean;
+    onClick: () => void;
+}
+
+const AbilityRow: React.FC<AbilityRowProps> = ({ label, value, isPercentage = false, isSelected, onClick }) => {
+    const intValue = Math.round(Math.max(0, Math.min(100, value)));
+    
+    // Determine tier color logic (consistent with LeaderboardTab)
+    let barColor = 'bg-red-500';
+    let textColor = 'text-red-500';
+    
+    if (intValue >= 80) {
+        barColor = 'bg-yellow-500';
+        textColor = 'text-yellow-500';
+    } else if (intValue >= 60) {
+        barColor = 'bg-green-500';
+        textColor = 'text-green-600 dark:text-green-400';
+    } else if (intValue >= 40) {
+        barColor = 'bg-neutral-400';
+        textColor = 'text-neutral-600 dark:text-neutral-400';
+    }
+
+    return (
+        <div 
+            onClick={onClick}
+            className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all border ${isSelected ? 'bg-neutral-100 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 shadow-sm' : 'border-transparent hover:bg-neutral-50 dark:hover:bg-neutral-800/50'}`}
+        >
+             <div className={`w-12 shrink-0 text-xs font-bold text-right truncate transition-colors ${isSelected ? 'text-black dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}>
+                 {label}
+             </div>
+             
+             {/* Progress Track */}
+             <div className="flex-1 relative h-3 bg-neutral-200 dark:bg-neutral-800 rounded-sm overflow-hidden group">
+                 {/* Tier Markers (Background Lines) */}
+                 <div className="absolute top-0 bottom-0 left-[40%] w-px bg-white/50 dark:bg-white/10 z-10"></div>
+                 <div className="absolute top-0 bottom-0 left-[60%] w-px bg-white/50 dark:bg-white/10 z-10"></div>
+                 <div className="absolute top-0 bottom-0 left-[80%] w-px bg-white/50 dark:bg-white/10 z-10"></div>
+                 
+                 {/* Average Marker (45%) */}
+                 <div className="absolute top-0 bottom-0 left-[45%] w-0.5 bg-black/20 dark:bg-white/20 z-10"></div>
+                 {/* Tooltip for Avg */}
+                 <div className="absolute -top-4 left-[45%] -translate-x-1/2 text-[8px] font-mono text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                     AVG
+                 </div>
+
+                 {/* Fill */}
+                 <div 
+                    className={`h-full rounded-sm transition-all duration-1000 ease-out relative ${barColor}`} 
+                    style={{ width: `${intValue}%` }}
+                 >
+                 </div>
+             </div>
+             
+             {/* Score Value - Larger and Colored */}
+             <div className={`w-12 shrink-0 text-right font-mono font-black text-lg leading-none ${textColor}`}>
+                 {intValue}{isPercentage ? <span className="text-xs align-top text-neutral-400">%</span> : ''}
+             </div>
+        </div>
+    );
+};
+
+const StatCard = ({ label, value, subLabel, highlight = false }: { label: string, value: string | number, subLabel?: string, highlight?: boolean }) => (
+    <div className={`relative p-4 rounded-xl border flex flex-col items-center justify-center transition-all ${highlight ? 'bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 shadow-sm' : 'bg-neutral-50 dark:bg-neutral-900 border-transparent'}`}>
+        <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider mb-1">{label}</div>
+        <div className={`text-2xl font-black font-mono tabular-nums leading-none tracking-tight ${highlight ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-900 dark:text-white'}`}>
+            {value}
+        </div>
+        {subLabel && <div className="text-[9px] text-neutral-400 font-medium mt-1">{subLabel}</div>}
+    </div>
+);
+
+const MetricItem = ({ label, value }: { label: string, value: string }) => (
+    <div className="flex flex-col p-2 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-100 dark:border-neutral-800">
+        <span className="text-[10px] text-neutral-400 font-medium mb-0.5">{label}</span>
+        <span className="text-sm font-bold text-neutral-900 dark:text-white font-mono">{value}</span>
+    </div>
+);
+
+const DetailCard = ({ type, data }: { type: AbilityType, data: any }) => {
+    const info = ABILITY_INFO[type];
+    
+    // Helper to format values
+    const formatValue = (key: string, fmt?: string) => {
+        const val = data[key];
+        if (val === undefined || isNaN(val)) return '-';
+        if (fmt === '0.0%') return (val).toFixed(1) + '%';
+        if (fmt === '0%') return (val).toFixed(0) + '%';
+        if (fmt === '0.00') return (val).toFixed(2);
+        if (fmt === '0.0') return (val).toFixed(1);
+        if (fmt === '0.0s') return (val).toFixed(1) + 's';
+        if (fmt === '0.00s') return (val).toFixed(2) + 's';
+        return Math.round(val);
+    };
+
+    return (
+        <div className="bg-white dark:bg-neutral-800 rounded-xl p-5 border border-neutral-200 dark:border-neutral-700 h-full animate-in fade-in zoom-in-95 duration-200">
+            <h4 className="text-sm font-black uppercase mb-2 flex items-center gap-2" style={{ color: info.color }}>
+                {info.title}
+            </h4>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed mb-6 font-medium">
+                {info.desc}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+                {info.metrics.map((m, idx) => (
+                    <MetricItem 
+                        key={idx} 
+                        label={m.label} 
+                        value={formatValue(m.key, m.format)} 
+                    />
+                ))}
             </div>
         </div>
     );
 };
 
-const DetailStatBox = ({ label, value, subLabel, highlight = false }: { label: string, value: string | number, subLabel?: string, highlight?: boolean }) => (
-    <div className={`p-3 rounded-xl border flex flex-col items-center justify-center transition-all ${highlight ? 'bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 shadow-sm' : 'bg-neutral-50 dark:bg-neutral-900 border-transparent'}`}>
-        <div className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider mb-0.5">{label}</div>
-        <div className="text-lg font-black text-neutral-900 dark:text-white font-sans tabular-nums leading-tight">{value}</div>
-        {subLabel && <div className="text-[9px] text-neutral-400 font-medium">{subLabel}</div>}
-    </div>
-);
-
 export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, onBack, onMatchClick }) => {
     const [sideFilter, setSideFilter] = useState<SideFilter>('ALL');
+    const [selectedAbility, setSelectedAbility] = useState<AbilityType>('firepower');
 
-    // --- Dynamic Aggregation Logic ---
-    const statsData = useMemo(() => {
-        // Overall accumulators (Not affected by filter)
-        let totalRoundsPlayed = 0;
-        let totalRatingSum = 0;
-        let ctRatingSum = 0, ctRounds = 0;
-        let tRatingSum = 0, tRounds = 0;
+    // Use custom hook for logic
+    const { overall, filtered } = usePlayerStats(profile.id, history, sideFilter);
 
-        // Filtered accumulators (Affected by sideFilter)
-        let fRounds = 0;
-        let f = {
-            kills: 0, deaths: 0, assists: 0, damage: 0,
-            impactSum: 0, wpaSum: 0,
-            kastCount: 0,
-            multiKillRounds: 0,
-            entryKills: 0,
-            utilityDamage: 0,
-            flashAssists: 0,
-            clutchWins: 0,
-            sniperKills: 0,
-            headshots: 0
-        };
-
-        const SNIPER_WEAPONS = ['awp', 'ssg08', 'scar20', 'g3sg1'];
-
-        history.forEach(({ match }) => {
-            if (!match.rounds) return;
-            
-            // Fix: Resolve the ID used by this player in THIS specific match dynamically.
-            // Do not rely on profile.steamid which might be from a different match (e.g. smurf/alt account).
-            const matchPlayer = [...match.players, ...match.enemyPlayers].find(p => p.playerId === profile.id);
-            if (!matchPlayer) return;
-            
-            // Use the SteamID recorded in this match, or fallback to the roster ID name if steamid missing
-            const targetId = matchPlayer.steamid || matchPlayer.playerId;
-            
-            match.rounds.forEach(round => {
-                // Find player stats for this round using the resolved targetId
-                const pRound = round.playerStats[targetId];
-                if (!pRound) return;
-
-                // --- 1. Global (Static) Calculations ---
-                // Skip ghost rounds
-                if (!(pRound.rating === 0 && pRound.damage === 0 && pRound.deaths === 0)) {
-                    totalRatingSum += pRound.rating;
-                    totalRoundsPlayed++;
-
-                    if (pRound.side === 'CT') {
-                        ctRatingSum += pRound.rating;
-                        ctRounds++;
-                    } else {
-                        tRatingSum += pRound.rating;
-                        tRounds++;
-                    }
-                }
-
-                // --- 2. Filtered Calculations ---
-                if (sideFilter !== 'ALL' && pRound.side !== sideFilter) return;
-                if (pRound.rating === 0 && pRound.damage === 0 && pRound.deaths === 0) return;
-
-                fRounds++;
-                f.kills += pRound.kills;
-                f.deaths += pRound.deaths;
-                f.assists += pRound.assists;
-                f.damage += pRound.damage;
-                f.impactSum += pRound.impact;
-                
-                // Safe WPA accumulation
-                const wpa = pRound.wpa;
-                if (typeof wpa === 'number' && !isNaN(wpa)) {
-                    f.wpaSum += wpa;
-                }
-                
-                f.headshots += pRound.headshots;
-                
-                if (pRound.kills > 0 || pRound.assists > 0 || pRound.survived || pRound.wasTraded) {
-                    f.kastCount++;
-                }
-                
-                if (pRound.kills >= 2) f.multiKillRounds++;
-                if (pRound.isEntryKill) f.entryKills++;
-                
-                f.utilityDamage += pRound.utility ? (pRound.utility.heDamage + pRound.utility.molotovDamage) : (pRound.utilityDamage || 0);
-                
-                // Track Sniper Kills from Timeline
-                if (pRound.kills > 0 && round.timeline) {
-                    round.timeline.forEach(event => {
-                        if (event.type === 'kill' && event.subject && 
-                           (event.subject.steamid === targetId || event.subject.name === targetId)) {
-                            if (event.weapon && SNIPER_WEAPONS.includes(event.weapon.toLowerCase())) {
-                                f.sniperKills++;
-                            }
-                        }
-                    });
-                }
-            });
-        });
-
-        // Flash assists & Clutches need history aggregate
-        history.forEach(({ match, stats }) => {
-            // Flash Assists - Fallback logic if needed, but best effort in main loop is done if round data exists
-            // Since we updated parser to fill flashAssists in round.utility (not directly on stats object sometimes in old version), 
-            // let's rely on the round loop above if possible. 
-            // But if we want to be safe with match aggregates:
-            if (match.rounds) {
-                 // Already handled
-            } else {
-                 if (sideFilter === 'ALL') f.flashAssists += (stats.flash_assists || 0);
-            }
-
-            if (stats.clutchHistory) {
-                stats.clutchHistory.forEach(c => {
-                    if (sideFilter !== 'ALL' && c.side !== sideFilter) return;
-                    if (c.result === 'won') f.clutchWins++;
-                });
-            }
-        });
-        
-        // --- Flash Assists Accumulation from Round Data ---
-        history.forEach(({ match }) => {
-            if(!match.rounds) return;
-            
-            // Fix: Resolve ID per match
-            const matchPlayer = [...match.players, ...match.enemyPlayers].find(p => p.playerId === profile.id);
-            if (!matchPlayer) return;
-            const targetId = matchPlayer.steamid || matchPlayer.playerId;
-
-            match.rounds.forEach(round => {
-                 const pRound = round.playerStats[targetId];
-                 if (!pRound) return;
-                 
-                 if (sideFilter !== 'ALL' && pRound.side !== sideFilter) return;
-                 if (pRound.utility && pRound.utility.flashesThrown > 0) {
-                     const assists = round.timeline.filter(e => e.type === 'flash_assist' && e.subject && (e.subject.steamid === targetId || e.subject.name === targetId)).length;
-                     f.flashAssists += assists;
-                 }
-            });
-        });
-
-        const safeDiv = (a: number, b: number) => b === 0 ? 0 : a / b;
-        const wpaAvg = safeDiv(f.wpaSum, fRounds);
-
-        return {
-            overall: {
-                rating: safeDiv(totalRatingSum, totalRoundsPlayed) * 1.30,
-                ctRating: safeDiv(ctRatingSum, ctRounds) * 1.30,
-                tRating: safeDiv(tRatingSum, tRounds) * 1.30,
-            },
-            filtered: {
-                adr: safeDiv(f.damage, fRounds),
-                kdr: safeDiv(f.kills, f.deaths),
-                dpr: safeDiv(f.deaths, fRounds),
-                kast: safeDiv(f.kastCount, fRounds) * 100,
-                impact: safeDiv(f.impactSum, fRounds), 
-                wpaSum: f.wpaSum, // Total WPA
-                wpaAvg: wpaAvg, // Average WPA (Percentage Points)
-                multiKillRate: safeDiv(f.multiKillRounds, fRounds) * 100,
-                
-                // 7 Dimensions Scores (Normalized roughly 0-100 for bars)
-                // 1. Firepower (火力): ADR based. 100 ADR = 100 Score.
-                scoreFirepower: Math.min(100, safeDiv(f.damage, fRounds)), 
-                
-                // 2. Entry (破点): Entry Kills per Round. 0.20 EKPR is elite.
-                scoreEntry: Math.min(100, safeDiv(f.entryKills, fRounds) * 500), 
-                
-                // 3. Trade (补枪): KAST % (Consistency/Support).
-                scoreTrade: Math.min(100, safeDiv(f.kastCount, fRounds) * 100), 
-                
-                // 4. Breakthrough (突破): REPLACED BY WPA. 
-                // Avg WPA (percent) of 20% per round is godlike.
-                // Logic: (Avg + 5) * 4. e.g. 20 -> 100. 0 -> 20. -5 -> 0.
-                scoreBreakthrough: Math.max(0, Math.min(100, (wpaAvg + 5) * 4)), 
-                
-                // 5. Clutch (残局): Clutches Won / Total Rounds * weight. 
-                scoreClutch: Math.min(100, safeDiv(f.clutchWins, fRounds) * 3000), 
-                
-                // 6. Sniper (狙击): Percentage of kills that were sniper kills.
-                scoreSniper: Math.min(100, safeDiv(f.sniperKills, f.kills) * 100), 
-                
-                // 7. Utility (道具): UD per round + Flash Assists per round.
-                scoreUtility: Math.min(100, (safeDiv(f.utilityDamage, fRounds) * 5) + (safeDiv(f.flashAssists, fRounds) * 400)),
-            }
-        };
-    }, [history, profile, sideFilter]);
-
-    const { overall, filtered } = statsData;
+    // Optimized Order for Radar Chart: Firepower -> Entry -> Sniper -> Clutch -> Opening -> Trade -> Utility
+    // This creates a cleaner shape for different player roles
+    const abilities: { id: AbilityType, label: string, value: number, isPct?: boolean }[] = [
+        { id: 'firepower', label: '火力', value: filtered.scoreFirepower }, 
+        { id: 'entry', label: '破点', value: filtered.scoreEntry }, 
+        { id: 'sniper', label: '狙击', value: filtered.scoreSniper }, 
+        { id: 'clutch', label: '残局', value: filtered.scoreClutch }, 
+        { id: 'opening', label: '开局', value: filtered.scoreOpening, isPct: false }, 
+        { id: 'trade', label: '补枪', value: filtered.scoreTrade }, 
+        { id: 'utility', label: '道具', value: filtered.scoreUtility }, 
+    ];
 
     return (
-        <div className="space-y-6 animate-in slide-in-from-right duration-300 px-1 font-sans pb-20">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <button 
+        <div className="space-y-6 animate-in slide-in-from-right duration-300 pb-20 font-sans">
+            
+            {/* 1. Header Toolbar */}
+            <div className="sticky top-[56px] z-30 bg-neutral-50/95 dark:bg-neutral-950/95 backdrop-blur-md py-3 -mx-4 px-4 border-b border-neutral-200 dark:border-neutral-800 flex justify-between items-center">
+                 <button 
                     onClick={onBack}
-                    className="flex items-center text-sm font-bold text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors"
+                    className="flex items-center text-xs font-bold text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors"
                 >
                     <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                    返回列表
+                    BACK
                 </button>
-            </div>
-
-            {/* Profile Header */}
-            <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-3xl font-black text-white shadow-lg shadow-blue-500/20 shrink-0">
-                    {profile.id[0]}
-                </div>
-                <div>
-                    <h2 className="text-2xl font-black text-neutral-900 dark:text-white leading-none tracking-tight">{profile.id}</h2>
-                    <div className="flex items-center gap-2 mt-2">
-                        <RankBadge rank={profile.currentRank} />
-                        <span className="text-[10px] font-bold text-neutral-400">{profile.role}</span>
-                        <span className="text-[10px] font-mono text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded">{profile.matches} Maps</span>
-                    </div>
+                <div className="flex p-0.5 bg-neutral-200 dark:bg-neutral-800 rounded-lg">
+                    {(['ALL', 'CT', 'T'] as const).map(side => (
+                        <button
+                            key={side}
+                            onClick={() => setSideFilter(side)}
+                            className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${sideFilter === side ? 'bg-white dark:bg-neutral-700 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'}`}
+                        >
+                            {side}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* Main Rating Card (Static Overall) */}
+            {/* 2. Hero Card: Profile & Rating */}
             <div className="bg-white dark:bg-neutral-900 rounded-3xl p-1 shadow-sm border border-neutral-200 dark:border-neutral-800">
-                <div className="bg-gradient-to-b from-neutral-50 to-white dark:from-neutral-800 dark:to-neutral-900/50 rounded-[20px] p-5 text-center">
-                    <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1">Rating 4.0</div>
-                    <div className={`text-6xl font-black tracking-tighter ${getRatingColorClass(overall.rating)}`}>
-                        {overall.rating.toFixed(2)}
+                <div className="bg-gradient-to-br from-neutral-50 via-white to-neutral-100 dark:from-neutral-800 dark:via-neutral-900 dark:to-black rounded-[20px] p-6 relative overflow-hidden">
+                    {/* Background Deco */}
+                    <div className="absolute top-0 right-0 p-10 opacity-5 dark:opacity-10 pointer-events-none">
+                         <span className="text-9xl font-black">{profile.id[0]}</span>
                     </div>
-                    
-                    {/* CT / T Split */}
-                    <div className="flex justify-center gap-8 mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-800">
-                        <div className="flex flex-col items-center">
-                            <span className="text-[10px] font-bold text-blue-500 mb-0.5">CT Rating</span>
-                            <span className={`text-xl font-black font-mono ${getRatingColorClass(overall.ctRating)}`}>{overall.ctRating.toFixed(2)}</span>
+
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                        {/* Profile Info */}
+                        <div className="flex items-center gap-5">
+                            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-4xl font-black text-white shadow-xl shadow-blue-500/20 shrink-0">
+                                {profile.id[0]}
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-black text-neutral-900 dark:text-white leading-none tracking-tight">{profile.id}</h1>
+                                <p className="text-sm text-neutral-500 font-medium mt-1 mb-2">{profile.role}</p>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-mono text-neutral-400 border border-neutral-200 dark:border-neutral-700 px-1.5 py-0.5 rounded">
+                                        {profile.matches} MAPS
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="w-px bg-neutral-200 dark:bg-neutral-800 h-8"></div>
-                        <div className="flex flex-col items-center">
-                            <span className="text-[10px] font-bold text-yellow-600 mb-0.5">T Rating</span>
-                            <span className={`text-xl font-black font-mono ${getRatingColorClass(overall.tRating)}`}>{overall.tRating.toFixed(2)}</span>
+
+                        {/* Big Rating */}
+                        <div className="flex items-center gap-6 md:gap-8 bg-white/50 dark:bg-black/20 p-4 rounded-2xl backdrop-blur-sm border border-neutral-100 dark:border-neutral-800">
+                            <div className="text-center">
+                                <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Rating 4.0</div>
+                                <div className={`text-5xl font-black tracking-tighter tabular-nums ${getRatingColorClass(overall.rating)}`}>
+                                    {overall.rating.toFixed(2)}
+                                </div>
+                            </div>
+                            <div className="h-10 w-px bg-neutral-300 dark:bg-neutral-700"></div>
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center justify-between gap-4 text-xs font-mono font-bold">
+                                    <span className="text-blue-500">CT</span>
+                                    <span className="text-neutral-700 dark:text-neutral-300">{overall.ctRating.toFixed(2)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4 text-xs font-mono font-bold">
+                                    <span className="text-yellow-600 dark:text-yellow-500">T</span>
+                                    <span className="text-neutral-700 dark:text-neutral-300">{overall.tRating.toFixed(2)}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Filter Control */}
-            <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl">
-                {(['ALL', 'CT', 'T'] as const).map(side => (
-                    <button
-                        key={side}
-                        onClick={() => setSideFilter(side)}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${sideFilter === side ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
-                    >
-                        {side}
-                    </button>
-                ))}
+            {/* 3. Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <StatCard label="ADR" value={filtered.adr.toFixed(1)} subLabel="Damage / Round" highlight={filtered.adr > 85} />
+                <StatCard label="K/D Ratio" value={filtered.kdr.toFixed(2)} subLabel="Kill / Death" highlight={filtered.kdr > 1.2} />
+                <StatCard label="KAST" value={`${filtered.kast.toFixed(1)}%`} subLabel="Consistency" highlight={filtered.kast > 72} />
+                <StatCard label="WPA" value={(filtered.wpaAvg > 0 ? '+' : '') + filtered.wpaAvg.toFixed(1) + '%'} subLabel="Win Prob Added" highlight={filtered.wpaAvg > 15} />
+                <StatCard label="Multi-Kill" value={`${filtered.multiKillRate.toFixed(1)}%`} subLabel="2+ Kills Rounds" />
+                <StatCard label="DPR" value={filtered.dpr.toFixed(2)} subLabel="Deaths / Round" highlight={filtered.dpr < 0.65} />
             </div>
 
-            {/* Detailed Stats Grid (Filtered) */}
-            <div className="grid grid-cols-3 gap-3">
-                <DetailStatBox label="KDR" value={filtered.kdr.toFixed(2)} subLabel="Kill/Death" highlight={filtered.kdr > 1.2} />
-                <DetailStatBox label="ADR" value={filtered.adr.toFixed(1)} subLabel="Dmg/Round" highlight={filtered.adr > 85} />
-                <DetailStatBox label="KAST" value={`${filtered.kast.toFixed(1)}%`} subLabel="Consistency" highlight={filtered.kast > 72} />
-                <DetailStatBox label="Avg WPA" value={(filtered.wpaAvg > 0 ? '+' : '') + filtered.wpaAvg.toFixed(1) + '%'} subLabel="Win Prob Added" highlight={filtered.wpaAvg > 15} />
-                <DetailStatBox label="MKR" value={`${filtered.multiKillRate.toFixed(1)}%`} subLabel="Multi-Kill" />
-                <DetailStatBox label="DPR" value={filtered.dpr.toFixed(2)} subLabel="Death/Round" highlight={filtered.dpr < 0.65} />
-            </div>
+            {/* 4. Ability Analysis (Split Layout) */}
+            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                        综合能力评估
+                    </h3>
+                    <div className="text-[10px] text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded">点击条目查看详情</div>
+                </div>
+                
+                <div className="flex flex-col lg:flex-row gap-8">
+                    {/* Left: Radar */}
+                    <div className="flex justify-center p-2 lg:w-1/3">
+                        <RadarChart data={abilities} size={300} />
+                    </div>
 
-            {/* Ability Bars (Filtered, 7 Dimensions) */}
-            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5">
-                <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-4">综合能力评估 (Beta)</h3>
-                <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-                    <SkillBar label="火力 Firepower" value={filtered.scoreFirepower} max={100} colorClass="bg-red-500" />
-                    <SkillBar label="破点 Entry" value={filtered.scoreEntry} max={100} colorClass="bg-orange-500" />
-                    <SkillBar label="补枪 Trade" value={filtered.scoreTrade} max={100} colorClass="bg-blue-500" />
-                    <SkillBar label="突破 WPA" value={filtered.scoreBreakthrough} max={100} colorClass="bg-indigo-500" />
-                    <SkillBar label="残局 Clutch" value={filtered.scoreClutch} max={100} colorClass="bg-yellow-500" />
-                    <SkillBar label="狙击 Sniper" value={filtered.scoreSniper} max={100} colorClass="bg-green-500" />
-                    <div className="col-span-2">
-                         <SkillBar label="道具 Utility" value={filtered.scoreUtility} max={100} colorClass="bg-purple-500" />
+                    {/* Middle: Selectable List */}
+                    <div className="flex-1 space-y-2">
+                        {abilities.map((ability) => (
+                            <AbilityRow 
+                                key={ability.id} 
+                                label={ability.label} 
+                                value={ability.value} 
+                                isPercentage={ability.isPct}
+                                isSelected={selectedAbility === ability.id}
+                                onClick={() => setSelectedAbility(ability.id)}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Right: Detailed Card */}
+                    <div className="lg:w-1/3 min-h-[250px]">
+                        <DetailCard type={selectedAbility} data={filtered.details} />
                     </div>
                 </div>
             </div>
 
-            {/* Match History List */}
+            {/* 5. Match History Ledger */}
             <div>
-                <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-4 px-1">近期表现 History</h3>
-                <div className="space-y-3">
+                <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3 px-1">近期比赛 History</h3>
+                <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden divide-y divide-neutral-100 dark:divide-neutral-800 shadow-sm">
                     {history.map(({ match, stats }) => {
                         const mapName = getMapDisplayName(match.mapId);
                         const kdDiff = stats.kills - stats.deaths;
@@ -338,38 +512,42 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
                         const scoreLeft = isPlayerOnMyTeam ? match.score.us : match.score.them;
                         const scoreRight = isPlayerOnMyTeam ? match.score.them : match.score.us;
                         
-                        const barColor = resultForPlayer === 'WIN' ? 'bg-green-500' : resultForPlayer === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500';
+                        const winColor = resultForPlayer === 'WIN' ? 'text-green-600 dark:text-green-500' : resultForPlayer === 'LOSS' ? 'text-red-500' : 'text-yellow-500';
 
                         return (
-                            <button 
+                            <div 
                                 key={match.id} 
                                 onClick={() => onMatchClick(match)}
-                                className="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-3 rounded-xl flex items-center justify-between hover:border-blue-500/50 hover:shadow-md transition-all active:scale-[0.99] group"
+                                className="p-4 flex items-center justify-between hover:bg-neutral-50 dark:hover:bg-neutral-800/50 cursor-pointer transition-colors group"
                             >
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-1 h-8 rounded-full ${barColor}`}></div>
-                                    <div className="text-left">
-                                        <div className="text-sm font-black text-neutral-900 dark:text-white flex items-center gap-2">
-                                            {mapName}
-                                            <span className="text-[10px] font-mono font-normal text-neutral-400">{scoreLeft}:{scoreRight}</span>
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-1.5 h-10 rounded-full ${resultForPlayer === 'WIN' ? 'bg-green-500' : resultForPlayer === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500'}`}></div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-black text-sm text-neutral-900 dark:text-white">{mapName}</span>
+                                            <span className={`text-xs font-mono font-bold ${winColor}`}>{scoreLeft}:{scoreRight}</span>
                                         </div>
                                         <div className="text-[10px] text-neutral-400 font-mono mt-0.5">{match.date.split('T')[0]}</div>
                                     </div>
                                 </div>
                                 
-                                <div className="flex items-center gap-4 text-right">
-                                    <div className="flex flex-col items-end">
-                                        <div className="text-[10px] font-bold text-neutral-400">K-D</div>
+                                <div className="flex items-center gap-6 text-right">
+                                    <div className="hidden sm:block">
+                                        <div className="text-[9px] font-bold text-neutral-400 uppercase">ADR</div>
+                                        <div className="text-xs font-mono font-bold text-neutral-600 dark:text-neutral-300">{stats.adr.toFixed(0)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[9px] font-bold text-neutral-400 uppercase">K-D</div>
                                         <div className={`text-xs font-mono font-bold ${kdDiff > 0 ? 'text-green-500' : kdDiff < 0 ? 'text-red-500' : 'text-neutral-500'}`}>
-                                            {stats.kills}-{stats.deaths} ({kdDiff > 0 ? '+' : ''}{kdDiff})
+                                            {stats.kills}-{stats.deaths}
                                         </div>
                                     </div>
                                     
-                                    <div className={`text-lg font-black tabular-nums w-12 text-right ${getRatingColorClass(stats.rating)}`}>
+                                    <div className={`w-14 text-right font-black font-mono text-lg ${getRatingColorClass(stats.rating)}`}>
                                         {stats.rating.toFixed(2)}
                                     </div>
                                 </div>
-                            </button>
+                            </div>
                         );
                     })}
                 </div>

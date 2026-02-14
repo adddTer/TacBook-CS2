@@ -1,21 +1,21 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Match, MatchSeries, ContentGroup, PlayerMatchStats } from '../types';
-import { ROSTER } from '../constants/roster';
-import { resolveName } from '../utils/demo/helpers';
-import { MatchList } from './review/MatchList';
-import { PlayerList } from './review/PlayerList';
-import { MatchDetail } from './review/MatchDetail';
-import { PlayerDetail } from './review/PlayerDetail';
-import { SeriesDetail } from './review/SeriesDetail';
-import { LeaderboardTab } from './review/LeaderboardTab'; // Fixed path
-import { SeriesCreatorModal } from './SeriesCreatorModal';
-import { MatchImportModal } from './MatchImportModal';
-import { parseDemoJson } from '../utils/demoParser';
-import { ParseError, ParseErrorModal } from './ParseErrorModal';
-import { JsonDebugger } from './JsonDebugger';
-import { shareFile } from '../utils/shareHelper';
-import { LoadingOverlay } from './LoadingOverlay';
+import { Match, MatchSeries, ContentGroup, PlayerMatchStats } from '../../types';
+import { ROSTER } from '../../constants/roster';
+import { resolveName } from '../../utils/demo/helpers';
+import { MatchList } from './MatchList';
+import { PlayerList } from './PlayerList';
+import { MatchDetail } from './MatchDetail';
+import { PlayerDetail } from './PlayerDetail';
+import { SeriesDetail } from './SeriesDetail';
+import { LeaderboardTab } from './LeaderboardTab';
+import { SeriesCreatorModal } from '../SeriesCreatorModal';
+import { MatchImportModal } from '../MatchImportModal';
+import { parseDemoJson } from '../../utils/demoParser';
+import { ParseError, ParseErrorModal } from '../ParseErrorModal';
+import { JsonDebugger } from '../JsonDebugger';
+import { shareFile } from '../../utils/shareHelper';
+import { LoadingOverlay } from '../LoadingOverlay';
 
 interface ReviewViewProps {
     allMatches: Match[];

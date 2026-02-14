@@ -15,7 +15,12 @@ export const UtilityTab: React.FC<UtilityTabProps> = ({ players, enemyPlayers })
     // Check for missing blind data anomaly
     const totalFlashes = allPlayers.reduce((acc, p) => acc + p.utility.flashesThrown, 0);
     const totalBlinded = allPlayers.reduce((acc, p) => acc + p.utility.enemiesBlinded, 0);
-    const isBlindDataMissing = totalFlashes > 5 && totalBlinded === 0;
+    const totalFlashAssists = allPlayers.reduce((acc, p) => acc + (p.flash_assists || 0), 0);
+    
+    // Data is broken if: 
+    // 1. Threw many flashes (>5) but blinded no one.
+    // 2. Has flash assists but blinded no one (impossible unless data missing).
+    const isBlindDataMissing = (totalFlashes > 5 && totalBlinded === 0) || (totalFlashAssists > 0 && totalBlinded === 0);
 
     const renderTeamList = (teamName: string, teamPlayers: PlayerMatchStats[]) => {
         // Sort by Total Utility Damage (HE + Fire)
