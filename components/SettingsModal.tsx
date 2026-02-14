@@ -12,6 +12,7 @@ interface SettingsModalProps {
   utilityViewMode: 'detail' | 'accordion';
   onUtilityViewModeChange: (mode: 'detail' | 'accordion') => void;
   onOpenGroupManager?: () => void;
+  onOpenAiConfig?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -23,7 +24,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onInstall,
   utilityViewMode,
   onUtilityViewModeChange,
-  onOpenGroupManager
+  onOpenGroupManager,
+  onOpenAiConfig
 }) => {
   const [defaultAuthor, setDefaultAuthor] = useState('');
 
@@ -79,13 +81,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Data Management */}
         <div className="space-y-3">
             <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">数据管理</label>
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-2 gap-2">
                 <button 
                     onClick={onOpenGroupManager}
                     className="py-3 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-xl text-xs font-bold text-neutral-700 dark:text-neutral-300 transition-colors flex flex-col items-center justify-center gap-1"
                 >
                     <svg className="w-5 h-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                     战术包管理
+                </button>
+                <button 
+                    onClick={() => { if(onOpenAiConfig) onOpenAiConfig(); }}
+                    className="py-3 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-xl text-xs font-bold text-neutral-700 dark:text-neutral-300 transition-colors flex flex-col items-center justify-center gap-1"
+                >
+                    <svg className="w-5 h-5 mb-0.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    API 设置
                 </button>
             </div>
         </div>
@@ -149,7 +158,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
         
         <div className="pt-4 text-center">
-            <p className="text-[10px] text-neutral-300">TacBook CS2 v1.3.0</p>
+            <p className="text-[10px] text-neutral-300">TacBook CS2 v1.3.1</p>
         </div>
 
       </div>

@@ -15,6 +15,7 @@ import { InstallPrompt } from './components/InstallPrompt';
 import { SettingsModal } from './components/SettingsModal';
 import { GroupManagerModal } from './components/GroupManagerModal'; 
 import { ConfirmModal } from './components/ConfirmModal';
+import { AiConfigModal } from './components/AiConfigModal';
 import { useTactics } from './hooks/useTactics';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useAppStorage } from './hooks/useAppStorage'; 
@@ -41,6 +42,7 @@ const App: React.FC = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isGroupManagerOpen, setIsGroupManagerOpen] = useState(false); 
+  const [isAiConfigOpen, setIsAiConfigOpen] = useState(false); // Global AI Config
   const [activeEditor, setActiveEditor] = useState<'tactic' | 'utility' | null>(null);
   const [editingTactic, setEditingTactic] = useState<Tactic | undefined>(undefined);
   const [editingUtility, setEditingUtility] = useState<Utility | undefined>(undefined);
@@ -374,6 +376,7 @@ const App: React.FC = () => {
         utilityViewMode={utilityViewMode}
         onUtilityViewModeChange={handleUtilityViewModeChange}
         onOpenGroupManager={() => { setIsSettingsOpen(false); setIsGroupManagerOpen(true); }}
+        onOpenAiConfig={() => { setIsSettingsOpen(false); setIsAiConfigOpen(true); }}
       />
       <GroupManagerModal 
         isOpen={isGroupManagerOpen}
@@ -384,6 +387,9 @@ const App: React.FC = () => {
         onToggleGroup={(id) => setActiveGroupIds(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id])}
         isDebug={isDebug}
       />
+      {isAiConfigOpen && (
+          <AiConfigModal onClose={() => setIsAiConfigOpen(false)} onSave={() => setIsAiConfigOpen(false)} />
+      )}
       <ConfirmModal 
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}
