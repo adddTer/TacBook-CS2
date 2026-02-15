@@ -27,12 +27,15 @@ export const calculateClutch = (
     const cpPerRound = clutchPoints / rounds;
     const scoreCP = (cpPerRound / 0.10) * 50;
 
-    // 2. 1v1 Win Rate (30%)
+    // 2. 1v1 Win Rate (30%) - Dynamic Weighting
     const total1v1 = w1v1 + l1v1;
-    let scoreWinRate = 15; // Base 50% score if no 1v1s (neutral)
+    let scoreWinRate = 0;
+    let weightTotal = 70; // 50(CP) + 10(LastAlive) + 5(Time) + 5(Save)
+
     if (total1v1 > 0) {
         const winRate = w1v1 / total1v1;
         scoreWinRate = (winRate / 0.75) * 30;
+        weightTotal += 30; // Add weight if applicable
     }
 
     // 3. Last Alive % (10%)
@@ -47,7 +50,10 @@ export const calculateClutch = (
     const saveRate = roundsLost > 0 ? savesInLosses / roundsLost : 0;
     const scoreSave = (saveRate / 0.30) * 5;
 
-    const totalScore = scoreCP + scoreWinRate + scoreLastAlive + scoreTime + scoreSave;
+    const rawTotalScore = scoreCP + scoreWinRate + scoreLastAlive + scoreTime + scoreSave;
+    
+    // Normalize to 100 based on active weights
+    const finalScore = (rawTotalScore / weightTotal) * 100;
 
-    return Math.round(Math.max(0, totalScore));
+    return Math.round(Math.max(0, finalScore));
 };

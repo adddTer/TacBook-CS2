@@ -210,7 +210,7 @@ export const DetailCard = ({ type, data, score }: { type: AbilityType, data: any
     // Helper to format values
     const formatValue = (key: string, fmt?: string) => {
         const val = data[key];
-        if (val === undefined || isNaN(val)) return '-';
+        if (val === undefined || val === null || (typeof val === 'number' && isNaN(val))) return '-';
         if (fmt === '0.0%') return (val).toFixed(1) + '%';
         if (fmt === '0%') return (val).toFixed(0) + '%';
         if (fmt === '0.00') return (val).toFixed(2);

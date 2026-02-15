@@ -20,3 +20,10 @@ export interface TacticAgentResponse {
     modifiedTactic?: Partial<Tactic>; // Optional data payload if changes were made
     reasoning?: string; // Optional reasoning for the change
 }
+
+export interface PlayerAnalysisReport {
+    summary: string;
+    strengths: { title: string; description: string }[];
+    weaknesses: { title: string; description: string }[];
+    roleEvaluation: string;
+}

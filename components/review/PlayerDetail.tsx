@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -6,8 +7,10 @@ import { getMapDisplayName, getRatingColorClass } from './ReviewShared';
 import { usePlayerStats } from '../../hooks/usePlayerStats';
 import { getValueStyleClass } from '../../utils/styleConstants';
 import { generatePlayerAnalysis } from '../../services/ai/agents/playerReportAgent';
-import { getAIConfig } from '../../services/ai/config';
+import { getAIConfig, getSelectedModel } from '../../services/ai/config';
+import { PlayerAnalysisReport } from '../../services/ai/types';
 import { ConfirmModal } from '../ConfirmModal';
+import { AiConfigModal } from '../AiConfigModal'; // Import local config modal
 import { AbilityType } from './player_detail/config';
 import { RadarChart, AbilityRow, DetailCard, StatCard } from './player_detail/PlayerDetailSubComponents';
 
@@ -23,13 +26,18 @@ type SideFilter = 'ALL' | 'CT' | 'T';
 export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, onBack, onMatchClick }) => {
     const [sideFilter, setSideFilter] = useState<SideFilter>('ALL');
     const [selectedAbility, setSelectedAbility] = useState<AbilityType>('firepower');
-    const [analysis, setAnalysis] = useState<string | null>(null);
+    
+    // AI Report State
+    const [analysis, setAnalysis] = useState<PlayerAnalysisReport | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isReportOpen, setIsReportOpen] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
+    const [showAiConfig, setShowAiConfig] = useState(false); // Local config state
 
     // Check Config
-    const hasApiKey = !!getAIConfig().apiKey;
+    const aiConfig = getAIConfig();
+    const hasApiKey = !!aiConfig.apiKey;
+    const currentModel = getSelectedModel();
 
     // Confirm Modal State
     const [confirmConfig, setConfirmConfig] = useState<{
@@ -44,17 +52,20 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
 
     // Load saved report from localStorage on mount or when key filters change
     useEffect(() => {
-        const key = `tacbook_ai_report_${profile.id}_${sideFilter}`;
+        const key = `tacbook_ai_report_v2_${profile.id}_${sideFilter}`; // Changed key for v2 structure
         const saved = localStorage.getItem(key);
         if (saved) {
-            setAnalysis(saved);
+            try {
+                setAnalysis(JSON.parse(saved));
+            } catch (e) {
+                setAnalysis(null);
+            }
         } else {
             setAnalysis(null);
         }
     }, [profile.id, sideFilter]);
 
     // Optimized Order for Radar Chart
-    // Ensure labels match ABILITY_INFO.title in player_detail/config.ts
     const abilities: { id: AbilityType, label: string, value: number, isPct?: boolean }[] = [
         { id: 'firepower', label: '火力', value: filtered.scoreFirepower }, 
         { id: 'entry', label: '破点', value: filtered.scoreEntry }, 
@@ -68,7 +79,10 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
     const selectedScore = abilities.find(a => a.id === selectedAbility)?.value || 0;
 
     const runAnalysis = async () => {
-        if (!hasApiKey) return;
+        if (!getAIConfig().apiKey) {
+            setShowAiConfig(true);
+            return;
+        }
 
         setIsAnalyzing(true);
         setAnalysisError(null);
@@ -77,8 +91,8 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
             const result = await generatePlayerAnalysis(profile, { overall, filtered });
             setAnalysis(result);
             // Save to localStorage
-            const key = `tacbook_ai_report_${profile.id}_${sideFilter}`;
-            localStorage.setItem(key, result);
+            const key = `tacbook_ai_report_v2_${profile.id}_${sideFilter}`;
+            localStorage.setItem(key, JSON.stringify(result));
             
         } catch (e: any) {
             console.error(e);
@@ -114,19 +128,18 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
                     BACK
                 </button>
                 <div className="flex gap-2">
-                    {hasApiKey && (
-                         <button 
-                             onClick={() => setIsReportOpen(true)}
-                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all shadow-sm ${
-                                 analysis 
-                                    ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700' 
-                                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border-transparent'
-                             }`}
-                         >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                            <span>{analysis ? '查看 AI 报告' : 'AI 深度分析'}</span>
-                         </button>
-                    )}
+                    <button 
+                        onClick={() => setIsReportOpen(true)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all shadow-sm ${
+                            analysis 
+                            ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700' 
+                            : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border-transparent'
+                        }`}
+                    >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        <span>{analysis ? '查看 AI 报告' : 'AI 深度分析'}</span>
+                    </button>
+                    
                     <div className="flex p-0.5 bg-neutral-200 dark:bg-neutral-800 rounded-lg">
                         {(['ALL', 'CT', 'T'] as const).map(side => (
                             <button
@@ -299,89 +312,150 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
                 </div>
             </div>
 
-            {/* Report Modal */}
+            {/* AI Report FULLSCREEN Interface */}
             {isReportOpen && (
                 <div 
-                    className="fixed inset-0 z-[300] bg-neutral-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
-                    onClick={() => setIsReportOpen(false)}
+                    className="fixed inset-0 z-[300] bg-neutral-100 dark:bg-black overflow-y-auto animate-in fade-in duration-200"
                 >
-                    <div 
-                        className="bg-white dark:bg-neutral-900 w-full max-w-3xl rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-800 flex flex-col max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-8 duration-300"
-                        onClick={e => e.stopPropagation()}
-                    >
-                         <div className="px-6 py-4 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center bg-white/50 dark:bg-neutral-950/50 backdrop-blur-sm shrink-0">
-                             <div className="flex items-center gap-3">
-                                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-                                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-                                 </div>
-                                 <div>
-                                     <h3 className="font-bold text-lg text-neutral-900 dark:text-white leading-none">AI 战术顾问</h3>
-                                     <p className="text-xs text-neutral-500 mt-1">Player: {profile.id}</p>
-                                 </div>
-                             </div>
-                             <div className="flex items-center gap-2">
-                                {analysis && (
-                                    <button
-                                        onClick={handleRegenerate}
-                                        title="重新生成 (消耗额度)"
-                                        className="p-2 rounded-full text-neutral-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                    </button>
-                                )}
-                                <button 
-                                    onClick={() => setIsReportOpen(false)}
-                                    className="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-500"
+                    {/* Sticky Header */}
+                    <div className="sticky top-0 z-20 bg-white/90 dark:bg-neutral-950/90 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800 px-6 py-4 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center text-white shadow-lg">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                            </div>
+                            <div>
+                                <h3 className="font-black text-lg text-neutral-900 dark:text-white leading-none">AI 表现评估</h3>
+                                <p className="text-xs text-neutral-500 font-mono mt-0.5">TARGET: {profile.id}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {analysis && !isAnalyzing && (
+                                <button
+                                    onClick={handleRegenerate}
+                                    className="p-2 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors"
+                                    title="重新生成"
                                 >
-                                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                 </button>
+                            )}
+                            <button 
+                                onClick={() => setIsReportOpen(false)}
+                                className="p-2 bg-neutral-200 dark:bg-neutral-800 rounded-full hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+                            >
+                                <svg className="w-5 h-5 text-neutral-600 dark:text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="max-w-4xl mx-auto p-6 md:p-10">
+                        {analysisError ? (
+                             <div className="flex flex-col items-center justify-center py-20 text-red-500">
+                                 <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-4">
+                                    <svg className="w-8 h-8 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                 </div>
+                                 <p className="text-lg font-bold">生成失败</p>
+                                 <p className="text-sm opacity-70 mt-2 bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg font-mono">{analysisError}</p>
                              </div>
-                         </div>
-                         
-                         <div className="flex-1 overflow-y-auto p-8 md:p-12 bg-neutral-50 dark:bg-neutral-950">
-                             {analysisError ? (
-                                 <div className="flex flex-col items-center justify-center h-full text-red-500">
-                                     <svg className="w-10 h-10 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                     <p className="text-sm font-bold">生成失败</p>
-                                     <p className="text-xs opacity-70 mt-1">{analysisError}</p>
+                         ) : isAnalyzing ? (
+                             <div className="flex flex-col items-center justify-center py-32 text-neutral-400">
+                                 <div className="relative w-20 h-20 mb-8">
+                                    <div className="absolute inset-0 border-4 border-neutral-200 dark:border-neutral-800 rounded-full"></div>
+                                    <div className="absolute inset-0 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                                  </div>
-                             ) : isAnalyzing ? (
-                                 <div className="flex flex-col items-center justify-center h-full text-neutral-400">
-                                     <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-                                     <p className="text-sm">正在分析比赛数据...</p>
-                                     <p className="text-xs opacity-50 mt-1">这可能需要几秒钟</p>
-                                 </div>
-                             ) : analysis ? (
-                                 <div className="prose prose-base dark:prose-invert max-w-none text-neutral-700 dark:text-neutral-300 
-                                    prose-headings:font-bold prose-headings:text-neutral-900 dark:prose-headings:text-white
-                                    prose-h3:text-lg prose-h3:border-b prose-h3:border-neutral-200 dark:prose-h3:border-neutral-800 prose-h3:pb-2 prose-h3:mt-8 prose-h3:mb-4
-                                    prose-p:leading-8 prose-p:mb-4 prose-p:text-neutral-600 dark:prose-p:text-neutral-400
-                                    prose-li:text-neutral-600 dark:prose-li:text-neutral-400 prose-li:my-2
-                                    prose-strong:text-blue-700 dark:prose-strong:text-blue-400 prose-strong:font-bold
-                                    prose-blockquote:border-l-4 prose-blockquote:border-neutral-300 prose-blockquote:bg-neutral-100 dark:prose-blockquote:bg-neutral-800/50 dark:prose-blockquote:border-neutral-700 prose-blockquote:py-2 prose-blockquote:px-4 prose-blockquote:rounded-r-lg prose-blockquote:not-italic prose-blockquote:text-neutral-600 dark:prose-blockquote:text-neutral-400
-                                 ">
-                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{analysis || ''}</ReactMarkdown>
-                                 </div>
-                             ) : (
-                                <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
-                                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
-                                        <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                 <h4 className="text-xl font-bold text-neutral-800 dark:text-white animate-pulse">正在深度分析比赛数据...</h4>
+                                 <p className="text-sm opacity-50 mt-3 font-mono">{currentModel}</p>
+                             </div>
+                         ) : analysis ? (
+                            <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+                                {/* 1. Summary Card */}
+                                <div className="bg-white dark:bg-neutral-900 rounded-3xl p-8 shadow-xl border border-neutral-200 dark:border-neutral-800">
+                                    <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-4">表现总结</h4>
+                                    <p className="text-lg md:text-xl font-medium text-neutral-800 dark:text-neutral-100 leading-relaxed">
+                                        {analysis.summary}
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    {/* 2. Strengths */}
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="p-1.5 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-600 dark:text-green-400">
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                            </div>
+                                            <h4 className="font-bold text-neutral-900 dark:text-white">高光表现</h4>
+                                        </div>
+                                        {analysis.strengths.map((item, i) => (
+                                            <div key={i} className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border-l-4 border-green-500 shadow-sm">
+                                                <div className="font-bold text-neutral-900 dark:text-white mb-2">{item.title}</div>
+                                                <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">{item.description}</p>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div className="max-w-md">
-                                        <h3 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">生成 AI 表现评估</h3>
-                                        <p className="text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                                            AI 将基于当前筛选条件 ({sideFilter === 'ALL' ? '全场' : sideFilter} 数据)，分析 {profile.id} 的各项能力指标，提供战术建议和改进方向。
-                                        </p>
+
+                                    {/* 3. Weaknesses */}
+                                    <div className="space-y-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="p-1.5 bg-orange-100 dark:bg-orange-900/30 rounded-lg text-orange-600 dark:text-orange-400">
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                            </div>
+                                            <h4 className="font-bold text-neutral-900 dark:text-white">改进建议</h4>
+                                        </div>
+                                        {analysis.weaknesses.map((item, i) => (
+                                            <div key={i} className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border-l-4 border-orange-500 shadow-sm">
+                                                <div className="font-bold text-neutral-900 dark:text-white mb-2">{item.title}</div>
+                                                <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">{item.description}</p>
+                                            </div>
+                                        ))}
                                     </div>
+                                </div>
+
+                                {/* 4. Role Evaluation */}
+                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-3xl p-8 border border-blue-100 dark:border-blue-900/30">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full uppercase tracking-wider">
+                                            Role: {profile.role}
+                                        </div>
+                                        <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 uppercase tracking-widest">职责评估</h4>
+                                    </div>
+                                    <p className="text-neutral-700 dark:text-neutral-300 leading-8">
+                                        {analysis.roleEvaluation}
+                                    </p>
+                                </div>
+                            </div>
+                         ) : (
+                            // Empty State
+                            <div className="flex flex-col items-center justify-center py-20 text-center">
+                                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-blue-500/30 mb-8 transform rotate-3 hover:rotate-6 transition-transform duration-500">
+                                    <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                                </div>
+                                <div className="max-w-md space-y-4 mb-8">
+                                    <h3 className="text-3xl font-black text-neutral-900 dark:text-white">生成专属表现评估</h3>
+                                    <p className="text-base text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                                        AI 将基于当前筛选的 <span className="font-bold text-neutral-800 dark:text-white">{sideFilter === 'ALL' ? '全场' : sideFilter}</span> 数据，深度分析 {profile.id} 的各项能力指标。
+                                    </p>
+                                </div>
+                                
+                                <div className="flex gap-3">
                                     <button 
                                         onClick={runAnalysis}
-                                        className="px-8 py-3 bg-neutral-900 dark:bg-white text-white dark:text-black font-bold rounded-xl hover:scale-105 transition-transform shadow-lg"
+                                        className="px-10 py-4 bg-neutral-900 dark:bg-white text-white dark:text-black font-bold text-lg rounded-2xl hover:scale-105 transition-transform shadow-xl flex items-center gap-2"
                                     >
-                                        开始生成
+                                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                        开始生成报告
+                                    </button>
+                                    <button
+                                        onClick={() => setShowAiConfig(true)}
+                                        className="p-4 bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 rounded-2xl hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+                                        title="API 设置"
+                                    >
+                                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.572 1.065c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                     </button>
                                 </div>
-                             )}
-                         </div>
+                                <div className="mt-6 text-xs text-neutral-400 font-mono">
+                                    Current Model: {currentModel}
+                                </div>
+                             </div>
+                         )}
                     </div>
                 </div>
             )}
@@ -393,6 +467,14 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
                 onConfirm={confirmConfig.onConfirm}
                 onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
             />
+
+            {/* Local Instance of Config Modal for Shortcut */}
+            {showAiConfig && (
+                <AiConfigModal 
+                    onClose={() => setShowAiConfig(false)}
+                    onSave={() => setShowAiConfig(false)}
+                />
+            )}
         </div>
     );
 };

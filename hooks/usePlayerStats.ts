@@ -74,7 +74,7 @@ interface StatsResult {
             // Clutch
             clutchPointsPerRound: number;
             lastAlivePct: number;
-            win1v1Pct: number;
+            win1v1Pct: number | null; // Allow null for N/A
             timeAlivePerRound: number;
             savesPerLoss: number;
 
@@ -273,7 +273,7 @@ export const usePlayerStats = (
             // Clutch
             clutchPointsPerRound: safeDiv(stats.clutchPoints, rounds),
             lastAlivePct: safeDiv(stats.roundsLastAlive, rounds) * 100,
-            win1v1Pct: safeDiv(stats.w1v1, stats.w1v1 + stats.l1v1) * 100,
+            win1v1Pct: (stats.w1v1 + stats.l1v1) > 0 ? safeDiv(stats.w1v1, stats.w1v1 + stats.l1v1) * 100 : null,
             timeAlivePerRound: safeDiv(stats.totalTimeAlive, rounds),
             savesPerLoss: safeDiv(stats.savesInLosses, stats.roundsLost),
 

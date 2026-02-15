@@ -287,7 +287,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             const matchesPlayed = allMatches.filter(m => {
                 const allP = [...m.players, ...m.enemyPlayers];
                 return allP.some(p => resolveName(p.playerId) === selectedPlayerId || resolveName(p.steamid) === selectedPlayerId);
-            });
+            }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
             if (matchesPlayed.length > 0) {
                 let sums = {
@@ -298,16 +298,22 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     rounds: 0
                 };
                 
-                let steamid = undefined;
-                let currentRank = '?';
-                let displayName = selectedPlayerId;
+                // Get display info from the latest match
+                const latestMatch = matchesPlayed[0];
+                const latestPlayer = [...latestMatch.players, ...latestMatch.enemyPlayers]
+                    .find(p => resolveName(p.playerId) === selectedPlayerId || resolveName(p.steamid) === selectedPlayerId);
+                
+                // FIXED: Calculate displayName but also use it for profile.id to avoid showing SteamID
+                let displayName = latestPlayer ? latestPlayer.playerId : selectedPlayerId;
+                let currentRank = latestPlayer ? latestPlayer.rank : '?';
+                let steamid = latestPlayer ? latestPlayer.steamid : undefined;
 
                 matchesPlayed.forEach(m => {
                     const p = [...m.players, ...m.enemyPlayers].find(p => resolveName(p.playerId) === selectedPlayerId || resolveName(p.steamid) === selectedPlayerId)!;
                     
-                    if (p.steamid) steamid = p.steamid;
-                    if (p.rank) currentRank = p.rank;
-                    if (p.playerId) displayName = p.playerId;
+                    if (!steamid && p.steamid) steamid = p.steamid;
+                    if (currentRank === '?' && p.rank) currentRank = p.rank;
+                    // Note: displayName is already set from the latest match to prefer most recent name
 
                     const rounds = p.r3_rounds_played || (m.score.us + m.score.them) || 1;
 
@@ -334,7 +340,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 const totalKills = sums.k || 1;
                 
                 profile = {
-                    id: displayName,
+                    id: displayName, // Use display name as ID for presentation
                     name: displayName,
                     role: '陌生人',
                     roleType: 'Guest',
