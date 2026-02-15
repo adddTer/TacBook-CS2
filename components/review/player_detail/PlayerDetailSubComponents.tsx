@@ -133,7 +133,8 @@ interface AbilityRowProps {
 }
 
 export const AbilityRow: React.FC<AbilityRowProps> = ({ label, value, isPercentage = false, isSelected, onClick }) => {
-    const intValue = Math.round(Math.max(0, Math.min(100, value)));
+    const intValue = Math.round(Math.max(0, value)); // Actual value, not capped
+    const barWidth = Math.min(100, intValue); // Visual width, capped at 100
     
     const barClass = getScoreStyle(value, 'bar');
     const textClass = getScoreStyle(value, 'text');
@@ -147,24 +148,12 @@ export const AbilityRow: React.FC<AbilityRowProps> = ({ label, value, isPercenta
                  {label}
              </div>
              
-             {/* Progress Track */}
+             {/* Progress Track - Cleaned up background lines */}
              <div className="flex-1 relative h-3 bg-neutral-200 dark:bg-neutral-800 rounded-sm overflow-hidden group">
-                 {/* Tier Markers (Background Lines) */}
-                 <div className="absolute top-0 bottom-0 left-[40%] w-px bg-white/50 dark:bg-white/10 z-10"></div>
-                 <div className="absolute top-0 bottom-0 left-[60%] w-px bg-white/50 dark:bg-white/10 z-10"></div>
-                 <div className="absolute top-0 bottom-0 left-[80%] w-px bg-white/50 dark:bg-white/10 z-10"></div>
-                 
-                 {/* Average Marker (45%) */}
-                 <div className="absolute top-0 bottom-0 left-[45%] w-0.5 bg-black/20 dark:bg-white/20 z-10"></div>
-                 {/* Tooltip for Avg */}
-                 <div className="absolute -top-4 left-[45%] -translate-x-1/2 text-[8px] font-mono text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                     AVG
-                 </div>
-
                  {/* Fill */}
                  <div 
                     className={`h-full rounded-sm transition-all duration-1000 ease-out relative ${barClass}`} 
-                    style={{ width: `${intValue}%` }}
+                    style={{ width: `${barWidth}%` }}
                  >
                  </div>
              </div>
@@ -210,6 +199,13 @@ export const DetailCard = ({ type, data, score }: { type: AbilityType, data: any
 
     const evalClass = getScoreStyle(score, 'bg');
     const evalTextClass = getScoreStyle(score, 'text');
+    
+    // Check if flash data is likely broken (missing parser events)
+    // Same logic as UtilityTab
+    const isUtilityBroken = type === 'utility' && (
+        (data.totalFlashes > 5 && data.totalBlinded === 0) || 
+        (data.totalFlashAssists > 0 && data.totalBlinded === 0)
+    );
 
     // Helper to format values
     const formatValue = (key: string, fmt?: string) => {
@@ -240,6 +236,19 @@ export const DetailCard = ({ type, data, score }: { type: AbilityType, data: any
                      </div>
                  </div>
             </div>
+            
+            {/* Broken Data Warning */}
+            {isUtilityBroken && (
+                <div className="mb-4 flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-400">
+                    <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div className="text-[10px] leading-relaxed font-bold">
+                        检测到闪光数据异常 (解析缺失)<br/>
+                        评分已自动忽略致盲时长并重新计算。
+                    </div>
+                </div>
+            )}
 
             <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed mb-6 font-medium">
                 {info.desc}

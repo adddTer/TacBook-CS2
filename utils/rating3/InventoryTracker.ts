@@ -1,4 +1,4 @@
-import { WEAPON_VALUES } from "./constants";
+import { WEAPON_VALUES, DISPLAY_NAME_TO_ID } from "./constants";
 
 export class InventoryTracker {
     // SteamID -> List of item names
@@ -80,6 +80,11 @@ export class InventoryTracker {
 
         // 2. Resolve Item Name securely
         let rawItem = event.item;
+        
+        // FIX: If raw item is null/empty but we have a display name, try to map it
+        if ((!rawItem || rawItem === null) && event.item_name) {
+            rawItem = DISPLAY_NAME_TO_ID[event.item_name];
+        }
         
         if (!rawItem || typeof rawItem !== 'string') return; 
 

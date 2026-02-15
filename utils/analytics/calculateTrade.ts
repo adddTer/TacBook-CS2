@@ -48,5 +48,5 @@ export const calculateTrade = (
 
     const totalScore = scoreTKPR + scoreTKRate + scoreSaved + scoreDPK + scoreAssist;
 
-    return Math.round(Math.max(0, Math.min(100, totalScore)));
+    return Math.round(Math.max(0, totalScore));
 };

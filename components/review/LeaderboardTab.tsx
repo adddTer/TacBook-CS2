@@ -27,10 +27,35 @@ type SortOrder = 'asc' | 'desc';
 export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) => {
     const [sortField, setSortField] = useState<SortField>('rating');
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+    const [includeStrangers, setIncludeStrangers] = useState(false);
 
     // --- Core Calculation Logic ---
     const leaderboardData = useMemo(() => {
-        return ROSTER.map(player => {
+        let candidateList = ROSTER.map(r => ({ id: r.id, name: r.name, role: r.role.split(' ')[0] }));
+
+        if (includeStrangers) {
+            const rosterIds = new Set(ROSTER.map(r => r.id));
+            const strangerMap = new Map<string, { id: string, name: string, role: string }>();
+
+            allMatches.forEach(m => {
+                [...m.players, ...m.enemyPlayers].forEach(p => {
+                    const resolvedId = resolveName(p.playerId);
+                    // Skip if is roster member
+                    if (rosterIds.has(resolvedId)) return;
+                    
+                    if (!strangerMap.has(resolvedId)) {
+                        strangerMap.set(resolvedId, {
+                            id: resolvedId,
+                            name: resolvedId,
+                            role: '路人'
+                        });
+                    }
+                });
+            });
+            candidateList = [...candidateList, ...Array.from(strangerMap.values())];
+        }
+
+        return candidateList.map(player => {
             const matchesPlayed = allMatches.filter(m => {
                 const allP = [...m.players, ...m.enemyPlayers];
                 return allP.some(p => resolveName(p.playerId) === player.id || resolveName(p.steamid) === player.id);
@@ -119,6 +144,9 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
                 rounds
             );
 
+            // Check for broken utility data
+            const isUtilityBroken = (stats.flashesThrown > 5 && stats.enemiesBlinded === 0) || (stats.flashAssists > 0 && stats.enemiesBlinded === 0);
+
             return {
                 id: player.id,
                 name: player.name,
@@ -138,10 +166,11 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
                 trade: scoreTrade,
                 sniper: scoreSniper,
                 clutch: scoreClutch,
-                utility: scoreUtility
+                utility: scoreUtility,
+                isUtilityBroken
             };
         }).filter(Boolean) as any[];
-    }, [allMatches]);
+    }, [allMatches, includeStrangers]);
 
     // --- Sorting ---
     const sortedData = useMemo(() => {
@@ -211,7 +240,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
     };
 
     // --- Empty State ---
-    if (sortedData.length === 0) {
+    if (sortedData.length === 0 && !includeStrangers) {
         return (
             <div className="flex flex-col items-center justify-center py-32 text-neutral-400 dark:text-neutral-600">
                 <div className="w-20 h-20 bg-neutral-100 dark:bg-neutral-800 rounded-full flex items-center justify-center mb-6">
@@ -219,6 +248,12 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
                 </div>
                 <h3 className="text-lg font-bold text-neutral-500 dark:text-neutral-400">暂无数据</h3>
                 <p className="text-xs mt-2 opacity-60">请先在赛程页面导入 Demo 数据</p>
+                <button 
+                    onClick={() => setIncludeStrangers(true)}
+                    className="mt-4 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                    查看所有玩家 (含路人)
+                </button>
             </div>
         );
     }
@@ -226,6 +261,22 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
     return (
         <div className="pb-10 font-sans animate-in fade-in duration-500">
             
+            {/* Options */}
+            <div className="flex justify-end mb-4 px-1">
+                 <button 
+                    onClick={() => setIncludeStrangers(!includeStrangers)}
+                    className={`
+                        flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border active:scale-95
+                        ${includeStrangers 
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
+                            : 'bg-white dark:bg-neutral-900 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 border-neutral-200 dark:border-neutral-800'}
+                    `}
+                 >
+                    {includeStrangers && <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                    包含路人数据
+                 </button>
+            </div>
+
             {/* MVP/Leader Card */}
             {leader && (
                  <div className="mb-8 bg-neutral-900 dark:bg-black rounded-2xl p-6 text-white relative overflow-hidden shadow-xl border border-neutral-800">
@@ -289,16 +340,17 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
                                 <HeaderCell field="matches" label="场次" className="border-l border-neutral-100 dark:border-neutral-800" />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-neutral-50 dark:divide-neutral-800/50">
+                        <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800 font-sans tabular-nums">
                             {sortedData.map((p, idx) => {
-                                const rankColor = idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-neutral-400' : idx === 2 ? 'text-amber-700' : 'text-neutral-300 dark:text-neutral-600';
+                                const rankValue = sortOrder === 'desc' ? idx + 1 : sortedData.length - idx;
+                                const rankColor = rankValue === 1 ? 'text-yellow-500' : rankValue === 2 ? 'text-neutral-400' : rankValue === 3 ? 'text-amber-700' : 'text-neutral-300 dark:text-neutral-600';
                                 
                                 return (
-                                <tr key={p.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30 transition-colors group">
+                                <tr key={p.id} className="hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors group">
                                     <td className="px-6 py-4 sticky left-0 z-10 bg-white dark:bg-neutral-900 border-r border-transparent group-hover:border-neutral-100 dark:group-hover:border-neutral-800 transition-colors">
                                         <div className="flex items-center gap-4">
                                             <span className={`font-mono text-lg font-black w-6 text-center ${rankColor}`}>
-                                                {idx + 1}
+                                                {rankValue}
                                             </span>
                                             <div>
                                                 <div className="font-bold text-neutral-900 dark:text-white leading-none mb-1 text-sm">{p.name}</div>
@@ -328,7 +380,20 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
                                     <td className={`px-2 py-4 text-center font-mono text-sm ${getScoreStyle(p.trade)} ${sortField === 'trade' ? 'bg-neutral-50 dark:bg-neutral-800/30' : ''}`}>{p.trade}</td>
                                     <td className={`px-2 py-4 text-center font-mono text-sm ${getScoreStyle(p.sniper)} ${sortField === 'sniper' ? 'bg-neutral-50 dark:bg-neutral-800/30' : ''}`}>{p.sniper}</td>
                                     <td className={`px-2 py-4 text-center font-mono text-sm ${getScoreStyle(p.clutch)} ${sortField === 'clutch' ? 'bg-neutral-50 dark:bg-neutral-800/30' : ''}`}>{p.clutch}</td>
-                                    <td className={`px-2 py-4 text-center font-mono text-sm ${getScoreStyle(p.utility)} ${sortField === 'utility' ? 'bg-neutral-50 dark:bg-neutral-800/30' : ''}`}>{p.utility}</td>
+                                    
+                                    {/* Utility Column with Warning */}
+                                    <td className={`px-2 py-4 text-center font-mono text-sm ${getScoreStyle(p.utility)} ${sortField === 'utility' ? 'bg-neutral-50 dark:bg-neutral-800/30' : ''}`}>
+                                        <div className="flex items-center justify-center gap-1">
+                                            {p.utility}
+                                            {p.isUtilityBroken && (
+                                                <span className="text-amber-500 cursor-help" title="闪光数据异常 (解析缺失)。评分已自动忽略致盲时长并重新计算。">
+                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                    </svg>
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
                                     
                                     <td className="px-2 py-4 text-center text-[10px] font-bold text-neutral-400 border-l border-neutral-50 dark:border-neutral-800/50">
                                         {p.matches}

@@ -10,6 +10,19 @@ import { normalizeSteamId, resolveName } from "./demo/helpers";
 import { determineTeammates } from "./demo/teamLogic";
 import { determineStartingSide } from "./demo/sideLogic";
 
+// Hitgroup mapping for JSON string values
+const HITGROUP_MAP: Record<string, number> = {
+    'generic': 0,
+    'head': 1,
+    'chest': 2,
+    'stomach': 3,
+    'left arm': 4,
+    'right arm': 5,
+    'left leg': 6,
+    'right leg': 7,
+    'gear': 10
+};
+
 export const parseDemoJson = (data: DemoData): Match => {
     const events = Array.isArray(data) ? data : (data.events || []);
     const meta = (!Array.isArray(data) && data.meta) ? data.meta : { map_name: 'Unknown', server_name: '' };
@@ -473,7 +486,13 @@ export const parseDemoJson = (data: DemoData): Match => {
                 const n = steamIdToName.get(sid) || "Unknown";
                 return { steamid: sid, name: n, side: s };
             };
-
+            
+            // FIX: Use hitgroup mapping if available in event, otherwise fallback
+            let headshot = e.headshot;
+            // Additional check if e.headshot is boolean or not available
+            
+            // Hitgroup detection from kill event is sometimes missing in summary, rely on headshot flag
+            
             currentRoundEvents.push({
                 tick,
                 seconds: 0, 
@@ -554,6 +573,12 @@ export const parseDemoJson = (data: DemoData): Match => {
             const vic = normalizeSteamId(e.user_steamid);
             const rawDmg = parseInt(e.dmg_health || 0);
             const actualDmg = healthTracker.recordDamage(vic, rawDmg);
+            
+            // FIX: Convert string hitgroup to number if needed
+            let hg = e.hitgroup;
+            if (typeof hg === 'string') {
+                hg = HITGROUP_MAP[hg.toLowerCase()] || 0;
+            }
 
             if (actualDmg > 0) {
                  const getTimelineInfo = (sid: string) => {
@@ -573,7 +598,7 @@ export const parseDemoJson = (data: DemoData): Match => {
                     target: getTimelineInfo(vic),
                     weapon: (e.weapon || "").replace("weapon_", ""),
                     damage: actualDmg,
-                    hitgroup: e.hitgroup,
+                    hitgroup: hg, // Use corrected hitgroup
                     winProb: ratingEngine.getRoundWinProb()
                 });
             }

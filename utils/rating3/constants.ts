@@ -29,7 +29,66 @@ export const WEAPON_VALUES: Record<string, number> = {
     'incendiarygrenade': 500, // data/weapons.ts: 500
     'incgrenade': 500, // Alias for parsing
     'decoy': 50,
-    'kevlar': 650, 'assaultsuit': 1000, 'defuser': 400, 'taser': 200
+    'kevlar': 650, 'assaultsuit': 1000, 'defuser': 400, 'taser': 200,
+    'vest': 650, 'vesthelm': 1000 // Add strict aliases
+};
+
+// 物品显示名称到内部ID的映射 (修复 JSON item 为 null 的问题)
+export const DISPLAY_NAME_TO_ID: Record<string, string> = {
+    "Kevlar Vest": "vest",
+    "Kevlar + Helmet": "vesthelm",
+    "Defuse Kit": "defuser",
+    "Zeus x27": "taser",
+    
+    // Pistols
+    "Glock-18": "glock",
+    "P2000": "hkp2000",
+    "USP-S": "usp_silencer",
+    "P250": "p250",
+    "CZ75-Auto": "cz75a",
+    "Tec-9": "tec9",
+    "Five-SeveN": "fiveseven",
+    "Desert Eagle": "deagle",
+    "R8 Revolver": "revolver",
+    "Dual Berettas": "elite",
+
+    // SMGs
+    "MAC-10": "mac10",
+    "MP9": "mp9",
+    "UMP-45": "ump45",
+    "MP7": "mp7",
+    "MP5-SD": "mp5sd",
+    "PP-Bizon": "bizon",
+    "P90": "p90",
+
+    // Rifles
+    "Galil AR": "galilar",
+    "FAMAS": "famas",
+    "AK-47": "ak47",
+    "M4A4": "m4a1", // Internal mapping quirk
+    "M4A1-S": "m4a1_silencer",
+    "SSG 08": "ssg08",
+    "AWP": "awp",
+    "AUG": "aug",
+    "SG 553": "sg553",
+    "SCAR-20": "scar20",
+    "G3SG1": "g3sg1",
+
+    // Heavy
+    "Nova": "nova",
+    "XM1014": "xm1014",
+    "Sawed-Off": "sawedoff",
+    "MAG-7": "mag7",
+    "M249": "m249",
+    "Negev": "negev",
+
+    // Grenades
+    "Flashbang": "flashbang",
+    "Smoke Grenade": "smokegrenade",
+    "HE Grenade": "hegrenade",
+    "Molotov": "molotov",
+    "Incendiary Grenade": "incgrenade",
+    "Decoy Grenade": "decoy"
 };
 
 // 基础胜率矩阵 (T人数, CT人数) -> T胜率

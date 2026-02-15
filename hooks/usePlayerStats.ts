@@ -91,6 +91,11 @@ interface StatsResult {
             flashesPerRound: number;
             flashAssistsPerRound: number;
             blindTimePerRound: number;
+            
+            // Raw Stats for Validation
+            totalFlashes: number;
+            totalBlinded: number;
+            totalFlashAssists: number;
         }
     };
 }
@@ -254,7 +259,7 @@ export const usePlayerStats = (
             savedTeammatePerRound: safeDiv(stats.teammatesSaved, rounds),
             tradeKillsPerRound: safeDiv(stats.tradeKills, rounds),
             tradeKillsPct: safeDiv(stats.tradeKills, stats.kills) * 100,
-            assistPct: safeDiv(stats.assists, stats.kills) * 100, // Ratio of assists to kills usually, or assists/rounds. Standard is assist/kill ratio or assist per round. Let's use Assist/Kill% to show "Helpfulness" relative to fragging
+            assistPct: safeDiv(stats.assists, stats.kills) * 100, 
             damagePerKill: safeDiv(stats.damage, stats.kills),
 
             // Opening
@@ -285,6 +290,11 @@ export const usePlayerStats = (
             flashesPerRound: safeDiv(stats.flashesThrown, rounds),
             flashAssistsPerRound: safeDiv(stats.flashAssists, rounds),
             blindTimePerRound: safeDiv(stats.blindDuration, rounds),
+            
+            // Raw Stats for Validation
+            totalFlashes: stats.flashesThrown,
+            totalBlinded: stats.enemiesBlinded,
+            totalFlashAssists: stats.flashAssists
         };
 
         return {

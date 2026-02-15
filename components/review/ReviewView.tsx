@@ -16,6 +16,7 @@ import { ParseError, ParseErrorModal } from '../ParseErrorModal';
 import { JsonDebugger } from '../JsonDebugger';
 import { shareFile } from '../../utils/shareHelper';
 import { LoadingOverlay } from '../LoadingOverlay';
+import { ConfirmModal } from '../ConfirmModal';
 
 interface ReviewViewProps {
     allMatches: Match[];
@@ -56,6 +57,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         subMessage?: string;
         progress?: number;
     }>({ isVisible: false, message: '' });
+
+    // Confirm Modal State
+    const [confirmConfig, setConfirmConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
     // File Input
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -243,15 +252,21 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     };
 
     const handleBatchDelete = (items: { type: 'match' | 'series', id: string }[]) => {
-        if (!confirm(`确定要删除选中的 ${items.length} 项数据吗？`)) return;
-        
-        items.forEach(item => {
-            if (item.type === 'match') {
-                const m = allMatches.find(m => m.id === item.id);
-                if (m) onDeleteMatch(m);
-            } else {
-                const s = allSeries.find(s => s.id === item.id);
-                if (s) onDeleteSeries(s);
+        setConfirmConfig({
+            isOpen: true,
+            title: "批量删除",
+            message: `确定要删除选中的 ${items.length} 项数据吗？此操作无法撤销。`,
+            onConfirm: () => {
+                items.forEach(item => {
+                    if (item.type === 'match') {
+                        const m = allMatches.find(m => m.id === item.id);
+                        if (m) onDeleteMatch(m);
+                    } else {
+                        const s = allSeries.find(s => s.id === item.id);
+                        if (s) onDeleteSeries(s);
+                    }
+                });
+                setConfirmConfig(prev => ({ ...prev, isOpen: false }));
             }
         });
     };
@@ -285,12 +300,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 
                 let steamid = undefined;
                 let currentRank = '?';
+                let displayName = selectedPlayerId;
 
                 matchesPlayed.forEach(m => {
                     const p = [...m.players, ...m.enemyPlayers].find(p => resolveName(p.playerId) === selectedPlayerId || resolveName(p.steamid) === selectedPlayerId)!;
                     
                     if (p.steamid) steamid = p.steamid;
                     if (p.rank) currentRank = p.rank;
+                    if (p.playerId) displayName = p.playerId;
 
                     const rounds = p.r3_rounds_played || (m.score.us + m.score.them) || 1;
 
@@ -317,8 +334,8 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 const totalKills = sums.k || 1;
                 
                 profile = {
-                    id: selectedPlayerId,
-                    name: selectedPlayerId,
+                    id: displayName,
+                    name: displayName,
                     role: '陌生人',
                     roleType: 'Guest',
                     steamid,
@@ -353,18 +370,34 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     if (selectedMatch) {
         return (
-            <MatchDetail 
-                match={selectedMatch}
-                onBack={() => setSelectedMatch(null)}
-                onPlayerClick={handlePlayerClick}
-                onDelete={(m) => {
-                    if(confirm("确定删除此比赛记录？")) {
-                        onDeleteMatch(m);
-                        setSelectedMatch(null);
-                    }
-                }}
-                onShare={handleShareMatch}
-            />
+            <>
+                <MatchDetail 
+                    match={selectedMatch}
+                    onBack={() => setSelectedMatch(null)}
+                    onPlayerClick={handlePlayerClick}
+                    onDelete={(m) => {
+                        setConfirmConfig({
+                            isOpen: true,
+                            title: "删除比赛",
+                            message: "确定要删除这场比赛记录吗？此操作无法撤销。",
+                            onConfirm: () => {
+                                onDeleteMatch(m);
+                                setSelectedMatch(null);
+                                setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                            }
+                        });
+                    }}
+                    onShare={handleShareMatch}
+                />
+                <ConfirmModal 
+                    isOpen={confirmConfig.isOpen}
+                    title={confirmConfig.title}
+                    message={confirmConfig.message}
+                    onConfirm={confirmConfig.onConfirm}
+                    onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+                    isDangerous={true}
+                />
+            </>
         );
     }
 
@@ -496,6 +529,15 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             <JsonDebugger 
                 isOpen={showDebugger} 
                 onClose={() => setShowDebugger(false)} 
+            />
+
+            <ConfirmModal 
+                isOpen={confirmConfig.isOpen}
+                title={confirmConfig.title}
+                message={confirmConfig.message}
+                onConfirm={confirmConfig.onConfirm}
+                onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+                isDangerous={true}
             />
         </div>
     );

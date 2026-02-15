@@ -81,7 +81,7 @@ export const getRatingStyle = (rating: number, type: 'text' | 'bg' = 'text') => 
  * Specific helper for WPA
  */
 export const getWpaStyle = (wpa: number) => {
-    return getValueStyleClass(wpa, [2.0, 0, -1.0], 'text'); // >2.0 is Outstanding, >0 is Excellent, >-1 is Avg
+    return getValueStyleClass(wpa, [4.0, 0, -1.0], 'text'); // >4.0 is Outstanding, >0 is Excellent, >-1 is Avg
 };
 
 /**

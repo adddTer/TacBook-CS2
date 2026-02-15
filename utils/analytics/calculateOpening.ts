@@ -41,5 +41,5 @@ export const calculateOpening = (
 
     const totalScore = scoreSuccess + scoreAttempts + scoreOKPR + scoreWinRate;
 
-    return Math.round(Math.max(0, Math.min(100, totalScore)));
+    return Math.round(Math.max(0, totalScore));
 };

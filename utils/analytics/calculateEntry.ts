@@ -46,5 +46,5 @@ export const calculateEntry = (
     
     const totalScore = scoreODT + scoreTDPct + scoreTDPR + scoreSaved + scoreSupp;
 
-    return Math.round(Math.max(0, Math.min(100, totalScore)));
+    return Math.round(Math.max(0, totalScore));
 };
