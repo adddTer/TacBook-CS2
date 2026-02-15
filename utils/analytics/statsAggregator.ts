@@ -1,6 +1,7 @@
 
 import { Match, PlayerMatchStats, Side } from '../../types';
 import { isSniperWeapon, isUtilityDamageWeapon } from './weaponHelper';
+import { resolveName } from '../demo/helpers';
 
 export interface AggregatedStats {
     // --- General ---
@@ -99,8 +100,16 @@ export const aggregatePlayerStats = (
 
         if (!match.rounds) return;
 
-        const matchPlayer = [...match.players, ...match.enemyPlayers].find(p => p.playerId === profileId);
+        // Enhanced lookup: Check ID, SteamID, and Resolved Name
+        const matchPlayer = [...match.players, ...match.enemyPlayers].find(p => 
+            p.playerId === profileId || 
+            p.steamid === profileId ||
+            resolveName(p.playerId) === profileId
+        );
+        
         if (!matchPlayer) return;
+        
+        // Target ID for Round Lookup (prefer SteamID if available, as rounds are keyed by SteamID for strangers)
         const targetId = matchPlayer.steamid || matchPlayer.playerId;
 
         // 2. Iterate Rounds

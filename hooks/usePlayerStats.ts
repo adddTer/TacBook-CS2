@@ -9,6 +9,7 @@ import { calculateOpening } from '../utils/analytics/calculateOpening';
 import { calculateClutch } from '../utils/analytics/calculateClutch';
 import { calculateSniper } from '../utils/analytics/calculateSniper';
 import { calculateUtility } from '../utils/analytics/calculateUtility';
+import { resolveName } from '../utils/demo/helpers';
 
 interface StatsResult {
     overall: {
@@ -118,7 +119,11 @@ export const usePlayerStats = (
         
         history.forEach(({ match }) => {
              if (!match.rounds) return;
-             const pMatch = [...match.players, ...match.enemyPlayers].find(p => p.playerId === profileId);
+             const pMatch = [...match.players, ...match.enemyPlayers].find(p => 
+                 p.playerId === profileId || 
+                 p.steamid === profileId ||
+                 resolveName(p.playerId) === profileId
+             );
              if(!pMatch) return;
              const pid = pMatch.steamid || pMatch.playerId;
              
@@ -141,7 +146,11 @@ export const usePlayerStats = (
         
         history.forEach(({ match }) => {
             if(!match.rounds) return;
-            const pMatch = [...match.players, ...match.enemyPlayers].find(p => p.playerId === profileId);
+            const pMatch = [...match.players, ...match.enemyPlayers].find(p => 
+                p.playerId === profileId || 
+                p.steamid === profileId ||
+                resolveName(p.playerId) === profileId
+            );
             if(!pMatch) return;
             const pid = pMatch.steamid || pMatch.playerId;
 
