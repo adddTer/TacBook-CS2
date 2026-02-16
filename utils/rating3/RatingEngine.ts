@@ -4,12 +4,7 @@ import { WIN_PROB_MATRIX, WEAPON_VALUES } from "./constants";
 import { InventoryTracker } from "./InventoryTracker";
 import { HealthTracker } from "./HealthTracker";
 import { WPAEngine, WPAUpdate } from "./WPAEngine";
-
-// Helper for normalizeId
-const normalizeId = (id: string | number | null | undefined): string => {
-    if (id === null || id === undefined || id === 0 || id === "0" || id === "BOT") return "BOT";
-    return String(id).trim();
-};
+import { normalizeSteamId } from "../demo/helpers";
 
 export interface RoundContext {
     kills: number;
@@ -45,6 +40,10 @@ export class RatingEngine {
     // Accumulators: SteamID -> { sumRating, rounds, impactSum, sumWPA }
     private playerRatings = new Map<string, { sumRating: number, rounds: number, impactSum: number, sumWPA: number }>();
 
+    // FIX: Accumulative Roster Cache to handle empty Round 1 inputs
+    private knownRoundTs = new Set<string>();
+    private knownRoundCTs = new Set<string>();
+
     public getOrInitState(sid: string) {
         if (!this.playerRatings.has(sid)) {
             this.playerRatings.set(sid, { sumRating: 0, rounds: 0, impactSum: 0, sumWPA: 0 });
@@ -78,18 +77,62 @@ export class RatingEngine {
         return this.wpaEngine.getCurrentWinProb();
     }
 
+    /**
+     * Resolves a player ID, handling JavaScript number precision loss.
+     * Raw IDs from events might be Numbers that have lost precision (e.g. 76561198012345680 instead of ...78).
+     * This compares the Number() value of the candidate against the Number() value of the raw input.
+     */
+    private resolvePlayerId(rawId: any, candidates: Set<string>): string {
+        const normalized = normalizeSteamId(rawId);
+        // 1. Try exact match (String match)
+        if (candidates.has(normalized)) return normalized;
+
+        // 2. Fuzzy match for JS precision loss
+        // Steam64 IDs are large integers. JS 'Number' loses precision beyond 2^53.
+        // If the demo parser passes a raw Number, it might be slightly off.
+        // We check if the imprecise Number versions match.
+        const rawNum = Number(rawId);
+        if (!isNaN(rawNum) && rawNum > 0) {
+            for (const candidate of candidates) {
+                if (Number(candidate) === rawNum) {
+                    return candidate;
+                }
+            }
+        }
+        return normalized;
+    }
+
     public handleEvent(
         event: any, 
         currentRound: number, 
         teammateSteamIds: Set<string>,
         aliveTs: Set<string>,
         aliveCTs: Set<string>,
-        roundTs: Set<string>, // All T players this round
-        roundCTs: Set<string> // All CT players this round
+        roundTs: Set<string>, // Incoming T players (might be empty in R1)
+        roundCTs: Set<string> // Incoming CT players (might be empty in R1)
     ) {
         const type = event.event_name;
         const tick = event.tick || 0;
         const TICK_RATE = 64; 
+
+        // --- FIX: Sync internal roster cache ---
+        if (type === 'round_announce_match_start' || type === 'round_start') {
+            this.knownRoundTs.clear();
+            this.knownRoundCTs.clear();
+        }
+
+        // Accumulate players into known sets
+        roundTs.forEach(id => this.knownRoundTs.add(id));
+        roundCTs.forEach(id => this.knownRoundCTs.add(id));
+        // Also capture alive players as they are definitely in the round (fixes R1 empty roster)
+        aliveTs.forEach(id => this.knownRoundTs.add(id));
+        aliveCTs.forEach(id => this.knownRoundCTs.add(id));
+
+        // Build candidate set for ID resolution (Fuzzy Match Target)
+        const allRoundPlayers = new Set<string>();
+        this.knownRoundTs.forEach(id => allRoundPlayers.add(id));
+        this.knownRoundCTs.forEach(id => allRoundPlayers.add(id));
+        teammateSteamIds.forEach(id => allRoundPlayers.add(id)); 
 
         if (['item_pickup', 'item_drop', 'item_purchase'].includes(type)) {
             this.inventory.handleItemEvent(event);
@@ -107,10 +150,6 @@ export class RatingEngine {
         // Logic for round start / freeze end
         if (type === 'round_start' || type === 'round_freeze_end') {
             if (type === 'round_start') {
-                 // FIX: Do NOT call startNewRound() here. It wipes the economy state set by synthetic freeze_end.
-                 // The parser/engine logic relies on round_freeze_end (real or synthetic) to init the WPA engine.
-                 // this.wpaEngine.startNewRound(); 
-                 
                  // FIX: Initialize with current tick to avoid 0-based time panic if freeze_end is missing
                  this.roundStartTick = tick;
             }
@@ -126,9 +165,9 @@ export class RatingEngine {
                 let tVal = 0;
                 let ctVal = 0;
                 
-                // Use the round roster sets passed from parser
-                roundTs.forEach(sid => tVal += this.inventory.getStartValue(sid));
-                roundCTs.forEach(sid => ctVal += this.inventory.getStartValue(sid));
+                // Use the accumulated roster sets (Fixes R1)
+                this.knownRoundTs.forEach(sid => tVal += this.inventory.getStartValue(sid));
+                this.knownRoundCTs.forEach(sid => ctVal += this.inventory.getStartValue(sid));
 
                 // Fallback for empty sets (e.g. pistol round or parsing error)
                 if (tVal === 0 && ctVal === 0) {
@@ -170,13 +209,18 @@ export class RatingEngine {
         }
         
         // Arrays for WPA Engine (Symmetric Distribution to ALL team members)
-        const tPlayers = Array.from(roundTs);
-        const ctPlayers = Array.from(roundCTs);
+        // Use accumulative cache instead of passed args
+        const tPlayers = Array.from(this.knownRoundTs);
+        const ctPlayers = Array.from(this.knownRoundCTs);
 
         if (type === 'player_hurt') {
-            // Use userid fallback if steamid is missing
-            const att = normalizeId(event.attacker_steamid || event.attacker);
-            const vic = normalizeId(event.user_steamid || event.userid);
+            // Fix ID: attacker_steamid / attacker / userid
+            const rawAtt = event.attacker_steamid || event.attacker;
+            const rawVic = event.user_steamid || event.userid;
+
+            const att = this.resolvePlayerId(rawAtt, allRoundPlayers);
+            const vic = this.resolvePlayerId(rawVic, allRoundPlayers);
+            
             const rawDmg = parseInt(event.dmg_health || 0);
             
             const actualDmg = this.health.recordDamage(vic, rawDmg);
@@ -192,8 +236,8 @@ export class RatingEngine {
                 // WPA for Damage
                 // Robust Side Detection
                 let attSide: 'T' | 'CT' | undefined;
-                if (roundTs.has(att)) attSide = 'T';
-                else if (roundCTs.has(att)) attSide = 'CT';
+                if (this.knownRoundTs.has(att)) attSide = 'T';
+                else if (this.knownRoundCTs.has(att)) attSide = 'CT';
                 // Fallback to event data
                 if (!attSide && event.attacker_team_num == 2) attSide = 'T';
                 if (!attSide && event.attacker_team_num == 3) attSide = 'CT';
@@ -209,14 +253,15 @@ export class RatingEngine {
         }
 
         if (type === 'bomb_planted' || type === 'bomb_defused') {
-            const sid = normalizeId(event.user_steamid || event.userid);
+            const rawSid = event.user_steamid || event.userid;
+            const sid = this.resolvePlayerId(rawSid, allRoundPlayers);
             const isPlant = type === 'bomb_planted';
             
             // [Bug Fix] Calculate Active Kits for Post-Plant WPA
             let activeKits = 0;
             if (isPlant) {
                 // Count kits for all currently alive CTs
-                roundCTs.forEach(ctId => {
+                this.knownRoundCTs.forEach(ctId => {
                     if (aliveCTs.has(ctId) && this.inventory.hasKit(ctId)) activeKits++;
                 });
             }
@@ -230,9 +275,13 @@ export class RatingEngine {
         }
 
         if (type === 'player_death') {
-            const att = normalizeId(event.attacker_steamid || event.attacker);
-            const vic = normalizeId(event.user_steamid || event.userid);
-            const ast = normalizeId(event.assister_steamid || event.assister);
+            const rawAtt = event.attacker_steamid || event.attacker;
+            const rawVic = event.user_steamid || event.userid;
+            const rawAst = event.assister_steamid || event.assister;
+
+            const att = this.resolvePlayerId(rawAtt, allRoundPlayers);
+            const vic = this.resolvePlayerId(rawVic, allRoundPlayers);
+            const ast = this.resolvePlayerId(rawAst, allRoundPlayers);
             
             // [Bug Fix] Check if victim had kit BEFORE clearing inventory
             const hasKit = this.inventory.hasKit(vic);
@@ -254,9 +303,9 @@ export class RatingEngine {
             if (aliveTs.has(vic)) victimSide = 'T';
             else if (aliveCTs.has(vic)) victimSide = 'CT';
             
-            // 2. Then round roster (static list)
-            else if (roundTs.has(vic)) victimSide = 'T';
-            else if (roundCTs.has(vic)) victimSide = 'CT';
+            // 2. Then round roster (accumulated cache)
+            else if (this.knownRoundTs.has(vic)) victimSide = 'T';
+            else if (this.knownRoundCTs.has(vic)) victimSide = 'CT';
             
             // 3. Fallback to event properties (least reliable but necessary for incomplete data)
             if (!victimSide) {
@@ -337,8 +386,12 @@ export class RatingEngine {
         allCTs: string[], 
         winnerSide: 'T' | 'CT'
     ) {
+        // Use cached rosters if passed ones are empty (R1 fix)
+        const finalTs = (allTs && allTs.length > 0) ? allTs : Array.from(this.knownRoundTs);
+        const finalCTs = (allCTs && allCTs.length > 0) ? allCTs : Array.from(this.knownRoundCTs);
+
         // 1. WPA Round Closure (Distribute remaining probability symmetrically to ALL players)
-        const closureUpdates = this.wpaEngine.finalizeRound(winnerSide, allTs, allCTs);
+        const closureUpdates = this.wpaEngine.finalizeRound(winnerSide, finalTs, finalCTs);
         this.wpaEngine.commitUpdates(closureUpdates);
 
         // 2. Inventory Snapshots
