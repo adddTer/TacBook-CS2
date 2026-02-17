@@ -1,28 +1,13 @@
 
 import { PlayerMatchStats } from "../../types";
-import { WIN_PROB_MATRIX, WEAPON_VALUES } from "./constants";
 import { InventoryTracker } from "./InventoryTracker";
 import { HealthTracker } from "./HealthTracker";
 import { WPAEngine, WPAUpdate } from "./WPAEngine";
 import { normalizeSteamId } from "../demo/helpers";
+import { RoundContext } from "./types"; // Changed from ../types
+import { calculateRoundRating } from "./rating/formula";
 
-export interface RoundContext {
-    kills: number;
-    deaths: number;
-    assists: number; 
-    damage: number;
-    survived: boolean;
-    isEntryKill: boolean;
-    isEntryDeath: boolean;
-    traded: boolean;
-    wasTraded: boolean;
-    tradeBonus: number;
-    tradePenalty: number;
-    impactPoints: number;
-    killValue: number; // For Econ Rating
-    rating: number; 
-    wpa: number; // Accumulated WPA for this round
-}
+export { RoundContext }; 
 
 export class RatingEngine {
     private inventory = new InventoryTracker();
@@ -418,36 +403,15 @@ export class RatingEngine {
             
             if (!this.playerRatings.has(sid)) return;
 
-            // Rating 3.0 Calculation (Preserved)
-            const scoreKill = (stats.kills / 0.75) * 0.25;
-            const scoreSurv = stats.survived ? 0.30 : 0.0;
-            const scoreDmg = (stats.damage / 80.0) * 0.15;
+            // Rating 4.0 Calculation (Delegated to helper)
+            const startValue = this.inventory.getStartValue(sid);
+            const calcResult = calculateRoundRating(stats, startValue);
             
-            let impactVal = 0;
-            if (stats.kills === 1) impactVal = 1.0;
-            else if (stats.kills === 2) impactVal = 2.2;
-            else if (stats.kills >= 3) impactVal = 3.5;
-            if (stats.isEntryKill) impactVal += 0.5;
-            const scoreImpact = (impactVal / 1.3) * 0.25;
-            stats.impactPoints = scoreImpact;
-
-            const isKast = stats.kills > 0 || stats.assists > 0 || stats.survived || stats.traded || stats.wasTraded;
-            const scoreKast = isKast ? 0.20 : 0.0;
-
-            const startValue = this.inventory.getStartValue(sid) + 500; 
-            const valueGenerated = stats.killValue; 
-            let scoreEcon = 0;
-            if (valueGenerated > 0) {
-                 scoreEcon = Math.log2(1 + (valueGenerated / startValue)) * 0.10;
-            }
-
-            const tradeScore = stats.tradeBonus - stats.tradePenalty;
-            let roundRating = scoreKill + scoreSurv + scoreDmg + scoreImpact + scoreKast + scoreEcon + tradeScore;
-            
-            stats.rating = parseFloat(roundRating.toFixed(3));
+            stats.rating = calcResult.rating;
+            stats.impactPoints = calcResult.impact;
 
             const p = this.playerRatings.get(sid)!;
-            p.sumRating += roundRating;
+            p.sumRating += stats.rating;
             p.sumWPA += stats.wpa; // Accumulate WPA
             p.rounds++;
         });
