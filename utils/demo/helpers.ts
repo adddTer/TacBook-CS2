@@ -10,6 +10,7 @@ export const NAME_ALIASES: Record<string, string> = {
     'forsakenN': 'F1oyd',
     '冥医': 'Sanatio',
     'addd_233': 'addd',
+    '𝐚𝐝𝐝𝐝': 'addd',
     'Ser1EN': 'Ser1EN',
     'ClayDEN': 'Ser1EN', 
     'FuNct1on': 'FuNct1on',

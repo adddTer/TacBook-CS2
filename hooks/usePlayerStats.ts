@@ -239,11 +239,11 @@ export const usePlayerStats = (
         const details = {
             // Firepower
             kpr: kpr,
-            roundsWithKills: stats.roundsWithKills,
+            roundsWithKills: safeDiv(stats.roundsWithKills, rounds) * 100,
             kprWin: safeDiv(stats.killsInWins, stats.roundsWon),
             rating: avgRating,
             dpr: adr,
-            multiKillRounds: stats.multiKillRounds,
+            multiKillRounds: safeDiv(stats.multiKillRounds, rounds) * 100,
             dprWin: safeDiv(stats.damageInWins, stats.roundsWon),
             pistolRating: safeDiv(stats.pistolRatingSum, stats.pistolRoundsPlayed) * 1.30,
 
@@ -265,7 +265,7 @@ export const usePlayerStats = (
             // Opening
             openingKillsPerRound: safeDiv(stats.entryKills, rounds),
             openingDeathsPerRound: safeDiv(stats.entryDeaths, rounds),
-            openingAttempts: stats.entryKills + stats.entryDeaths,
+            openingAttempts: safeDiv(stats.entryKills + stats.entryDeaths, rounds) * 100,
             openingSuccessPct: safeDiv(stats.entryKills, stats.entryKills + stats.entryDeaths) * 100,
             winPctAfterOpening: safeDiv(stats.roundsWonAfterEntry, stats.entryKills) * 100,
             attacksPerRound: safeDiv(stats.entryKills + stats.entryDeaths, rounds),

@@ -302,7 +302,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
                              <div className="text-center">
                                  <div className="text-[10px] text-neutral-400 uppercase font-bold mb-1">{sortField === 'rating' ? 'ADR' : getSortLabel(sortField)}</div>
                                  <div className="text-2xl font-black tabular-nums text-green-400">
-                                     {getMvpValueDisplay(sortField, leader[sortField])}
+                                     {sortField === 'rating' ? leader.adr.toFixed(1) : getMvpValueDisplay(sortField, leader[sortField])}
                                  </div>
                              </div>
                              <div className="w-px h-8 bg-white/10"></div>

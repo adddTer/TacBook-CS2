@@ -66,7 +66,7 @@ export const ABILITY_INFO: Record<AbilityType, {
         metrics: [
             { label: "OpKPR (首杀)", key: "openingKillsPerRound", format: "0.00" },
             { label: "首杀成功率", key: "openingSuccessPct", format: "0.0%" },
-            { label: "首杀尝试%", key: "openingAttempts", format: "0" },
+            { label: "首杀尝试%", key: "openingAttempts", format: "0.0%" },
             { label: "首杀后胜率", key: "winPctAfterOpening", format: "0.0%" },
             { label: "OpDPR (首死)", key: "openingDeathsPerRound", format: "0.00" },
         ],
