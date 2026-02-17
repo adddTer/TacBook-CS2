@@ -1,3 +1,4 @@
+
 # WPA Algorithm v3.3 Specification
 
 ## 1. 核心理念 (Core Concepts)
@@ -102,9 +103,12 @@ $$ Mod_{Health} = \alpha \times \frac{(HP_{T} - HP_{CT})}{500} $$
 2.  **更新人数**: 减少受害者方存活人数。
 3.  **计算 $\Delta P$**: $P_{new} - P_{old}$。
 4.  **分配 WPA**:
-    *   击杀者: $+\Delta P \times (1 - AssistShare)$
-    *   助攻者: $+\Delta P \times AssistShare$ (闪光助攻权重更高)
-    *   受害者: $-\Delta P$ (完全承担责任)
+    *   计算总收益 $\Delta P$。
+    *   **击杀者固定奖励**: $50\% \times \Delta P$。
+    *   **贡献池分配**: 剩余 $50\% \times \Delta P$ 按照权重分配给所有贡献者（包括击杀者）。
+        *   伤害权重: 每 1 点未溢出伤害 = 1 权重。
+        *   闪光助攻权重: 30 权重。
+    *   **受害者**: $-\Delta P$ (完全承担责任)。
 
 ### C. 炸弹事件 (Objective)
 1.  **下包 (Plant)**:
@@ -131,4 +135,3 @@ $$ Mod_{Health} = \alpha \times \frac{(HP_{T} - HP_{CT})}{500} $$
 | `TIME_PANIC` | 30s | 时间开始加速衰减的阈值 |
 | `ASSIST_WEIGHT` | 0.25 | 普通助攻分摊比例 |
 | `FLASH_WEIGHT` | 0.35 | 闪光助攻分摊比例 |
-

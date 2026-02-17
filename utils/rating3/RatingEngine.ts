@@ -320,11 +320,20 @@ export class RatingEngine {
                     const isFlash = event.assistedflash;
                     assisters.push({ sid: ast, isFlash });
                 }
+
+                // NEW: Collect damage contributors to the victim for weighted WPA
+                const damageContributors = new Map<string, number>();
+                this.damageGraph.forEach((victimMap, attackerSid) => {
+                    if (victimMap.has(vic)) {
+                        damageContributors.set(attackerSid, victimMap.get(vic)!);
+                    }
+                });
                 
                 const updates = this.wpaEngine.handleKill(
                     att, vic, victimSide, assisters, timeElapsed,
                     tPlayers, ctPlayers,
-                    hasKit // Pass kit loss info to WPA
+                    hasKit, // Pass kit loss info to WPA
+                    damageContributors // NEW Argument
                 );
                 this.wpaEngine.commitUpdates(updates);
             } else {

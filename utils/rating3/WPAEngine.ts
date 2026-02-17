@@ -1,3 +1,4 @@
+
 import { Side } from "../../types";
 
 export interface WPAUpdate {
@@ -184,7 +185,8 @@ export class WPAEngine {
         assisters: { sid: string, isFlash?: boolean }[], 
         timeElapsed: number,
         allTs: string[], allCTs: string[],
-        kitsLost: boolean = false // [Bug Fix] Track kit loss
+        kitsLost: boolean = false, // [Bug Fix] Track kit loss
+        damageContributors: Map<string, number> = new Map() // NEW: Pass contributors
     ): WPAUpdate[] {
         this.updateRoundTime(timeElapsed); 
 
@@ -200,7 +202,8 @@ export class WPAEngine {
             assisters.map(a => ({ sid: a.sid, weight: a.isFlash ? 0.35 : 0.25 })),
             victimSid,
             allTs, allCTs,
-            'kill'
+            'kill',
+            { killerSid, damageContributors, assisters } // Pass kill context
         );
     }
 
@@ -256,7 +259,12 @@ export class WPAEngine {
         victimSid: string | null,
         allTs: string[], 
         allCTs: string[],
-        reason: string
+        reason: string,
+        killContext?: {
+            killerSid: string,
+            damageContributors: Map<string, number>,
+            assisters: { sid: string, isFlash?: boolean }[]
+        }
     ): WPAUpdate[] {
         const prevProb = this.currentWinProb;
         const newProb = this.calculateWinProb();
@@ -269,6 +277,78 @@ export class WPAEngine {
         const debugInfo = { debugProbBefore: prevProb, debugProbAfter: newProb, reason };
 
         if (Math.abs(totalPoints) < 0.001) return [];
+
+        // Special Logic for Kill Distribution (50% Killer, 50% Weighted)
+        if (killContext && reason === 'kill') {
+            const impactMagnitude = Math.abs(totalPoints);
+            const penaltyTotal = -impactMagnitude;
+
+            // 1. Calculate Rewards
+            const killerFixedShare = impactMagnitude * 0.5;
+            const weightedPool = impactMagnitude * 0.5;
+            
+            const weights = new Map<string, number>();
+            let totalWeight = 0;
+
+            // Add damage weights (1 point per 1 damage)
+            killContext.damageContributors.forEach((dmg, sid) => {
+                const current = weights.get(sid) || 0;
+                weights.set(sid, current + dmg);
+                totalWeight += dmg;
+            });
+
+            // Add flash assist weights (30 points)
+            killContext.assisters.forEach(a => {
+                if (a.isFlash) {
+                    const current = weights.get(a.sid) || 0;
+                    weights.set(a.sid, current + 30);
+                    totalWeight += 30;
+                }
+            });
+
+            // Apply Rewards
+            // A. Killer Fixed Share
+            updates.push({
+                sid: killContext.killerSid,
+                delta: killerFixedShare,
+                ...debugInfo
+            });
+
+            // B. Weighted Share from Pool
+            if (totalWeight > 0) {
+                weights.forEach((w, sid) => {
+                    const share = (w / totalWeight) * weightedPool;
+                    // Check if update exists for this player (e.g. killer) and accumulate
+                    const existing = updates.find(u => u.sid === sid);
+                    if (existing) {
+                        existing.delta += share;
+                    } else {
+                        updates.push({
+                            sid,
+                            delta: share,
+                            ...debugInfo
+                        });
+                    }
+                });
+            } else {
+                // Fallback: If no damage recorded (rare), give remaining pool to killer
+                const existing = updates.find(u => u.sid === killContext.killerSid);
+                if (existing) existing.delta += weightedPool;
+            }
+
+            // 2. Victim Penalty
+            if (victimSid) {
+                updates.push({
+                    sid: victimSid,
+                    delta: penaltyTotal,
+                    ...debugInfo
+                });
+            }
+
+            return updates;
+        }
+
+        // --- Legacy / Other Event Logic (Damage, Plant, Defuse) ---
 
         let totalAssistWeight = 0;
         secondaryContributors.forEach(c => totalAssistWeight += c.weight);
@@ -331,6 +411,6 @@ export class WPAEngine {
     }
     
     public getTradeRestoration(victimSid: string): WPAUpdate {
-        return { sid: victimSid, delta: 5.0, reason: 'trade_bonus' };
+        return { sid: victimSid, delta: 0, reason: 'trade_bonus' };
     }
 }
