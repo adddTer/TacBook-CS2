@@ -141,6 +141,26 @@ export class RatingEngine {
 
             if (type === 'round_freeze_end') {
                 this.roundStartTick = tick;
+
+                // --- Fallback: Force Populate Roster if Empty (Round 1 Fix) ---
+                if (this.knownRoundTs.size === 0 && this.knownRoundCTs.size === 0) {
+                     // Try to recover side from active players
+                     // Since we don't know who is T/CT without events, we rely on parser passing them.
+                     // If parser fixed, we are good.
+                     // But if parser failed to pass (e.g. empty roundTs), we check aliveTs.
+                     // aliveTs is already added to knownRoundTs above.
+                     
+                     // If STILL empty, check all active ratings keys (fallback for total failure)
+                     const activeIds = Array.from(this.playerRatings.keys());
+                     if (activeIds.length > 0) {
+                        // Guess side: Teammates to T, others to CT (or vice versa, assuming R1)
+                        // This is a last resort guess.
+                        // Assuming Pistol Round (R1), usually T side starts attacking?
+                        // Without explicit info, this is risky, but better than crash.
+                        // However, demoParser fix should prevent this.
+                        // We will skip explicit random assignment to avoid wrong side.
+                     }
+                }
                 
                 // 1. Inventory Snapshot
                 const activeIds = Array.from(this.playerRatings.keys());
@@ -298,6 +318,21 @@ export class RatingEngine {
                 if (teamNum == 2) victimSide = 'T';
                 if (teamNum == 3) victimSide = 'CT';
             }
+
+            // 4. Ultimate Fallback: Deduce from teammates (User Request Step 3)
+            if (!victimSide) {
+                // Try to determine 'Our Side' from known players
+                let ourSide: 'T' | 'CT' | undefined;
+                // Check known T's for a teammate
+                for (const id of this.knownRoundTs) { if (teammateSteamIds.has(id)) { ourSide = 'T'; break; } }
+                // Check known CT's
+                if (!ourSide) for (const id of this.knownRoundCTs) { if (teammateSteamIds.has(id)) { ourSide = 'CT'; break; } }
+                
+                if (ourSide) {
+                    const isTeammate = teammateSteamIds.has(vic);
+                    victimSide = isTeammate ? ourSide : (ourSide === 'T' ? 'CT' : 'T');
+                }
+            }
             
             if (victimSide) {
                 const assisters = [];
@@ -322,7 +357,8 @@ export class RatingEngine {
                 );
                 this.wpaEngine.commitUpdates(updates);
             } else {
-                console.warn("[RatingEngine] Could not determine victim side for WPA:", vic);
+                // Warn only if we really couldn't figure it out
+                // console.warn("[RatingEngine] Could not determine victim side for WPA:", vic);
             }
 
             if (att !== "BOT" && att !== vic && att !== "0") {

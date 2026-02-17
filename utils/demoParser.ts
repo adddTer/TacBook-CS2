@@ -1,4 +1,3 @@
-
 import { DemoData, Match, PlayerMatchStats, MatchRound, MatchTimelineEvent, PlayerRoundStats, Side } from "../types";
 import { generateId } from "./idGenerator";
 import { ROSTER } from "../constants/roster";
@@ -358,6 +357,17 @@ export const parseDemoJson = (data: DemoData): Match => {
             });
             matchRounds.length = 0;
             pendingRoundEnd = null;
+            
+            // FIX: Force populate playerSideMap based on roster
+            // This handles cases where spawn events happen before match start
+            activeSteamIds.forEach(sid => {
+                if (teammateSteamIds.has(sid)) {
+                    playerSideMap.set(sid, initialRosterSide);
+                } else {
+                    playerSideMap.set(sid, initialRosterSide === 'T' ? 'CT' : 'T');
+                }
+            });
+
             resetRoundState();
 
             // Notify Engine of Match Start (Clear State)
