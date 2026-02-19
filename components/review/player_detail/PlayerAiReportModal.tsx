@@ -132,7 +132,28 @@ export const PlayerAiReportModal: React.FC<PlayerAiReportModalProps> = ({
                             </p>
                         </div>
                     </div>
-                    ) : null}
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-20 text-center">
+                            <div className="w-20 h-20 bg-neutral-100 dark:bg-neutral-800 rounded-3xl flex items-center justify-center mb-6 shadow-sm">
+                                <svg className="w-10 h-10 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            </div>
+                            <h3 className="text-2xl font-black text-neutral-900 dark:text-white mb-3">AI 战术分析</h3>
+                            <p className="text-neutral-500 dark:text-neutral-400 max-w-md mb-8 leading-relaxed">
+                                使用先进的 AI 模型深度分析 {profileId} 的比赛表现、风格定位及改进建议。
+                            </p>
+                            <button 
+                                onClick={onRunAnalysis}
+                                className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-lg shadow-blue-600/20 transition-all hover:scale-105 active:scale-95 flex items-center gap-3"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                开始分析
+                            </button>
+                            <div className="mt-6 flex items-center gap-2 text-xs font-mono text-neutral-400">
+                                <span>MODEL: {currentModel}</span>
+                                <button onClick={onOpenConfig} className="hover:text-blue-500 underline">Change</button>
+                            </div>
+                        </div>
+                    )}
             </div>
         </div>,
         document.body

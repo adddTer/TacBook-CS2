@@ -89,23 +89,54 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
                 // Weighted sums
                 entry.ratingSum += (p.rating || 0) * rounds;
                 
-                // WPA
-                // Fix: Ensure WPA is treated as a number, default to 0 if missing
-                const wpa = (typeof p.wpa === 'number' && !isNaN(p.wpa)) ? p.wpa : 0;
-                entry.wpaSum += wpa * rounds;
+                // WPA, Entry Kills, MultiKills - Force recalculation from rounds if available
+                // Because match-level stats might be missing or aggregated differently
+                if (data.rounds && data.rounds.length > 0) {
+                    const pid = p.steamid || p.playerId;
+                    let matchWpaSum = 0;
+                    let matchEntryKills = 0;
+                    let matchMultiKills = { k2: 0, k3: 0, k4: 0, k5: 0 };
 
-                // Entry Kills
-                entry.entry_kills += p.entry_kills || 0;
+                    data.rounds.forEach(r => {
+                        const pr = r.playerStats[pid];
+                        if (pr) {
+                            // WPA
+                            if (typeof pr.wpa === 'number' && !isNaN(pr.wpa)) {
+                                matchWpaSum += pr.wpa;
+                            }
+                            // Entry Kills
+                            if (pr.isEntryKill) {
+                                matchEntryKills++;
+                            }
+                            // MultiKills
+                            if (pr.kills === 2) matchMultiKills.k2++;
+                            else if (pr.kills === 3) matchMultiKills.k3++;
+                            else if (pr.kills === 4) matchMultiKills.k4++;
+                            else if (pr.kills >= 5) matchMultiKills.k5++;
+                        }
+                    });
 
-                // MultiKills
-                if (p.multikills) {
-                    entry.multikills.k2 += p.multikills.k2 || 0;
-                    entry.multikills.k3 += p.multikills.k3 || 0;
-                    entry.multikills.k4 += p.multikills.k4 || 0;
-                    entry.multikills.k5 += p.multikills.k5 || 0;
+                    entry.wpaSum += matchWpaSum;
+                    entry.entry_kills += matchEntryKills;
+                    entry.multikills.k2 += matchMultiKills.k2;
+                    entry.multikills.k3 += matchMultiKills.k3;
+                    entry.multikills.k4 += matchMultiKills.k4;
+                    entry.multikills.k5 += matchMultiKills.k5;
                 } else {
-                    // Fallback if multikills object is missing but we can infer from kills? 
-                    // No, can't infer without round data. Just assume 0.
+                    // Fallback to match stats if rounds are missing (unlikely but safe)
+                    const wpa = (typeof p.wpa === 'number' && !isNaN(p.wpa)) ? p.wpa : 0;
+                    // If p.wpa is average, multiply by rounds to get sum. If total, use as is.
+                    // Assuming average based on ScoreboardTab logic.
+                    entry.wpaSum += wpa * rounds;
+                    
+                    if (p.entry_kills !== undefined) entry.entry_kills += p.entry_kills;
+                    
+                    if (p.multikills) {
+                        entry.multikills.k2 += p.multikills.k2 || 0;
+                        entry.multikills.k3 += p.multikills.k3 || 0;
+                        entry.multikills.k4 += p.multikills.k4 || 0;
+                        entry.multikills.k5 += p.multikills.k5 || 0;
+                    }
                 }
 
                 // Clutches
@@ -161,6 +192,7 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
                     adr: p.damage / r,
                     kast: p.kastSum / r,
                     hsRate: (p.headshots / k) * 100,
+                    // Fix: WPA is already summed up as (avg_wpa_per_match * rounds_in_match), so dividing by total rounds gives the weighted average WPA per round
                     wpa: p.wpaSum / r,
                     kdDiff: p.kills - p.deaths
                 } as PlayerMatchStats;
