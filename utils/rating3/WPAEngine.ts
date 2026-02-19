@@ -1,9 +1,9 @@
 
 import { Side } from "../../types";
-import { WPAUpdate } from "./types"; // Changed from ../types
+import type { WPAUpdate } from "./ratingTypes"; // Changed from ./types
 import { MATRIX_PRE, MATRIX_POST, COEFF } from "./wpa/constants";
 
-export { WPAUpdate }; 
+export type { WPAUpdate }; 
 
 export class WPAEngine {
     // State

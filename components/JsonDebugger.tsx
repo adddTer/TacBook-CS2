@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 
 interface JsonDebuggerProps {
     isOpen: boolean;
@@ -97,7 +98,7 @@ export const JsonDebugger: React.FC<JsonDebuggerProps> = ({ isOpen, onClose }) =
         });
     };
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 top-0 left-0 w-full h-full z-[999] bg-neutral-950 text-white flex flex-col animate-in fade-in duration-200">
             {/* Header */}
             <div className="flex justify-between items-center p-4 border-b border-neutral-800 bg-neutral-900 shrink-0">
@@ -244,6 +245,7 @@ export const JsonDebugger: React.FC<JsonDebuggerProps> = ({ isOpen, onClose }) =
                     </>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };

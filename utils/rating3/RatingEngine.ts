@@ -2,12 +2,12 @@
 import { PlayerMatchStats } from "../../types";
 import { InventoryTracker } from "./InventoryTracker";
 import { HealthTracker } from "./HealthTracker";
-import { WPAEngine, WPAUpdate } from "./WPAEngine";
+import { WPAEngine, type WPAUpdate } from "./WPAEngine";
 import { normalizeSteamId } from "../demo/helpers";
-import { RoundContext } from "./types"; // Changed from ../types
+import type { RoundContext } from "./ratingTypes"; // Changed from ./types
 import { calculateRoundRating } from "./rating/formula";
 
-export { RoundContext }; 
+export type { RoundContext }; 
 
 export class RatingEngine {
     private inventory = new InventoryTracker();

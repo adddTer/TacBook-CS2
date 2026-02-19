@@ -1,5 +1,5 @@
 
-import { RoundContext } from "../types";
+import type { RoundContext } from "../ratingTypes";
 
 /**
  * Calculates the Rating 4.0 for a single round based on accumulated stats.

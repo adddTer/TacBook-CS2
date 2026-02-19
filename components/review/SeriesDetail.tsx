@@ -1,9 +1,8 @@
-
 import React, { useMemo } from 'react';
-import { Match, MatchSeries, PlayerMatchStats } from '../../types';
-import { getMapDisplayName, getRatingColorClass, getMapTheme, RankBadge } from './ReviewShared';
-import { ROSTER } from '../../constants/roster';
+import { Match, MatchSeries, PlayerMatchStats, ClutchRecord } from '../../types';
+import { getMapDisplayName, getMapTheme } from './ReviewShared';
 import { resolveName } from '../../utils/demo/helpers';
+import { ScoreboardTable } from './ScoreboardTable';
 
 interface SeriesDetailProps {
     series: MatchSeries;
@@ -55,8 +54,7 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
                 const name = resolveName(p.playerId);
                 if (!map.has(name)) {
                     map.set(name, {
-                        id: p.playerId,
-                        name: p.playerId,
+                        playerId: p.playerId, // Use original ID/Name
                         steamid: p.steamid,
                         matches: 0,
                         rounds: 0,
@@ -64,7 +62,11 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
                         ratingSum: 0,
                         headshots: 0,
                         kastSum: 0,
-                        rank: p.rank
+                        rank: p.rank,
+                        entry_kills: 0,
+                        wpaSum: 0,
+                        multikills: { k2: 0, k3: 0, k4: 0, k5: 0 },
+                        clutches: { '1v1': { won: 0, lost: 0 }, '1v2': { won: 0, lost: 0 }, '1v3': { won: 0, lost: 0 }, '1v4': { won: 0, lost: 0 }, '1v5': { won: 0, lost: 0 } }
                     });
                 }
                 
@@ -77,19 +79,48 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
                 entry.deaths += p.deaths;
                 entry.assists += p.assists;
                 
-                // Damage: Use total_damage if available for precision, else estimate from ADR
+                // Damage
                 entry.damage += (p.total_damage !== undefined ? p.total_damage : (p.adr * rounds));
                 
-                // Headshots: Use explicit count if available, else estimate
+                // Headshots
                 const hsCount = (p as any).headshots !== undefined ? (p as any).headshots : Math.round(p.kills * (p.hsRate / 100));
                 entry.headshots += hsCount;
 
-                // Weighted sums for averages
+                // Weighted sums
                 entry.ratingSum += (p.rating || 0) * rounds;
                 
-                // KAST Fix: Calculate from rounds if available (most accurate), else fallback to match stat
-                let matchKast = p.kast || 0;
+                // WPA
+                // Fix: Ensure WPA is treated as a number, default to 0 if missing
+                const wpa = (typeof p.wpa === 'number' && !isNaN(p.wpa)) ? p.wpa : 0;
+                entry.wpaSum += wpa * rounds;
+
+                // Entry Kills
+                entry.entry_kills += p.entry_kills || 0;
+
+                // MultiKills
+                if (p.multikills) {
+                    entry.multikills.k2 += p.multikills.k2 || 0;
+                    entry.multikills.k3 += p.multikills.k3 || 0;
+                    entry.multikills.k4 += p.multikills.k4 || 0;
+                    entry.multikills.k5 += p.multikills.k5 || 0;
+                } else {
+                    // Fallback if multikills object is missing but we can infer from kills? 
+                    // No, can't infer without round data. Just assume 0.
+                }
+
+                // Clutches
+                if (p.clutches) {
+                    Object.keys(p.clutches).forEach(k => {
+                        const key = k as keyof ClutchRecord;
+                        if (entry.clutches[key] && p.clutches[key]) {
+                            entry.clutches[key].won += p.clutches[key].won;
+                            entry.clutches[key].lost += p.clutches[key].lost;
+                        }
+                    });
+                }
                 
+                // KAST Fix
+                let matchKast = p.kast || 0;
                 if (data.rounds && data.rounds.length > 0) {
                      const pid = p.steamid || p.playerId;
                      let kCount = 0;
@@ -98,9 +129,7 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
                      data.rounds.forEach(r => {
                          const pr = r.playerStats[pid];
                          if (pr) {
-                             // Basic ghost round filter
                              if (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0 && pr.kills === 0 && pr.assists === 0) return;
-                             
                              validRoundCount++;
                              if (pr.kills > 0 || pr.assists > 0 || pr.survived || pr.wasTraded) {
                                  kCount++;
@@ -112,10 +141,9 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
                          matchKast = (kCount / validRoundCount) * 100;
                      }
                 }
-                
                 entry.kastSum += matchKast * rounds;
 
-                if (p.rank && p.rank !== '?') entry.rank = p.rank; // Update rank to latest
+                if (p.rank && p.rank !== '?') entry.rank = p.rank;
             };
 
             teamAPlayers.forEach(p => aggregate(p, teamMap));
@@ -130,11 +158,12 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
                 return {
                     ...p,
                     rating: p.ratingSum / r,
-                    adr: p.damage / r, // Total Damage / Total Rounds
-                    kast: p.kastSum / r, // Avg KAST %
-                    hsRate: (p.headshots / k) * 100, // Total HS / Total Kills
+                    adr: p.damage / r,
+                    kast: p.kastSum / r,
+                    hsRate: (p.headshots / k) * 100,
+                    wpa: p.wpaSum / r,
                     kdDiff: p.kills - p.deaths
-                };
+                } as PlayerMatchStats;
             });
         };
 
@@ -147,80 +176,6 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
             teamBName: tBName
         };
     }, [matches]);
-
-    const renderTable = (players: any[], title: string, colorClass: string, isMyTeam: boolean) => {
-        // Fixed Sorting: Rating Descending
-        const sortedPlayers = [...players].sort((a, b) => b.rating - a.rating);
-        
-        // Header Style based on Team
-        const headerClass = isMyTeam 
-            ? 'bg-blue-50/50 dark:bg-blue-900/10 text-blue-500 border-blue-100 dark:border-blue-900/30' 
-            : 'bg-red-50/50 dark:bg-red-900/10 text-red-500 border-red-100 dark:border-red-900/30';
-
-        return (
-            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden mb-6 shadow-sm">
-                <div className={`px-4 py-3 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center ${isMyTeam ? 'bg-blue-50/20' : 'bg-red-50/20'}`}>
-                    <h4 className={`text-sm font-black uppercase ${colorClass}`}>{title}</h4>
-                    <span className="text-[10px] font-bold text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded-full">
-                        {players.length} Players
-                    </span>
-                </div>
-                <div className="overflow-x-auto pb-2">
-                    <table className="w-full text-sm text-left whitespace-nowrap border-collapse font-sans">
-                        <thead>
-                            <tr className={`text-[10px] uppercase font-bold border-b ${headerClass}`}>
-                                <th className="px-4 py-3 sticky left-0 z-10 bg-inherit">Player</th>
-                                <th className="px-2 py-3 text-center">Rating</th>
-                                <th className="px-2 py-3 text-center">+/-</th>
-                                <th className="px-2 py-3 text-center">ADR</th>
-                                <th className="px-2 py-3 text-center">KAST%</th>
-                                <th className="px-2 py-3 text-center">HS%</th>
-                                <th className="px-2 py-3 text-center">K / D / A</th>
-                                <th className="px-2 py-3 text-center">Maps</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-neutral-50 dark:divide-neutral-800/50">
-                            {sortedPlayers.map((p, i) => {
-                                const resolvedName = resolveName(p.name);
-                                const isRoster = ROSTER.some(r => r.id === resolvedName);
-                                return (
-                                    <tr 
-                                        key={i} 
-                                        onClick={() => onSelectPlayer(p.name)}
-                                        className={`group transition-colors cursor-pointer ${isRoster && isMyTeam ? 'hover:bg-blue-50/50 dark:hover:bg-blue-900/10' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/30'}`}
-                                    >
-                                        <td className={`px-4 py-3 font-bold sticky left-0 z-10 bg-white dark:bg-neutral-900 border-r border-transparent group-hover:border-neutral-100 dark:group-hover:border-neutral-800 flex items-center gap-2 ${isRoster && isMyTeam ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-900 dark:text-white'}`}>
-                                            {isRoster && isMyTeam && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
-                                            {p.name}
-                                        </td>
-                                        <td className="px-2 py-3 text-center">
-                                            <span className={`font-black font-sans tabular-nums px-2 py-0.5 rounded-md ${getRatingColorClass(p.rating, 'bg')}`}>
-                                                {p.rating.toFixed(2)}
-                                            </span>
-                                        </td>
-                                        <td className={`px-2 py-3 text-center font-mono text-xs font-bold ${p.kdDiff > 0 ? 'text-green-500' : p.kdDiff < 0 ? 'text-red-500' : 'text-neutral-300'}`}>
-                                            {p.kdDiff > 0 ? `+${p.kdDiff}` : p.kdDiff}
-                                        </td>
-                                        <td className="px-2 py-3 text-center font-sans tabular-nums text-xs font-bold text-neutral-600 dark:text-neutral-400">{p.adr.toFixed(1)}</td>
-                                        <td className="px-2 py-3 text-center font-sans tabular-nums text-xs text-neutral-500">{p.kast.toFixed(1)}%</td>
-                                        <td className="px-2 py-3 text-center font-sans tabular-nums text-xs text-neutral-500">{p.hsRate.toFixed(1)}%</td>
-                                        <td className="px-2 py-3 text-center font-sans tabular-nums text-xs">
-                                            <span className="font-bold">{p.kills}</span>
-                                            <span className="text-neutral-300 mx-1">/</span>
-                                            <span className="text-red-500">{p.deaths}</span>
-                                            <span className="text-neutral-300 mx-1">/</span>
-                                            <span className="text-neutral-400">{p.assists}</span>
-                                        </td>
-                                        <td className="px-2 py-3 text-center font-mono text-xs text-neutral-500">{p.matches}</td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        );
-    };
 
     return (
         <div className="fixed inset-0 z-[200] bg-white dark:bg-neutral-950 flex flex-col h-[100dvh] w-screen overflow-hidden animate-in slide-in-from-right duration-300 font-sans">
@@ -318,8 +273,21 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                         系列赛综合数据
                     </h3>
-                    {renderTable(teamStats, teamAName, "text-blue-500", true)}
-                    {renderTable(enemyStats, teamBName, "text-red-500", false)}
+                    <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+                        <ScoreboardTable 
+                            players={teamStats} 
+                            title={teamAName} 
+                            isEnemy={false} 
+                            onPlayerClick={onSelectPlayer} 
+                        />
+                        <div className="h-px bg-neutral-100 dark:bg-neutral-800 mx-4"></div>
+                        <ScoreboardTable 
+                            players={enemyStats} 
+                            title={teamBName} 
+                            isEnemy={true} 
+                            onPlayerClick={onSelectPlayer} 
+                        />
+                    </div>
                 </div>
             </div>
         </div>

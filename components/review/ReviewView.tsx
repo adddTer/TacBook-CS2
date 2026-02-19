@@ -304,7 +304,25 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     .find(p => resolveName(p.playerId) === selectedPlayerId || resolveName(p.steamid) === selectedPlayerId);
                 
                 // FIXED: Calculate displayName but also use it for profile.id to avoid showing SteamID
-                let displayName = latestPlayer ? latestPlayer.playerId : selectedPlayerId;
+                // Prefer a name that doesn't look like a SteamID
+                let displayName = selectedPlayerId;
+                
+                const isSteamId = (id: string) => /^(7656\d{13})$/.test(id);
+                
+                // Try to find a better name from history
+                for (const m of matchesPlayed) {
+                    const p = [...m.players, ...m.enemyPlayers].find(p => resolveName(p.playerId) === selectedPlayerId || resolveName(p.steamid) === selectedPlayerId);
+                    if (p && p.playerId && !isSteamId(p.playerId)) {
+                        displayName = p.playerId;
+                        break;
+                    }
+                }
+                
+                // Fallback to latest player's ID if we still have a SteamID (or if we didn't find anything better)
+                if (isSteamId(displayName!) && latestPlayer) {
+                     displayName = latestPlayer.playerId;
+                }
+
                 let currentRank = latestPlayer ? latestPlayer.rank : '?';
                 let steamid = latestPlayer ? latestPlayer.steamid : undefined;
 

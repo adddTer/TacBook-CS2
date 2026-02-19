@@ -17,6 +17,10 @@ import { JsonDebugger } from './JsonDebugger';
 import { shareFile } from '../utils/shareHelper';
 import { LoadingOverlay } from './LoadingOverlay';
 import { ConfirmModal } from './ConfirmModal';
+import { AlertModal } from './AlertModal';
+
+import { exportPlayersToJson } from '../utils/exportPlayers';
+import { calculatePlayerStats } from '../utils/analytics/playerStatsCalculator';
 
 interface ReviewViewProps {
     allMatches: Match[];
@@ -65,6 +69,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         message: string;
         onConfirm: () => void;
     }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
+    // Alert Modal State
+    const [alertConfig, setAlertConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'success' | 'error' | 'info';
+    }>({ isOpen: false, title: '', message: '', type: 'info' });
 
     // File Input
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -458,6 +470,57 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 </div>
 
                 <div className="flex gap-2">
+                    {activeTab === 'players' && (
+                        <button 
+                            onClick={async () => {
+                                setLoadingState({ isVisible: true, message: '正在准备导出数据...' });
+                                
+                                // 1. Calculate Full Stats for Each Player
+                                const fullStats = playerStats.map(profile => {
+                                    // Find matches for this player
+                                    const history = allMatches
+                                        .filter(m => [...m.players, ...m.enemyPlayers].some(p => resolveName(p.playerId) === profile.id || resolveName(p.steamid) === profile.id))
+                                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                        .map(m => {
+                                            const stats = [...m.players, ...m.enemyPlayers].find(p => resolveName(p.playerId) === profile.id || resolveName(p.steamid) === profile.id)!;
+                                            return { match: m, stats };
+                                        });
+                                    
+                                    // Calculate Detailed Stats
+                                    const detailedStats = calculatePlayerStats(profile.id, history, 'ALL');
+                                    
+                                    return {
+                                        profile,
+                                        stats: detailedStats,
+                                        historyCount: history.length
+                                    };
+                                });
+
+                                const result = await exportPlayersToJson(fullStats);
+                                setLoadingState({ isVisible: false, message: '' });
+
+                                if (result === 'downloaded') {
+                                    setAlertConfig({
+                                        isOpen: true,
+                                        title: '导出成功 (下载)',
+                                        message: '由于浏览器权限限制，无法直接调用分享菜单。已为您自动下载 JSON 文件。',
+                                        type: 'success'
+                                    });
+                                } else if (result === 'error') {
+                                    setAlertConfig({
+                                        isOpen: true,
+                                        title: '导出失败',
+                                        message: '没有可导出的数据，或者发生了未知错误。',
+                                        type: 'error'
+                                    });
+                                }
+                            }}
+                            className="w-10 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
+                            title="导出队员数据 (JSON)"
+                        >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        </button>
+                    )}
                     <button 
                         onClick={() => setIsSeriesModalOpen(true)}
                         className="w-10 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
@@ -536,6 +599,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 onConfirm={confirmConfig.onConfirm}
                 onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
                 isDangerous={true}
+            />
+
+            <AlertModal 
+                isOpen={alertConfig.isOpen}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
             />
         </div>
     );

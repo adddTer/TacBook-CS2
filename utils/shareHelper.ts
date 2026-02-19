@@ -33,10 +33,11 @@ export const shareFile = async (blob: Blob, filename: string, title: string, tex
                 return true;
             } catch (e: any) {
                 // Ignore AbortError (User cancelled the share sheet), but return true as "supported"
-                if (e.name !== 'AbortError') {
-                    console.warn("Share failed:", e);
+                if (e.name === 'AbortError') {
+                    return true;
                 }
-                return true;
+                console.warn("Share failed:", e);
+                return false;
             }
         }
     }

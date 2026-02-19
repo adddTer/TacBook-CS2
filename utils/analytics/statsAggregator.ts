@@ -43,16 +43,12 @@ export interface AggregatedStats {
     utilityKills: number; 
     flashesThrown: number;
     
-    // --- Clutch ---
-    clutchPoints: number; 
-    w1v1: number;         
-    l1v1: number;         
-    roundsLastAlive: number; 
-    totalTimeAlive: number;  
-    savesInLosses: number;   
-    roundsLost: number;      
+    // --- Discipline ---
+    kastRounds: number;
     survivedRounds: number;
-
+    savesInLosses: number;
+    roundsLost: number;
+    
     // --- Sniper ---
     sniperKills: number;              
     sniperMultiKillRounds: number;    
@@ -79,6 +75,8 @@ export const aggregatePlayerStats = (
         clutchPoints: 0, w1v1: 0, l1v1: 0,
         roundsLastAlive: 0, totalTimeAlive: 0, savesInLosses: 0, roundsLost: 0, survivedRounds: 0,
         
+        kastRounds: 0,
+
         sniperKills: 0, sniperMultiKillRounds: 0, sniperOpeningKills: 0, roundsWithSniperKills: 0
     };
 
@@ -167,6 +165,9 @@ export const aggregatePlayerStats = (
             if (pRound.traded) stats.tradeKills++;
             if (pRound.wasTraded) stats.tradedDeaths++;
             if (pRound.survived) stats.survivedRounds++;
+            if (pRound.kills > 0 || pRound.assists > 0 || pRound.survived || pRound.wasTraded) {
+                stats.kastRounds++;
+            }
 
             let roundFlashAssists = 0;
             if (pRound.utility && pRound.utility.flashesThrown > 0) {
