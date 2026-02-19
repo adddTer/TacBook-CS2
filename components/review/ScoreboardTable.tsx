@@ -138,8 +138,8 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                         
                         // Safety check for WPA value
                         const wpaVal = (typeof p.wpa === 'number' && !isNaN(p.wpa)) ? p.wpa : 0;
-                        // WPA is usually 0.xx, we want to display as percentage (e.g. 15.5%)
-                        const wpaDisplay = (wpaVal * 100).toFixed(1);
+                        // WPA is already in percentage (e.g. 6.19 for 6.19%), so just format it
+                        const wpaDisplay = wpaVal.toFixed(1);
 
                         // If playerId is a SteamID (fallback), try to show something better if possible, but usually playerId is Name
                         const displayName = p.playerId;

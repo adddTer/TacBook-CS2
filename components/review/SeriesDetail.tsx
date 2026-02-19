@@ -98,7 +98,12 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
                     let matchMultiKills = { k2: 0, k3: 0, k4: 0, k5: 0 };
 
                     data.rounds.forEach(r => {
-                        const pr = r.playerStats[pid];
+                        // Try lookup by SteamID first, then by Name (playerId)
+                        let pr = r.playerStats[pid];
+                        if (!pr && p.playerId) {
+                             pr = r.playerStats[p.playerId];
+                        }
+                        
                         if (pr) {
                             // WPA
                             if (typeof pr.wpa === 'number' && !isNaN(pr.wpa)) {
