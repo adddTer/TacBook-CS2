@@ -39,9 +39,6 @@ export const PlayerHeroCard: React.FC<PlayerHeroCardProps> = ({ profile, stats, 
                                 <div className="mt-2 mb-3">
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{role.name}</span>
-                                        <span className="text-[10px] font-bold uppercase tracking-wider bg-neutral-100 dark:bg-neutral-800 text-neutral-500 px-1.5 py-0.5 rounded border border-neutral-200 dark:border-neutral-700">
-                                            {role.category}
-                                        </span>
                                     </div>
                                     <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium max-w-[280px] leading-relaxed">
                                         {role.description}

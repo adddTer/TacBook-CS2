@@ -1,13 +1,15 @@
 
 import React, { useState } from 'react';
-import { Match } from '../../types';
+import { Match, PlayerMatchStats } from '../../types';
 import { SourceBadge, DataDefinitionsModal, getMapDisplayName } from './ReviewShared';
 import { ScoreboardTab } from './ScoreboardTab';
 import { DuelsTab } from './DuelsTab';
 import { UtilityTab } from './UtilityTab';
 import { ClutchesTab } from './ClutchesTab';
 import { TimelineTab } from './TimelineTab';
+import { MatchPerformanceTab } from './match_detail/MatchPerformanceTab';
 import { isMyTeamMatch, getTeamNames } from '../../utils/matchHelpers';
+import { useAggregatedStats } from '../../hooks/useAggregatedStats';
 
 interface MatchDetailProps {
     match: Match;
@@ -22,7 +24,7 @@ type SideFilter = 'ALL' | 'CT' | 'T';
 // --- MAIN CONTAINER ---
 
 export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlayerClick, onDelete, onShare }) => {
-    const [detailTab, setDetailTab] = useState<'overview' | 'duels' | 'utility' | 'clutches' | 'timeline'>('overview');
+    const [detailTab, setDetailTab] = useState<'overview' | 'performance' | 'duels' | 'utility' | 'clutches' | 'timeline'>('overview');
     const [sideFilter, setSideFilter] = useState<SideFilter>('ALL');
     const [showDefinitions, setShowDefinitions] = useState(false);
 
@@ -37,6 +39,53 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
 
     const isMine = isMyTeamMatch(match);
     const { teamA, teamB } = getTeamNames(match);
+
+    // Stats for Export
+    const aggregatedPlayers = useAggregatedStats(match, match.players, sideFilter);
+    const aggregatedEnemies = useAggregatedStats(match, match.enemyPlayers, sideFilter);
+
+    const handleExportScoreboard = () => {
+        const headers = ['Team', 'Player', 'K', 'D', 'A', '+/-', 'ADR', 'Rating', 'KAST%', 'HS%', 'Entry', '1v1', '1v2', '1v3', '1v4', '1v5'];
+        const rows: string[] = [headers.join(',')];
+
+        const processPlayer = (p: PlayerMatchStats, teamName: string) => {
+            const name = p.name || p.playerId;
+            const kdDiff = p.kills - p.deaths;
+            const clutches = p.clutches || { '1v1': { won: 0 }, '1v2': { won: 0 }, '1v3': { won: 0 }, '1v4': { won: 0 }, '1v5': { won: 0 } };
+            
+            return [
+                teamName,
+                `"${name.replace(/"/g, '""')}"`,
+                p.kills,
+                p.deaths,
+                p.assists,
+                kdDiff > 0 ? `+${kdDiff}` : kdDiff,
+                p.adr,
+                p.rating,
+                p.kast,
+                p.hsRate,
+                p.entry_kills,
+                clutches['1v1']?.won || 0,
+                clutches['1v2']?.won || 0,
+                clutches['1v3']?.won || 0,
+                clutches['1v4']?.won || 0,
+                clutches['1v5']?.won || 0
+            ].join(',');
+        };
+
+        aggregatedPlayers.forEach(p => rows.push(processPlayer(p, 'My Team')));
+        aggregatedEnemies.forEach(p => rows.push(processPlayer(p, 'Enemy Team')));
+
+        const csvContent = "\uFEFF" + rows.join('\n'); // Add BOM for Excel
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `scoreboard_${match.mapId}_${match.date.split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
         <div className="fixed inset-0 z-[200] bg-white dark:bg-neutral-950 flex flex-col h-[100dvh] w-screen overflow-hidden animate-in slide-in-from-right duration-300">
@@ -114,22 +163,31 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl mb-6 sticky top-0 z-20 shadow-lg shadow-neutral-100/50 dark:shadow-black/20">
-                      {['overview', 'timeline', 'duels', 'utility', 'clutches'].map((t) => (
+                <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl mb-6 sticky top-0 z-20 shadow-lg shadow-neutral-100/50 dark:shadow-black/20 overflow-x-auto">
+                      {['overview', 'performance', 'timeline', 'duels', 'utility', 'clutches'].map((t) => (
                           <button
                             key={t}
                             onClick={() => setDetailTab(t as any)}
-                            className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all capitalize
+                            className={`flex-1 py-2.5 px-2 rounded-lg text-xs font-bold transition-all capitalize whitespace-nowrap
                                 ${detailTab === t ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
                           >
-                              {t === 'overview' ? '总览' : t === 'timeline' ? '战报' : t === 'duels' ? '对位' : t === 'utility' ? '道具' : '残局'}
+                              {t === 'overview' ? '战报' : t === 'performance' ? '表现' : t === 'timeline' ? '时间轴' : t === 'duels' ? '对位' : t === 'utility' ? '道具' : '残局'}
                           </button>
                       ))}
                 </div>
 
                 {/* Filters (Overview Only) */}
                 {detailTab === 'overview' && (
-                    <div className="flex justify-end mb-4 animate-in fade-in">
+                    <div className="flex justify-end mb-4 animate-in fade-in items-center gap-3">
+                        <button
+                            onClick={handleExportScoreboard}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            导出战报
+                        </button>
                         <div className="flex p-0.5 bg-neutral-100 dark:bg-neutral-800 rounded-lg">
                             {(['ALL', 'CT', 'T'] as const).map(side => (
                                 <button
@@ -147,6 +205,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                 {/* Tab Content */}
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     {detailTab === 'overview' && <ScoreboardTab match={match} players={match.players} enemyPlayers={match.enemyPlayers} onPlayerClick={onPlayerClick} filter={sideFilter} />}
+                    {detailTab === 'performance' && <MatchPerformanceTab match={match} />}
                     {detailTab === 'timeline' && <TimelineTab match={match} />}
                     {detailTab === 'duels' && <DuelsTab players={match.players} enemyPlayers={match.enemyPlayers} />}
                     {detailTab === 'utility' && <UtilityTab players={match.players} enemyPlayers={match.enemyPlayers} />}

@@ -2,8 +2,8 @@
 import React from 'react';
 
 interface BottomNavProps {
-  currentMode: 'tactics' | 'utilities' | 'weapons' | 'economy';
-  onChange: (mode: 'tactics' | 'utilities' | 'weapons' | 'economy') => void;
+  currentMode: 'tactics' | 'utilities' | 'weapons' | 'economy' | 'events';
+  onChange: (mode: 'tactics' | 'utilities' | 'weapons' | 'economy' | 'events') => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ currentMode, onChange }) => {
@@ -19,6 +19,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentMode, onChange }) =
     )},
     { id: 'economy', label: '经济', icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+    )},
+    { id: 'events', label: '赛事', icon: (
+      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
     )},
   ];
 

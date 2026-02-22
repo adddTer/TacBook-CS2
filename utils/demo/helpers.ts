@@ -22,8 +22,9 @@ export const WEAPON_SIDE_MAP: Record<string, 'T' | 'CT'> = {
     'usp_silencer': 'CT', 'hkp2000': 'CT', 'm4a1': 'CT', 'm4a1_silencer': 'CT', 'm4a4': 'CT', 'famas': 'CT', 'aug': 'CT', 'fiveseven': 'CT', 'mp9': 'CT', 'incendiary': 'CT', 'scar20': 'CT'
 };
 
-export const resolveName = (rawName: string | null): string => {
+export const resolveName = (rawName: string | null | undefined): string => {
     if (!rawName) return "Unknown";
+    if (typeof rawName !== 'string') return String(rawName);
     const clean = rawName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     if (NAME_ALIASES[clean]) return NAME_ALIASES[clean];
     const rosterMatch = ROSTER.find(r => r.id.toLowerCase() === clean.toLowerCase() || r.name.toLowerCase() === clean.toLowerCase());

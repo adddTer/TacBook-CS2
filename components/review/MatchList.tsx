@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Match, MatchSeries } from '../../types';
 import { SourceBadge, getMapDisplayName, getMapEnName } from './ReviewShared';
 import { isMyTeamMatch } from '../../utils/matchHelpers';
+import { MatchFilterBar, FilterState } from './MatchFilterBar';
 
 interface MatchListProps {
     matches: Match[];
@@ -10,13 +11,31 @@ interface MatchListProps {
     onSelectMatch: (match: Match) => void;
     onSelectSeries?: (series: MatchSeries) => void;
     onBatchDelete?: (items: { type: 'match' | 'series', id: string }[]) => void;
+    onSearch?: (query: string) => void;
+    onFilterChange?: (filters: FilterState) => void;
+    availableMaps?: string[];
+    availableServers?: string[];
 }
 
-export const MatchList: React.FC<MatchListProps> = ({ matches, series = [], onSelectMatch, onSelectSeries, onBatchDelete }) => {
+export const MatchList: React.FC<MatchListProps> = ({ 
+    matches, 
+    series = [], 
+    onSelectMatch, 
+    onSelectSeries, 
+    onBatchDelete,
+    onSearch,
+    onFilterChange,
+    availableMaps = [],
+    availableServers = []
+}) => {
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    if (matches.length === 0 && series.length === 0) {
+    const hasNoData = matches.length === 0 && series.length === 0;
+    const isFilteredEmpty = hasNoData && (availableMaps.length > 0 || availableServers.length > 0);
+    const isTrulyEmpty = hasNoData && !isFilteredEmpty;
+
+    if (isTrulyEmpty) {
         return (
             <div className="flex flex-col items-center justify-center py-20 text-neutral-400">
                 <div className="w-16 h-16 bg-neutral-100 dark:bg-neutral-800 rounded-full flex items-center justify-center mb-4">
@@ -67,12 +86,23 @@ export const MatchList: React.FC<MatchListProps> = ({ matches, series = [], onSe
 
     return (
         <div className="pb-20">
+             {/* Filter Bar */}
+             {onSearch && onFilterChange && (
+                 <MatchFilterBar 
+                     onSearch={onSearch}
+                     onFilterChange={onFilterChange}
+                     availableMaps={availableMaps}
+                     availableServers={availableServers}
+                 />
+             )}
+
              {/* Batch Actions Toolbar */}
              <div className="flex justify-end mb-4">
                  {!isSelectMode ? (
                      <button 
                         onClick={() => setIsSelectMode(true)}
-                        className="text-xs font-bold text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800 px-3 py-1.5 rounded-lg"
+                        disabled={hasNoData}
+                        className={`text-xs font-bold text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800 px-3 py-1.5 rounded-lg ${hasNoData ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                         批量管理
@@ -96,8 +126,14 @@ export const MatchList: React.FC<MatchListProps> = ({ matches, series = [], onSe
                  )}
              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {items.map(item => {
+            {hasNoData ? (
+                <div className="flex flex-col items-center justify-center py-20 text-neutral-400">
+                    <p className="text-sm font-bold">没有找到匹配的比赛</p>
+                    <p className="text-xs mt-1">请尝试调整筛选条件</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {items.map(item => {
                     const isSelected = selectedIds.has(item.id);
 
                     if (item.type === 'series') {
@@ -243,6 +279,7 @@ export const MatchList: React.FC<MatchListProps> = ({ matches, series = [], onSe
                     );
                 })}
             </div>
+            )}
             
             {/* Batch Action Floating Bar */}
             {isSelectMode && selectedIds.size > 0 && (

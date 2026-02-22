@@ -26,55 +26,57 @@ interface FeatureVector {
 // - Excellent Clutch: ~70
 // - Sniper: >40 is significant
 const ROLE_PROFILES: Record<string, Partial<FeatureVector>> = {
-    // --- 1. 突破手 (Entry) ---
+    // --- Entry / Aggressive ---
     'entry_machine':     { entry: 85, opening: 75, aggression: 80, survival: 30, firepower: 60 },
     'opening_duelist':   { opening: 85, entry: 70, aggression: 75, firepower: 70, trade: 40 },
-    'space_creator':     { entry: 80, aggression: 90, survival: 20, firepower: 40 }, // High death rate, space creation
-    'aggressive_pusher': { aggression: 85, opening: 65, entry: 65, survival: 40 }, // CT aggression
-    'aim_entry':         { entry: 75, firepower: 85, adr: 85, opening: 60 }, // High aim
-    'first_contact':     { opening: 70, aggression: 60, survival: 40, entry: 50 }, // Info gathering entry
+    'space_creator':     { entry: 80, aggression: 90, survival: 20, firepower: 40 }, 
+    'aggressive_pusher': { aggression: 85, opening: 65, entry: 65, survival: 40 }, 
+    'aim_entry':         { entry: 75, firepower: 85, adr: 85, opening: 60 }, 
+    'first_contact':     { opening: 70, aggression: 60, survival: 40, entry: 50 }, 
+    'entry_fragger':     { entry: 75, firepower: 80, opening: 60, multiKill: 50 },
+    'flash_entry':       { entry: 70, flash: 80, aggression: 60 },
 
-    // --- 2. 补枪手 (Trader) ---
+    // --- Trader / Damage ---
     'trade_king':        { trade: 85, kast: 80, entry: 30, survival: 60 },
     'damage_dealer':     { adr: 90, firepower: 85, trade: 65, entry: 40 },
     'multi_fragger':     { multiKill: 85, firepower: 85, impact: 85 },
     'bodyguard':         { trade: 75, survival: 75, kast: 85, entry: 20 },
     'second_entry':      { trade: 75, entry: 65, opening: 40, firepower: 70 },
-    'clean_up':          { trade: 70, clutch: 60, survival: 60, kast: 75 },
 
-    // --- 3. 自由人 (Lurker) ---
+    // --- Lurker / Survival ---
     'lurker':            { survival: 85, opening: 15, aggression: 15, clutch: 65, trade: 40 },
-    'anchor':            { survival: 80, kast: 75, entry: 15, utility: 55 }, // CT Anchor style
-    'flanker':           { survival: 65, aggression: 30, impact: 70, trade: 50 }, // Backstabber
+    'anchor':            { survival: 80, kast: 75, entry: 15, utility: 45 }, 
+    'flanker':           { survival: 65, aggression: 30, impact: 70, trade: 50 }, 
     'clutch_minister':   { clutch: 85, survival: 75, impact: 80 },
-    'guerrilla':         { aggression: 50, survival: 65, entry: 40, impact: 65 }, // Active lurk
+    'guerrilla':         { aggression: 50, survival: 65, entry: 40, impact: 65 }, 
     'silent_killer':     { survival: 90, aggression: 10, firepower: 50, opening: 10 },
+    'rat_king':          { survival: 95, aggression: 5, clutch: 50, impact: 40 }, 
+    'late_round_hero':   { clutch: 80, survival: 80, opening: 10 },
+    'map_control':       { survival: 70, aggression: 40, kast: 70 },
 
-    // --- 4. 狙击手 (Sniper) ---
-    // User: Sniper score > 40 is significant. Profiles should reflect "Good" sniper stats.
+    // --- Sniper ---
     'awp_god':           { sniper: 90, firepower: 85, opening: 60 },
     'opening_awp':       { sniper: 80, opening: 85, aggression: 70 },
     'aggressive_awp':    { sniper: 75, entry: 70, aggression: 75, survival: 35 },
     'turret_awp':        { sniper: 80, survival: 75, aggression: 15, entry: 10 },
-    'hybrid_awp':        { sniper: 60, firepower: 80, entry: 50 }, // Rifles + AWP
+    'hybrid_awp':        { sniper: 60, firepower: 80, entry: 50 }, 
     'mobile_awp':        { sniper: 75, survival: 65, aggression: 50, clutch: 55 },
 
-    // --- 5. 道具手 (Support) ---
-    // User: Utility > 60 is Excellent.
-    'utility_master':    { utility: 80, flash: 70, adr: 40, entry: 15 },
-    'flash_assist':      { flash: 85, utility: 70, support: 80 }, // support key not in vector, removed
-    'tactician':         { utility: 70, kast: 75, firepower: 35, trade: 55 },
-    'support_anchor':    { utility: 65, survival: 75, kast: 80, entry: 10 },
-    'best_teammate':     { kast: 90, trade: 75, utility: 60 },
-    'sacrifice':         { utility: 70, entry: 50, survival: 20, adr: 35 }, // Dies for info/space
+    // --- Support / Utility ---
+    'utility_master':    { utility: 70, flash: 60, adr: 40, entry: 15 },
+    'flash_assist':      { flash: 75, utility: 60 }, 
+    'tactician':         { utility: 60, kast: 75, firepower: 35, trade: 55 },
+    'support_anchor':    { utility: 55, survival: 75, kast: 80, entry: 10 },
+    'best_teammate':     { kast: 90, trade: 75, utility: 50 },
 
-    // --- 6. 全能王 (Flex) ---
-    'hexagon':           { firepower: 75, entry: 70, trade: 70, clutch: 70, utility: 70, survival: 65 },
+    // --- Flex / General ---
+    'hexagon':           { firepower: 75, entry: 70, trade: 70, clutch: 70, utility: 60, survival: 65 },
     'impact_player':     { impact: 90, firepower: 80, clutch: 65, multiKill: 65 },
-    'system_player':     { kast: 85, trade: 65, utility: 65, adr: 65, survival: 55 },
-    'carry':             { firepower: 90, impact: 90, adr: 90, rating: 90 }, // Rating not in vector, use Impact/ADR
-    'filler':            { trade: 55, utility: 55, entry: 45, clutch: 45 }, // Average across board
-    'all_rounder':       { firepower: 65, entry: 55, trade: 55, utility: 55, clutch: 55 }
+    'system_player':     { kast: 85, trade: 65, utility: 55, adr: 65, survival: 55 },
+    'carry':             { firepower: 90, impact: 90, adr: 90 }, 
+    'star_rifler':       { firepower: 85, adr: 85, multiKill: 70 },
+    'all_rounder':       { firepower: 65, entry: 55, trade: 55, utility: 45, clutch: 55 },
+    'consistent_rock':   { kast: 90, adr: 70, survival: 70 },
 };
 
 // Helper: Normalize values to 0-100 scale

@@ -8,6 +8,7 @@ import { TacticEditor } from './components/TacticEditor';
 import { UtilityEditor } from './components/UtilityEditor';
 import { ReviewView } from './components/ReviewView';
 import { ArsenalView } from './components/ArsenalView'; 
+import { EventsView } from './components/events/EventsView';
 import { BottomNav } from './components/BottomNav';
 import { TacticDetailView } from './components/TacticDetailView';
 import { UtilityDetailView } from './components/UtilityDetailView';
@@ -25,7 +26,7 @@ const App: React.FC = () => {
   // --- Global App State ---
   const [side, setSide] = useState<Side>('T');
   const [currentMap, setCurrentMap] = useState<MapId>('mirage');
-  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'economy'>('tactics');
+  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'economy' | 'events'>('tactics');
   const [theme, setTheme] = useState<Theme>('system');
   const [utilityViewMode, setUtilityViewMode] = useState<'detail' | 'accordion'>('detail');
   const [isDebug, setIsDebug] = useState(false);
@@ -321,6 +322,8 @@ const App: React.FC = () => {
             )}
             
             {viewMode === 'economy' && <div className="max-w-[1920px] mx-auto"><ArsenalView /></div>}
+            
+            {viewMode === 'events' && <div className="max-w-[1920px] mx-auto"><EventsView /></div>}
           </main>
       </div>
 

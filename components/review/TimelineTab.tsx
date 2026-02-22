@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { Match } from '../../types';
 import { RoundCard } from './RoundCard';
+import { getWinReasonText } from './TimelineHelpers';
+import { exportTimelineToTxt } from '../../utils/exportTimeline';
 
 interface TimelineTabProps {
     match: Match;
@@ -30,6 +32,16 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({ match }) => {
     return (
         <div className="space-y-4 pb-8">
             <div className="flex justify-end px-1 gap-2 flex-wrap">
+                 <button 
+                    onClick={() => exportTimelineToTxt(match, showDetails)}
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-200 transition-all active:scale-95 border border-transparent"
+                 >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    导出
+                 </button>
+
                  <button 
                     onClick={() => setShowWinProb(!showWinProb)}
                     className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all active:scale-95 border border-transparent

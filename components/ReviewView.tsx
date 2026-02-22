@@ -3,6 +3,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { Match, MatchSeries, ContentGroup, PlayerMatchStats } from '../types';
 import { ROSTER } from '../constants/roster';
 import { resolveName } from '../utils/demo/helpers';
+import { getMapDisplayName, getMapEnName } from '../utils/matchHelpers';
 import { MatchList } from './review/MatchList';
 import { PlayerList } from './review/PlayerList';
 import { MatchDetail } from './review/MatchDetail';
@@ -80,6 +81,197 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     // File Input
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // --- Search & Filter State ---
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filters, setFilters] = useState<FilterState>({
+        type: 'all',
+        map: 'all',
+        server: 'all',
+        result: 'all',
+        rosterCount: 'all',
+        customRosterCount: 5
+    });
+
+    // --- Helper: Get Roster Count ---
+    const getRosterCount = (players: any[]) => {
+        const rosterIds = new Set(ROSTER.map(r => r.id));
+        let count = 0;
+        players.forEach(p => {
+            const resolved = resolveName(p.playerId);
+            const resolvedSteam = resolveName(p.steamid);
+            if (rosterIds.has(resolved) || rosterIds.has(resolvedSteam)) {
+                count++;
+            }
+        });
+        return count;
+    };
+
+    // --- Helper: Check Match Result ---
+    const getMatchResult = (match: Match): 'win' | 'loss' | 'tie' | 'na' => {
+        if (!isMyTeamMatch(match)) return 'na';
+        const { us, them } = match.score;
+        if (us > them) return 'win';
+        if (them > us) return 'loss';
+        return 'tie';
+    };
+
+    // --- Helper: Check Series Result ---
+    const getSeriesResult = (series: MatchSeries, matches: Match[]): 'win' | 'loss' | 'tie' | 'na' => {
+        let myWins = 0;
+        let oppWins = 0;
+        let hasMyTeam = false;
+
+        series.matches.forEach(ref => {
+            const m = matches.find(x => x.id === ref.matchId);
+            if (m && isMyTeamMatch(m)) {
+                hasMyTeam = true;
+                // "us" is always My Team in the parsed match object
+                if (m.score.us > m.score.them) myWins++;
+                else if (m.score.them > m.score.us) oppWins++;
+            }
+        });
+
+        if (!hasMyTeam) return 'na';
+        if (myWins > oppWins) return 'win';
+        if (oppWins > myWins) return 'loss';
+        return 'tie';
+    };
+
+    // --- Filtering Logic ---
+    const { filteredMatches, filteredSeries, availableMaps, availableServers } = useMemo(() => {
+        // 1. Extract Available Options
+        const maps = new Set<string>();
+        const servers = new Set<string>();
+        allMatches.forEach(m => {
+            if (m.mapId) maps.add(m.mapId);
+            if (m.serverName) servers.add(m.serverName);
+        });
+
+        // 2. Filter Function
+        const matchesQuery = (m: Match) => {
+            if (!searchQuery) return true;
+            const q = searchQuery.toLowerCase();
+            
+            // Map
+            const mapId = m.mapId || '';
+            if (mapId.toLowerCase().includes(q)) return true;
+            if (getMapDisplayName(mapId).toLowerCase().includes(q)) return true;
+            if (getMapEnName(mapId).toLowerCase().includes(q)) return true;
+            if (('de_' + mapId).toLowerCase().includes(q)) return true;
+
+            // Server
+            if (m.serverName && m.serverName.toLowerCase().includes(q)) return true;
+
+            // Score (13:11)
+            const scoreRegex = /^(\d+)\s*[:：]\s*(\d+)$/;
+            const scoreMatch = q.match(scoreRegex);
+            if (scoreMatch) {
+                const s1 = parseInt(scoreMatch[1]);
+                const s2 = parseInt(scoreMatch[2]);
+                if ((m.score.us === s1 && m.score.them === s2) || (m.score.us === s2 && m.score.them === s1)) return true;
+            }
+
+            // Players
+            const allPlayers = [...m.players, ...m.enemyPlayers];
+            return allPlayers.some(p => {
+                // Nickname
+                if (p.playerId && p.playerId.toLowerCase().includes(q)) return true;
+                // SteamID (Exact 17 chars)
+                if (p.steamid && p.steamid === q && q.length === 17) return true;
+                // Resolved Name
+                const r1 = resolveName(p.playerId).toLowerCase();
+                const r2 = resolveName(p.steamid || null).toLowerCase();
+                if (r1.includes(q) || r2.includes(q)) return true;
+                return false;
+            });
+        };
+
+        const matchesFilter = (m: Match) => {
+            // Type
+            if (filters.type === 'series') return false;
+
+            // Map
+            if (filters.map !== 'all' && m.mapId !== filters.map) return false;
+
+            // Server
+            if (filters.server !== 'all' && m.serverName !== filters.server) return false;
+
+            // Result
+            if (filters.result !== 'all') {
+                const res = getMatchResult(m);
+                if (res !== filters.result) return false;
+            }
+
+            // Roster Count
+            if (filters.rosterCount !== 'all') {
+                const count = getRosterCount([...m.players, ...m.enemyPlayers]);
+                
+                if (filters.rosterCount === '5' && count !== 5) return false;
+                if (filters.rosterCount === 'none' && count !== 0) return false;
+                if (filters.rosterCount === 'any' && count === 0) return false;
+                if (filters.rosterCount === 'custom' && count !== filters.customRosterCount) return false;
+            }
+
+            return true;
+        };
+
+        const seriesQuery = (s: MatchSeries) => {
+            if (!searchQuery) return true;
+            if (s.title.toLowerCase().includes(searchQuery.toLowerCase())) return true;
+            
+            const subMatches = s.matches.map(ref => allMatches.find(m => m.id === ref.matchId)).filter(Boolean) as Match[];
+            return subMatches.some(m => matchesQuery(m));
+        };
+
+        const seriesFilter = (s: MatchSeries) => {
+            // Type
+            if (filters.type === 'match') return false;
+
+            const subMatches = s.matches.map(ref => allMatches.find(m => m.id === ref.matchId)).filter(Boolean) as Match[];
+
+            // Map (If any match has map)
+            if (filters.map !== 'all') {
+                if (!subMatches.some(m => m.mapId === filters.map)) return false;
+            }
+
+            // Server (If any match has server)
+            if (filters.server !== 'all') {
+                if (!subMatches.some(m => m.serverName === filters.server)) return false;
+            }
+
+            // Result
+            if (filters.result !== 'all') {
+                const res = getSeriesResult(s, allMatches);
+                if (res !== filters.result) return false;
+            }
+
+            // Roster Count
+            if (filters.rosterCount !== 'all') {
+                const satisfies = subMatches.some(m => {
+                    const count = getRosterCount([...m.players, ...m.enemyPlayers]);
+                    if (filters.rosterCount === '5') return count === 5;
+                    if (filters.rosterCount === 'none') return count === 0;
+                    if (filters.rosterCount === 'any') return count > 0;
+                    if (filters.rosterCount === 'custom') return count === filters.customRosterCount;
+                    return true;
+                });
+                if (!satisfies) return false;
+            }
+
+            return true;
+        };
+
+        const fMatches = allMatches.filter(m => matchesQuery(m) && matchesFilter(m));
+        const fSeries = allSeries.filter(s => seriesQuery(s) && seriesFilter(s));
+
+        return {
+            filteredMatches: fMatches,
+            filteredSeries: fSeries,
+            availableMaps: Array.from(maps),
+            availableServers: Array.from(servers)
+        };
+    }, [allMatches, allSeries, searchQuery, filters]);
 
     // --- Stats Calculation for Player List ---
     const playerStats = useMemo(() => {
@@ -545,11 +737,15 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             {/* Content */}
             {activeTab === 'matches' && (
                 <MatchList 
-                    matches={allMatches} 
-                    series={allSeries}
+                    matches={filteredMatches} 
+                    series={filteredSeries}
                     onSelectMatch={setSelectedMatch} 
                     onSelectSeries={setSelectedSeries}
                     onBatchDelete={handleBatchDelete}
+                    onSearch={setSearchQuery}
+                    onFilterChange={setFilters}
+                    availableMaps={availableMaps}
+                    availableServers={availableServers}
                 />
             )}
 

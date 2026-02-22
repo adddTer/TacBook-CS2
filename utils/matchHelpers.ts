@@ -1,6 +1,6 @@
 import { Match, PlayerMatchStats, MatchSeries, SeriesMatchRef } from '../types';
 import { ROSTER } from '../constants/roster';
-import { MAPS } from '../constants';
+import { MAPS } from '../constants/maps';
 
 /**
  * Determines if a match involves the "Main Roster" (My Team).
