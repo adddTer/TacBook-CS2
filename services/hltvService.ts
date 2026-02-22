@@ -53,32 +53,38 @@ export const fetchHltvEvents = async (): Promise<HltvEvent[]> => {
 const parseHltvEvents = (html: string): HltvEvent[] => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-    const events: HltvEvent[] = [];
+    const eventsMap = new Map<string, HltvEvent>();
+
+    // Helper to add event if unique
+    const addEvent = (el: Element, status: 'Upcoming' | 'Ongoing' | 'Completed') => {
+        const event = parseEventElement(el, status);
+        if (event && !eventsMap.has(event.id)) {
+            eventsMap.set(event.id, event);
+        }
+    };
 
     // 1. Ongoing Events
-    const ongoingEvents = doc.querySelectorAll('.ongoing-events-holder a.ongoing-event');
-    ongoingEvents.forEach(el => {
-        const event = parseEventElement(el, 'Ongoing');
-        if (event) events.push(event);
-    });
+    const ongoingEvents = doc.querySelectorAll('a.ongoing-event');
+    ongoingEvents.forEach(el => addEvent(el, 'Ongoing'));
 
-    // 2. Upcoming Events (Month blocks)
-    const upcomingEvents = doc.querySelectorAll('.events-month a.small-event');
-    upcomingEvents.forEach(el => {
-        const event = parseEventElement(el, 'Upcoming');
-        if (event) events.push(event);
-    });
+    // 2. Upcoming Events (Standard Desktop View)
+    const upcomingEvents = doc.querySelectorAll('a.small-event');
+    upcomingEvents.forEach(el => addEvent(el, 'Upcoming'));
 
-    return events;
+    return Array.from(eventsMap.values());
 };
 
 const parseEventElement = (el: Element, status: 'Upcoming' | 'Ongoing' | 'Completed'): HltvEvent | null => {
     try {
         const href = el.getAttribute('href');
-        const id = href ? href.split('/')[2] : Math.random().toString();
+        if (!href || !href.includes('/events/')) return null;
         
-        // Name
-        const nameEl = el.querySelector('.event-name-small') || el.querySelector('.text-ellipsis');
+        const id = href.split('/')[2];
+        
+        // Name Selectors
+        const nameEl = el.querySelector('.event-name-small') || 
+                       el.querySelector('.text-ellipsis') || 
+                       el.querySelector('.event-name');
         const name = nameEl?.textContent?.trim() || 'Unknown Event';
         
         // Logo
@@ -86,42 +92,45 @@ const parseEventElement = (el: Element, status: 'Upcoming' | 'Ongoing' | 'Comple
         const logoUrl = logoEl?.getAttribute('src') || '';
         
         // Dates
-        // Ongoing events structure might differ from upcoming
         let startDate = '';
         let endDate = '';
         
+        // Try multiple date selectors
         const dateCols = el.querySelectorAll('.col-value.col-date span');
+        const dateSingle = el.querySelector('.col-value.col-date');
+        const dateMobile = el.querySelector('.event-date');
+
         if (dateCols.length >= 2) {
             startDate = dateCols[0].textContent?.trim() || '';
             endDate = dateCols[1].textContent?.trim() || '';
-        } else {
-             const dateText = el.querySelector('.col-value.col-date')?.textContent?.trim() || '';
-             startDate = dateText;
+        } else if (dateSingle) {
+            startDate = dateSingle.textContent?.trim() || '';
+        } else if (dateMobile) {
+            startDate = dateMobile.textContent?.trim() || '';
         }
 
         // Prize Pool
-        const prizePool = el.querySelector('.prizePoolEllipsis')?.textContent?.trim() || 'TBA';
+        const prizeEl = el.querySelector('.prizePoolEllipsis') || el.querySelector('.event-prize');
+        const prizePool = prizeEl?.textContent?.trim() || 'TBA';
         
         // Location
-        const locationEl = el.querySelector('.smallCountry .col-value') || el.querySelector('.event-location');
+        const locationEl = el.querySelector('.smallCountry .col-value') || 
+                           el.querySelector('.event-location') ||
+                           el.querySelector('.location-top');
         const location = locationEl?.textContent?.trim().replace(/[\n\t]/g, '') || 'Online';
         
         const type = location.toLowerCase().includes('online') ? 'Online' : 'Lan';
 
-        // Stars (HLTV uses .event-rating with i.fa-star)
-        // Note: HLTV might use different classes for stars in different views
-        const stars = el.querySelectorAll('.event-rating .fa-star').length;
+        // Stars
+        const stars = el.querySelectorAll('.fa-star').length;
 
         // Teams
-        const teamsText = el.querySelector('.col-value.col-teams')?.textContent?.trim() || '';
+        const teamsEl = el.querySelector('.col-value.col-teams') || el.querySelector('.event-teams');
+        const teamsText = teamsEl?.textContent?.trim() || '';
         const teams = parseInt(teamsText) || 0;
 
-        // Filter out low tier events (e.g. 0 stars, unless it's a major/big event that somehow missed stars)
-        // For now, let's keep all parsed events but maybe sort them later.
-        // The user asked for "A Tier and above". Usually 3+ stars.
-        if (stars < 1 && !name.toLowerCase().includes('major') && !name.toLowerCase().includes('iem') && !name.toLowerCase().includes('blast') && !name.toLowerCase().includes('esl')) {
-             // return null; // Let's be permissive for now to ensure we see data
-        }
+        // Basic validation
+        if (name === 'Unknown Event') return null;
 
         return {
             id,
