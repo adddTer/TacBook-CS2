@@ -65,6 +65,16 @@ export const parseDemoJson = (data: DemoData): Match => {
 
     // Track dynamic team assignments from events
     const playerSideMap = new Map<string, 'T' | 'CT'>();
+
+    // FIX: Pre-fill playerSideMap to ensure we have data for Round 1
+    // This handles cases where 'round_announce_match_start' is missing or player_team events are incomplete
+    activeSteamIds.forEach(sid => {
+        if (teammateSteamIds.has(sid)) {
+            playerSideMap.set(sid, initialRosterSide);
+        } else {
+            playerSideMap.set(sid, initialRosterSide === 'T' ? 'CT' : 'T');
+        }
+    });
     
     const getOrInitStats = (sid: string, fallbackName: string | null) => {
         if (sid === "BOT") return null;
@@ -127,6 +137,33 @@ export const parseDemoJson = (data: DemoData): Match => {
 
     const tickRate = 64; 
 
+    // --- Helper: Calculate Side for Round (Supports OT) ---
+    const getRoundSide = (round: number, initialSide: 'T' | 'CT'): 'T' | 'CT' => {
+        const oppositeSide = initialSide === 'T' ? 'CT' : 'T';
+        
+        // Regular Time (MR12)
+        if (round <= 24) {
+            return round <= 12 ? initialSide : oppositeSide;
+        }
+        
+        // Overtime (MR3, 6 rounds per OT)
+        const otRound = round - 24;
+        const otNumber = Math.ceil(otRound / 6); // 1, 2, 3...
+        const otSubRound = (otRound - 1) % 6; // 0..5
+        
+        // Determine the starting side for this OT block
+        // OT1 (Odd): Starts with Opposite Side (Stay on side from end of Reg)
+        // OT2 (Even): Starts with Initial Side
+        const otStartSide = (otNumber % 2 !== 0) ? oppositeSide : initialSide;
+        
+        // Determine side for specific round within OT (Swap after 3 rounds)
+        if (otSubRound < 3) {
+            return otStartSide;
+        } else {
+            return otStartSide === 'T' ? 'CT' : 'T';
+        }
+    };
+
     const resetRoundState = () => {
         aliveTs.clear();
         aliveCTs.clear();
@@ -141,9 +178,18 @@ export const parseDemoJson = (data: DemoData): Match => {
         currentRoundStartTick = 0;
         currentFreezeEndTick = null;
 
-        const currentRosterSide = (currentRound <= 12) ? initialRosterSide : (initialRosterSide === 'T' ? 'CT' : 'T');
+        const currentRosterSide = getRoundSide(currentRound, initialRosterSide);
         
         activeSteamIds.forEach(sid => {
+            // FIX: Ensure playerSideMap reflects the CURRENT half's side
+            // Previously, playerSideMap was static from match start, causing 2nd half stats to be attributed to 1st half side.
+            // We now update it based on the roster logic for the current round.
+            const isTeammate = teammateSteamIds.has(sid);
+            const expectedSide = isTeammate ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
+            
+            // Update the map to the current correct side
+            playerSideMap.set(sid, expectedSide);
+
             // Priority: Use the definitive side from playerSideMap
             const realSide = playerSideMap.get(sid);
             let side: 'T' | 'CT';
@@ -169,9 +215,93 @@ export const parseDemoJson = (data: DemoData): Match => {
     // Helper: Finalize the PREVIOUS round (including post-round events)
     const processRoundEnd = () => {
         if (!pendingRoundEnd) return;
+
+        // --- WARMUP / PISTOL ROUND VALIDATION ---
+        if (currentRound === 1) {
+            const freezeEnd = currentFreezeEndTick || (currentRoundStartTick + 64 * 15);
+            
+            const eventsToRemove: MatchTimelineEvent[] = [];
+            const validEvents: MatchTimelineEvent[] = [];
+            
+            for (const ev of currentRoundEvents) {
+                if ((ev.type === 'kill' || ev.type === 'damage' || ev.type === 'assist' || ev.type === 'flash_assist') && ev.tick < freezeEnd) {
+                    eventsToRemove.push(ev);
+                } else {
+                    validEvents.push(ev);
+                }
+            }
+
+            const allowedWeapons = new Set([
+                'glock', 'hkp2000', 'usp_silencer', 'p250', 'tec9', 'cz75a', 'fiveseven', 'deagle', 'revolver', 'elite',
+                'taser', 'knife', 'knife_t', 'bayonet', 'knifegg', 'knife_css', 'knife_karambit', 'knife_m9_bayonet', 
+                'hegrenade', 'flashbang', 'smokegrenade', 'molotov', 'incendiarygrenade', 'decoy', 'inferno',
+                'world', 'generic', 'unknown', 'init'
+            ]);
+            
+            const hasRestrictedWeapon = validEvents.some(e => {
+                if ((e.type === 'kill' || e.type === 'damage') && e.weapon) {
+                    const w = e.weapon.toLowerCase().replace('weapon_', '');
+                    if (w.includes('knife') || w.includes('bayonet') || w.includes('dagger')) return false;
+                    return !allowedWeapons.has(w);
+                }
+                return false;
+            });
+
+            if (hasRestrictedWeapon) {
+                statsMap.forEach(p => {
+                    p.kills = 0; p.deaths = 0; p.assists = 0;
+                    p.total_damage = 0; (p as any).headshots = 0;
+                    p.entry_kills = 0; p.kast = 0;
+                    p.multikills = { k2: 0, k3: 0, k4: 0, k5: 0 };
+                    p.utility = { smokesThrown: 0, flashesThrown: 0, enemiesBlinded: 0, blindDuration: 0, heThrown: 0, heDamage: 0, molotovsThrown: 0, molotovDamage: 0 };
+                    p.duels = {};
+                    p.clutches = { '1v1': { won: 0, lost: 0 }, '1v2': { won: 0, lost: 0 }, '1v3': { won: 0, lost: 0 }, '1v4': { won: 0, lost: 0 }, '1v5': { won: 0, lost: 0 } };
+                    p.clutchHistory = [];
+                    p.r3_rounds_played = 0;
+                });
+                resetRoundState();
+                pendingRoundEnd = null;
+                return;
+            } else if (eventsToRemove.length > 0) {
+                eventsToRemove.forEach(ev => {
+                    if (ev.type === 'kill') {
+                        if (ev.subject) {
+                            const p = statsMap.get(ev.subject.steamid);
+                            const r = getRoundPlayerStats(ev.subject.steamid);
+                            if (p) { p.kills = Math.max(0, p.kills - 1); if (ev.isHeadshot) (p as any).headshots = Math.max(0, (p as any).headshots - 1); }
+                            if (r) { r.kills = Math.max(0, r.kills - 1); if (ev.isHeadshot) r.headshots = Math.max(0, r.headshots - 1); }
+                        }
+                        if (ev.target) {
+                            const p = statsMap.get(ev.target.steamid);
+                            const r = getRoundPlayerStats(ev.target.steamid);
+                            if (p) p.deaths = Math.max(0, p.deaths - 1);
+                            if (r) r.deaths = Math.max(0, r.deaths - 1);
+                        }
+                    } else if (ev.type === 'assist' || ev.type === 'flash_assist') {
+                        if (ev.subject) {
+                            const p = statsMap.get(ev.subject.steamid);
+                            const r = getRoundPlayerStats(ev.subject.steamid);
+                            if (p) { 
+                                p.assists = Math.max(0, p.assists - 1); 
+                                if (ev.type === 'flash_assist') p.flash_assists = Math.max(0, p.flash_assists - 1);
+                            }
+                            if (r) r.assists = Math.max(0, r.assists - 1);
+                        }
+                    } else if (ev.type === 'damage' && ev.damage) {
+                         if (ev.subject) {
+                            const p = statsMap.get(ev.subject.steamid);
+                            const r = getRoundPlayerStats(ev.subject.steamid);
+                            if (p) p.total_damage = Math.max(0, p.total_damage - ev.damage);
+                            if (r) r.damage = Math.max(0, r.damage - ev.damage);
+                         }
+                    }
+                });
+                currentRoundEvents = validEvents;
+            }
+        }
         
         const { winner, reason, endTick } = pendingRoundEnd;
-        const currentRosterSide = (currentRound <= 12) ? initialRosterSide : (initialRosterSide === 'T' ? 'CT' : 'T');
+        const currentRosterSide = getRoundSide(currentRound, initialRosterSide);
 
         let targetTs = Array.from(roundTs);
         let targetCTs = Array.from(roundCTs);
@@ -242,6 +372,28 @@ export const parseDemoJson = (data: DemoData): Match => {
             ev.seconds = (ev.tick - anchorTick) / tickRate;
         });
 
+        // Calculate Team Economy for the round
+        let equipUs = 0;
+        let equipThem = 0;
+
+        activeSteamIds.forEach(sid => {
+            const startVal = ratingEngine.getInventoryValue(sid, 'start');
+            const isTeammate = teammateSteamIds.has(sid);
+            // Determine side for this round to correctly attribute economy
+            // We use the side from playerSideMap which should be accurate for the round
+            const pSide = playerSideMap.get(sid);
+            
+            // If we know the side, we can group by side. 
+            // However, "Us" vs "Them" depends on who is "Us".
+            // "Us" is defined by teammateSteamIds.
+            
+            if (isTeammate) {
+                equipUs += startVal;
+            } else {
+                equipThem += startVal;
+            }
+        });
+
         matchRounds.push({
             roundNumber: currentRound,
             winnerSide: winner,
@@ -249,7 +401,9 @@ export const parseDemoJson = (data: DemoData): Match => {
             duration: roundDuration,
             endTick: endTick,
             playerStats: roundPlayerStatsRecord,
-            timeline: [...currentRoundEvents]
+            timeline: [...currentRoundEvents],
+            equip_value_us: equipUs,
+            equip_value_them: equipThem
         });
 
         scores[winner]++;
@@ -281,8 +435,14 @@ export const parseDemoJson = (data: DemoData): Match => {
         currentRound++;
     };
 
+    // FIX: Initialize round state (aliveTs, roundTs, etc.) immediately!
+    // If the demo misses 'round_announce_match_start', these sets would otherwise remain empty
+    // until the first 'round_start', causing WPA to ignore kills in the first round.
+    resetRoundState();
+
     // --- Main Event Loop ---
     let latestFreezeEndTick = 0; // Track last freeze_end seen (even in warmup)
+    let hasRoundStartSeen = !hasMatchStart; // If no match start announce, assume we are in game
 
     for (const e of events) {
         const type = e.event_name;
@@ -341,6 +501,7 @@ export const parseDemoJson = (data: DemoData): Match => {
 
         if (type === 'round_announce_match_start') {
             matchStarted = true;
+            hasRoundStartSeen = false; // Reset: Wait for first real round_start
             currentRound = 1;
             scores = { T: 0, CT: 0 };
             s1 = 0; s2 = 0; s3 = 0; s4 = 0;
@@ -402,12 +563,36 @@ export const parseDemoJson = (data: DemoData): Match => {
         if (!matchStarted) continue;
 
         if (type === 'round_start' || type === 'round_freeze_end') {
+            hasRoundStartSeen = true; // Confirmed round start
             if (pendingRoundEnd) {
                 processRoundEnd();
                 resetRoundState();
                 pendingRoundEnd = null;
             } else if (currentRoundEvents.length > 0 && type === 'round_start') {
+                // FIX: Implicit round end detected (missing round_end event)
+                // We must finalize the previous round instead of discarding it.
+                
+                // 1. Infer Winner
+                let inferredWinner: 'T' | 'CT' = 'CT'; // Default
+                const hasExplosion = currentRoundEvents.some(e => e.type === 'explode');
+                const hasDefuse = currentRoundEvents.some(e => e.type === 'defuse');
+                
+                if (hasExplosion) inferredWinner = 'T';
+                else if (hasDefuse) inferredWinner = 'CT';
+                else if (aliveTs.size === 0 && aliveCTs.size > 0) inferredWinner = 'CT';
+                else if (aliveCTs.size === 0 && aliveTs.size > 0) inferredWinner = 'T';
+                
+                // 2. Set Pending End
+                pendingRoundEnd = {
+                    winner: inferredWinner,
+                    reason: 1, // TargetBombed(T) or CTWin(CT) approx
+                    endTick: tick
+                };
+                
+                // 3. Process & Reset
+                processRoundEnd();
                 resetRoundState();
+                pendingRoundEnd = null;
             }
             
             if (type === 'round_start') {
@@ -418,6 +603,8 @@ export const parseDemoJson = (data: DemoData): Match => {
             }
         }
         
+
+        
         // LAZY INIT FIX: For visual timeline
         // If we missed the start/freeze_end events (broken demo), initialize anchor now
         // so we don't get huge negative numbers or absurd durations
@@ -425,13 +612,22 @@ export const parseDemoJson = (data: DemoData): Match => {
              // Only for gameplay events
              if (type === 'player_death' || type === 'player_hurt' || type === 'bomb_planted' || type.includes('grenade')) {
                  currentFreezeEndTick = tick;
+                 hasRoundStartSeen = true; // Implicit start
+                 
+                 // FIX: Notify RatingEngine that freeze time has ended!
+                 // Without this, the engine thinks we are still in freeze time and locks win prob at 50% (or map bias)
+                 ratingEngine.handleEvent(
+                    { event_name: 'round_freeze_end', tick: tick },
+                    currentRound, teammateSteamIds, aliveTs, aliveCTs, roundTs, roundCTs
+                 );
+
                  currentRoundEvents.push({
                     tick,
                     seconds: 0,
                     type: 'damage',
                     subject: { steamid: '0', name: 'Round Start (Auto-Fix)', side: 'CT' },
                     weapon: 'init',
-                    winProb: 0.5
+                    winProb: ratingEngine.getRoundWinProb() // Now this should be correct
                 });
              }
         }

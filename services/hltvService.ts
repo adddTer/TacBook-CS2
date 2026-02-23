@@ -1,152 +1,202 @@
 import { HltvEvent } from '../types/hltv';
 
-// Fallback Mock Data
-const MOCK_EVENTS: HltvEvent[] = [
-    {
-        id: '1',
-        name: 'PGL Major Copenhagen 2024',
-        logoUrl: 'https://img-cdn.hltv.org/eventlogo/7148.png?ixlib=java-2.1.0&w=100&s=1e3c2d4c0c5d5e5e5e5e5e5e5e5e5e5e',
-        startDate: 'Mar 17th',
-        endDate: 'Mar 31st',
-        prizePool: '$1,250,000',
-        location: 'Copenhagen, Denmark',
-        type: 'Lan',
-        stars: 5,
-        teams: 24,
-        status: 'Completed'
-    },
-    {
-        id: '2',
-        name: 'IEM Chengdu 2024',
-        logoUrl: 'https://img-cdn.hltv.org/eventlogo/7149.png?ixlib=java-2.1.0&w=100&s=1e3c2d4c0c5d5e5e5e5e5e5e5e5e5e5e',
-        startDate: 'Apr 8th',
-        endDate: 'Apr 14th',
-        prizePool: '$250,000',
-        location: 'Chengdu, China',
-        type: 'Lan',
-        stars: 4,
-        teams: 16,
-        status: 'Completed'
-    }
-];
-
-const PROXY_URL = 'https://api.allorigins.win/get?url=';
-const HLTV_EVENTS_URL = 'https://www.hltv.org/events';
+// Liquipedia MediaWiki API (Native CORS support via origin=*)
+// We use the 'parse' action to get the HTML content of the 'Portal:Tournaments' page.
+const LIQUIPEDIA_API_URL = 'https://liquipedia.net/counterstrike/api.php?action=parse&page=Portal:Tournaments&format=json&origin=*';
 
 export const fetchHltvEvents = async (): Promise<HltvEvent[]> => {
     try {
-        const response = await fetch(`${PROXY_URL}${encodeURIComponent(HLTV_EVENTS_URL)}`);
-        if (!response.ok) throw new Error('Network response was not ok');
+        const response = await fetch(LIQUIPEDIA_API_URL);
+        
+        if (!response.ok) {
+            throw new Error(`Network response was not ok: ${response.statusText}`);
+        }
         
         const data = await response.json();
-        const html = data.contents;
+        
+        // MediaWiki API returns content in parse.text['*']
+        const html = data.parse?.text?.['*'];
 
-        if (!html) throw new Error('No content received from proxy');
+        if (!html) {
+            throw new Error('No content received from Liquipedia API');
+        }
 
-        return parseHltvEvents(html);
+        return parseLiquipediaEvents(html);
     } catch (error) {
-        console.warn("Failed to fetch real HLTV data, falling back to mock data:", error);
-        return MOCK_EVENTS;
+        console.error("Failed to fetch real data from Liquipedia API:", error);
+        return [];
     }
 };
 
-const parseHltvEvents = (html: string): HltvEvent[] => {
+const parseLiquipediaEvents = (html: string): HltvEvent[] => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-    const eventsMap = new Map<string, HltvEvent>();
+    const events: HltvEvent[] = [];
+    const processedIds = new Set<string>();
 
-    // Helper to add event if unique
-    const addEvent = (el: Element, status: 'Upcoming' | 'Ongoing' | 'Completed') => {
-        const event = parseEventElement(el, status);
-        if (event && !eventsMap.has(event.id)) {
-            eventsMap.set(event.id, event);
+    // Strategy: Liquipedia Portal usually uses "grid" layout or tables for tournaments.
+    // We look for .gridRow, .tournament-card, or standard tables.
+
+    // 1. Try "Grid" style (common in portals)
+    const gridCells = doc.querySelectorAll('.gridRow .gridCell');
+    gridCells.forEach(cell => {
+        const event = parseLiquipediaGridCell(cell);
+        if (event && !processedIds.has(event.id)) {
+            processedIds.add(event.id);
+            events.push(event);
         }
-    };
+    });
 
-    // 1. Ongoing Events
-    const ongoingEvents = doc.querySelectorAll('a.ongoing-event');
-    ongoingEvents.forEach(el => addEvent(el, 'Ongoing'));
+    // 2. Try Standard Tables (if grid fails or mixed)
+    if (events.length === 0) {
+        const rows = doc.querySelectorAll('table.wikitable tbody tr');
+        rows.forEach(row => {
+            // Skip header rows
+            if (row.querySelector('th')) return; 
+            
+            const event = parseLiquipediaRow(row);
+            if (event && !processedIds.has(event.id)) {
+                processedIds.add(event.id);
+                events.push(event);
+            }
+        });
+    }
+    
+    // 3. Try "Tournament Card" divs (another common format)
+    if (events.length === 0) {
+        const cards = doc.querySelectorAll('div.tournament-card');
+        cards.forEach(card => {
+            const event = parseLiquipediaCard(card);
+            if (event && !processedIds.has(event.id)) {
+                processedIds.add(event.id);
+                events.push(event);
+            }
+        });
+    }
 
-    // 2. Upcoming Events (Standard Desktop View)
-    const upcomingEvents = doc.querySelectorAll('a.small-event');
-    upcomingEvents.forEach(el => addEvent(el, 'Upcoming'));
-
-    return Array.from(eventsMap.values());
+    return events;
 };
 
-const parseEventElement = (el: Element, status: 'Upcoming' | 'Ongoing' | 'Completed'): HltvEvent | null => {
+const parseLiquipediaGridCell = (cell: Element): HltvEvent | null => {
     try {
-        const href = el.getAttribute('href');
-        if (!href || !href.includes('/events/')) return null;
-        
-        const id = href.split('/')[2];
-        
-        // Name Selectors
-        const nameEl = el.querySelector('.event-name-small') || 
-                       el.querySelector('.text-ellipsis') || 
-                       el.querySelector('.event-name');
-        const name = nameEl?.textContent?.trim() || 'Unknown Event';
-        
-        // Logo
-        const logoEl = el.querySelector('img.logo') || el.querySelector('img.event-logo');
-        const logoUrl = logoEl?.getAttribute('src') || '';
-        
-        // Dates
-        let startDate = '';
-        let endDate = '';
-        
-        // Try multiple date selectors
-        const dateCols = el.querySelectorAll('.col-value.col-date span');
-        const dateSingle = el.querySelector('.col-value.col-date');
-        const dateMobile = el.querySelector('.event-date');
+        // Name is usually in a bold link
+        const nameLink = cell.querySelector('b a') || cell.querySelector('a');
+        if (!nameLink) return null;
 
-        if (dateCols.length >= 2) {
-            startDate = dateCols[0].textContent?.trim() || '';
-            endDate = dateCols[1].textContent?.trim() || '';
-        } else if (dateSingle) {
-            startDate = dateSingle.textContent?.trim() || '';
-        } else if (dateMobile) {
-            startDate = dateMobile.textContent?.trim() || '';
+        const name = nameLink.textContent?.trim() || 'Unknown Tournament';
+        const href = nameLink.getAttribute('href') || '';
+        const id = href.split('/').pop() || name.replace(/\s+/g, '_');
+
+        const contentText = cell.textContent || '';
+        
+        // Date usually follows
+        // Simple regex to find date-like patterns if specific class missing
+        const dateMatch = contentText.match(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:,\s+\d{4})?)/i);
+        const startDate = dateMatch ? dateMatch[0] : '';
+
+        // Prize
+        const prizeMatch = contentText.match(/\$[\d,]+/);
+        const prizePool = prizeMatch ? prizeMatch[0] : 'TBA';
+
+        // Location
+        let location = 'Online';
+        const locationEl = cell.querySelector('.flag') || cell.querySelector('img[alt*="flag"]');
+        if (locationEl) {
+            location = 'Lan'; // If flag exists, likely Lan
         }
 
-        // Prize Pool
-        const prizeEl = el.querySelector('.prizePoolEllipsis') || el.querySelector('.event-prize');
-        const prizePool = prizeEl?.textContent?.trim() || 'TBA';
-        
-        // Location
-        const locationEl = el.querySelector('.smallCountry .col-value') || 
-                           el.querySelector('.event-location') ||
-                           el.querySelector('.location-top');
-        const location = locationEl?.textContent?.trim().replace(/[\n\t]/g, '') || 'Online';
-        
-        const type = location.toLowerCase().includes('online') ? 'Online' : 'Lan';
-
-        // Stars
-        const stars = el.querySelectorAll('.fa-star').length;
-
-        // Teams
-        const teamsEl = el.querySelector('.col-value.col-teams') || el.querySelector('.event-teams');
-        const teamsText = teamsEl?.textContent?.trim() || '';
-        const teams = parseInt(teamsText) || 0;
-
-        // Basic validation
-        if (name === 'Unknown Event') return null;
+        // Tier inference (S-Tier if prize > 200k or big names)
+        const isHighTier = prizePool.includes('$1,000,000') || prizePool.includes('$500,000') || prizePool.includes('$250,000');
 
         return {
             id,
             name,
-            logoUrl,
+            logoUrl: '',
             startDate,
-            endDate,
+            endDate: '',
             prizePool,
             location,
-            type,
-            stars,
-            teams,
-            status
+            type: location === 'Online' ? 'Online' : 'Lan',
+            stars: isHighTier ? 5 : 4,
+            teams: 0,
+            status: 'Upcoming'
         };
     } catch (e) {
-        console.error("Error parsing event element", e);
+        return null;
+    }
+};
+
+const parseLiquipediaRow = (row: Element): HltvEvent | null => {
+    try {
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 3) return null;
+
+        const nameLink = row.querySelector('a');
+        if (!nameLink) return null;
+        
+        const name = nameLink.textContent?.trim() || 'Unknown';
+        const href = nameLink.getAttribute('href') || '';
+        const id = href.split('/').pop() || name.replace(/\s+/g, '_');
+
+        const dateText = cells[0]?.textContent?.trim() || '';
+        
+        let prizePool = 'TBA';
+        // Prize is often in the last column
+        const lastCell = cells[cells.length - 1];
+        if (lastCell && lastCell.textContent?.includes('$')) {
+            prizePool = lastCell.textContent.trim();
+        }
+
+        return {
+            id,
+            name,
+            logoUrl: '',
+            startDate: dateText,
+            endDate: '',
+            prizePool,
+            location: 'Lan', // Table rows usually imply Lan if not specified
+            type: 'Lan',
+            stars: 4,
+            teams: 0,
+            status: 'Upcoming'
+        };
+    } catch (e) {
+        return null;
+    }
+};
+
+const parseLiquipediaCard = (card: Element): HltvEvent | null => {
+    try {
+        const nameLink = card.querySelector('.name a') || card.querySelector('b a');
+        if (!nameLink) return null;
+
+        const name = nameLink.textContent?.trim() || '';
+        const href = nameLink.getAttribute('href') || '';
+        const id = href.split('/').pop() || name.replace(/\s+/g, '_');
+
+        const dateEl = card.querySelector('.date');
+        const startDate = dateEl?.textContent?.trim() || '';
+
+        const prizeEl = card.querySelector('.prize');
+        const prizePool = prizeEl?.textContent?.trim() || 'TBA';
+
+        const locationEl = card.querySelector('.location');
+        const location = locationEl?.textContent?.trim() || 'Online';
+
+        return {
+            id,
+            name,
+            logoUrl: '',
+            startDate,
+            endDate: '',
+            prizePool,
+            location,
+            type: location.includes('Online') ? 'Online' : 'Lan',
+            stars: 4,
+            teams: 0,
+            status: 'Upcoming'
+        };
+    } catch (e) {
         return null;
     }
 };

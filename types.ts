@@ -260,6 +260,10 @@ export interface MatchRound {
     
     // Chronological events
     timeline: MatchTimelineEvent[];
+
+    // Team Economy
+    equip_value_us?: number;
+    equip_value_them?: number;
 }
 
 export interface PlayerMatchStats {

@@ -115,8 +115,7 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                         <th className="px-2 py-3 text-center w-12" title="首杀 (Entry Kills)">首杀</th>
                         <th className="px-2 py-3 text-center w-12" title="多杀 (Multi-Kills)">多杀</th>
                         <th className="px-2 py-3 text-center w-12" title="残局获胜 (1vN Wins)">残局</th>
-                        <th className="px-2 py-3 text-center w-14">爆头</th>
-                        <th className="px-2 py-3 text-center w-14" title="Win Probability Added Avg per Round (Total Points)">WPA%</th>
+                        <th className="px-2 py-3 text-center w-14" title="Win Probability Added Avg per Round (Total Points)">WPA</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-50 dark:divide-neutral-800/50">
@@ -139,7 +138,7 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                         // Safety check for WPA value
                         const wpaVal = (typeof p.wpa === 'number' && !isNaN(p.wpa)) ? p.wpa : 0;
                         // WPA is already in percentage (e.g. 6.19 for 6.19%), so just format it
-                        const wpaDisplay = wpaVal.toFixed(1);
+                        const wpaDisplay = wpaVal.toFixed(2);
 
                         // If playerId is a SteamID (fallback), try to show something better if possible, but usually playerId is Name
                         const displayName = p.playerId;
@@ -207,9 +206,6 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                                     />
                                 </td>
 
-                                <td className="px-2 py-3 text-center font-sans tabular-nums text-xs text-neutral-400">
-                                    {p.hsRate.toFixed(0)}%
-                                </td>
                                 <td className={`px-2 py-3 text-center font-sans tabular-nums text-xs font-bold ${wpaVal > 0 ? 'text-green-500' : wpaVal < 0 ? 'text-red-500' : 'text-neutral-400'}`}>
                                     {wpaVal > 0 ? '+' : ''}{wpaDisplay}%
                                 </td>
