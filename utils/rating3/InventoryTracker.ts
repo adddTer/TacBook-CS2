@@ -93,10 +93,25 @@ export class InventoryTracker {
         if (!this.inventory.has(sid)) this.inventory.set(sid, []);
         const items = this.inventory.get(sid)!;
 
-        if (event.event_name === "item_pickup" || event.event_name === "item_purchase") {
-            // Avoid duplicate primary weapons if logic isn't perfect, but CS inventory is limited anyway
-            // Simple push for now.
-            items.push(item);
+        // FIX: Ignore item_purchase to prevent double counting with item_pickup
+        // Only track actual inventory changes via pickup/drop
+        if (event.event_name === "item_pickup") {
+            // Prevent duplicate unique items
+            // Primary/Secondary/Knife/Gear should be unique in inventory logic (mostly)
+            // Grenades can stack (Flashbang x2)
+            
+            const isGrenade = ['flashbang', 'hegrenade', 'smokegrenade', 'molotov', 'incendiarygrenade', 'decoy'].includes(item);
+            
+            if (!isGrenade) {
+                // For non-grenades, check if we already have it to avoid duplicates
+                // (e.g. sometimes pickup fires multiple times or glitchy demo)
+                if (!items.includes(item)) {
+                    items.push(item);
+                }
+            } else {
+                // Grenades stack, just push
+                items.push(item);
+            }
         } else if (event.event_name === "item_drop") {
             const idx = items.indexOf(item);
             if (idx > -1) items.splice(idx, 1);

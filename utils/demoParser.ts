@@ -215,92 +215,35 @@ export const parseDemoJson = (data: DemoData): Match => {
     // Helper: Finalize the PREVIOUS round (including post-round events)
     const processRoundEnd = () => {
         if (!pendingRoundEnd) return;
-
-        // --- WARMUP / PISTOL ROUND VALIDATION ---
-        if (currentRound === 1) {
-            const freezeEnd = currentFreezeEndTick || (currentRoundStartTick + 64 * 15);
-            
-            const eventsToRemove: MatchTimelineEvent[] = [];
-            const validEvents: MatchTimelineEvent[] = [];
-            
-            for (const ev of currentRoundEvents) {
-                if ((ev.type === 'kill' || ev.type === 'damage' || ev.type === 'assist' || ev.type === 'flash_assist') && ev.tick < freezeEnd) {
-                    eventsToRemove.push(ev);
-                } else {
-                    validEvents.push(ev);
-                }
-            }
-
-            const allowedWeapons = new Set([
-                'glock', 'hkp2000', 'usp_silencer', 'p250', 'tec9', 'cz75a', 'fiveseven', 'deagle', 'revolver', 'elite',
-                'taser', 'knife', 'knife_t', 'bayonet', 'knifegg', 'knife_css', 'knife_karambit', 'knife_m9_bayonet', 
-                'hegrenade', 'flashbang', 'smokegrenade', 'molotov', 'incendiarygrenade', 'decoy', 'inferno',
-                'world', 'generic', 'unknown', 'init'
-            ]);
-            
-            const hasRestrictedWeapon = validEvents.some(e => {
-                if ((e.type === 'kill' || e.type === 'damage') && e.weapon) {
-                    const w = e.weapon.toLowerCase().replace('weapon_', '');
-                    if (w.includes('knife') || w.includes('bayonet') || w.includes('dagger')) return false;
-                    return !allowedWeapons.has(w);
-                }
-                return false;
-            });
-
-            if (hasRestrictedWeapon) {
-                statsMap.forEach(p => {
-                    p.kills = 0; p.deaths = 0; p.assists = 0;
-                    p.total_damage = 0; (p as any).headshots = 0;
-                    p.entry_kills = 0; p.kast = 0;
-                    p.multikills = { k2: 0, k3: 0, k4: 0, k5: 0 };
-                    p.utility = { smokesThrown: 0, flashesThrown: 0, enemiesBlinded: 0, blindDuration: 0, heThrown: 0, heDamage: 0, molotovsThrown: 0, molotovDamage: 0 };
-                    p.duels = {};
-                    p.clutches = { '1v1': { won: 0, lost: 0 }, '1v2': { won: 0, lost: 0 }, '1v3': { won: 0, lost: 0 }, '1v4': { won: 0, lost: 0 }, '1v5': { won: 0, lost: 0 } };
-                    p.clutchHistory = [];
-                    p.r3_rounds_played = 0;
-                });
-                resetRoundState();
-                pendingRoundEnd = null;
-                return;
-            } else if (eventsToRemove.length > 0) {
-                eventsToRemove.forEach(ev => {
-                    if (ev.type === 'kill') {
-                        if (ev.subject) {
-                            const p = statsMap.get(ev.subject.steamid);
-                            const r = getRoundPlayerStats(ev.subject.steamid);
-                            if (p) { p.kills = Math.max(0, p.kills - 1); if (ev.isHeadshot) (p as any).headshots = Math.max(0, (p as any).headshots - 1); }
-                            if (r) { r.kills = Math.max(0, r.kills - 1); if (ev.isHeadshot) r.headshots = Math.max(0, r.headshots - 1); }
-                        }
-                        if (ev.target) {
-                            const p = statsMap.get(ev.target.steamid);
-                            const r = getRoundPlayerStats(ev.target.steamid);
-                            if (p) p.deaths = Math.max(0, p.deaths - 1);
-                            if (r) r.deaths = Math.max(0, r.deaths - 1);
-                        }
-                    } else if (ev.type === 'assist' || ev.type === 'flash_assist') {
-                        if (ev.subject) {
-                            const p = statsMap.get(ev.subject.steamid);
-                            const r = getRoundPlayerStats(ev.subject.steamid);
-                            if (p) { 
-                                p.assists = Math.max(0, p.assists - 1); 
-                                if (ev.type === 'flash_assist') p.flash_assists = Math.max(0, p.flash_assists - 1);
-                            }
-                            if (r) r.assists = Math.max(0, r.assists - 1);
-                        }
-                    } else if (ev.type === 'damage' && ev.damage) {
-                         if (ev.subject) {
-                            const p = statsMap.get(ev.subject.steamid);
-                            const r = getRoundPlayerStats(ev.subject.steamid);
-                            if (p) p.total_damage = Math.max(0, p.total_damage - ev.damage);
-                            if (r) r.damage = Math.max(0, r.damage - ev.damage);
-                         }
-                    }
-                });
-                currentRoundEvents = validEvents;
-            }
-        }
         
         const { winner, reason, endTick } = pendingRoundEnd;
+
+        // WARMUP CHECK: Time Limit with Abnormal Duration
+        // Reason 7 = Target Saved (Time Limit)
+        // Standard round is 1:55 (115s). If it ends by time limit significantly earlier or later, 
+        // it implies the round timer was not a full regulation round, thus Warmup.
+        const checkAnchor = currentFreezeEndTick ?? currentRoundStartTick;
+        const checkDuration = Math.max(0, (endTick - checkAnchor) / tickRate);
+
+        // User Request: Discard if Round 1, Reason 7 (Time), and duration NOT in [114, 116] (1:54 - 1:56)
+        // FIX: Also discard impossibly short rounds (< 15s) which are likely warmup artifacts
+        const r = Number(reason);
+        if (currentRound === 1) {
+             if (checkDuration < 15) {
+                 // console.log('[Parser] Discarding Warmup Round (Impossibly Short)', { duration: checkDuration });
+                 resetRoundState();
+                 pendingRoundEnd = null;
+                 return;
+             }
+             
+             if (r === 7 && (checkDuration < 114 || checkDuration > 116)) {
+                 // console.log('[Parser] Discarding Warmup Round (Time Limit + Abnormal Duration)', { duration: checkDuration });
+                 resetRoundState();
+                 pendingRoundEnd = null;
+                 return;
+             }
+        }
+        
         const currentRosterSide = getRoundSide(currentRound, initialRosterSide);
 
         let targetTs = Array.from(roundTs);
