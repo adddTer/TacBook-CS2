@@ -29,6 +29,10 @@ export class RatingEngine {
     private knownRoundTs = new Set<string>();
     private knownRoundCTs = new Set<string>();
 
+    public setRoundResult(result: { winner: 'T' | 'CT', reason: number, endTick: number }) {
+        this.wpaEngine.setRoundResult(result);
+    }
+
     public getOrInitState(sid: string) {
         if (!this.playerRatings.has(sid)) {
             this.playerRatings.set(sid, { sumRating: 0, rounds: 0, impactSum: 0, sumWPA: 0 });
@@ -85,6 +89,11 @@ export class RatingEngine {
             }
         }
         return normalized;
+    }
+
+    public handleDefuseStart(sid: string, hasKit: boolean) {
+        // Delegate to WPA Engine
+        this.wpaEngine.handleDefuseStart(sid, hasKit);
     }
 
     public handleEvent(
@@ -275,6 +284,13 @@ export class RatingEngine {
                 sid, isPlant ? 'plant' : 'defuse', timeElapsed, 
                 tPlayers, ctPlayers,
                 isPlant ? activeKits : undefined
+            );
+            this.wpaEngine.commitUpdates(wpaUpdates);
+        }
+
+        if (type === 'bomb_exploded') {
+            const wpaUpdates = this.wpaEngine.handleExplosion(
+                timeElapsed, tPlayers, ctPlayers
             );
             this.wpaEngine.commitUpdates(wpaUpdates);
         }

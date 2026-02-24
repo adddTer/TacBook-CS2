@@ -39,6 +39,111 @@ export const parseDemoJson = (data: DemoData): Match => {
     // --- PHASE 5: Determine Starting Side (Extracted) ---
     const initialRosterSide = determineStartingSide(events, teammateSteamIds);
 
+    // --- PHASE 5.5: Pre-Analyze Round Results (Retrospective Logic) ---
+    const roundResults = new Map<number, { winner: 'T' | 'CT', reason: number, endTick: number, defuserSid?: string }>();
+    const roundFreezeEnds = new Map<number, number>(); // Store freeze end ticks for filtering
+    {
+        let tempRound = 1;
+        let tempMatchStarted = false;
+        let tempRoundStartTick = 0;
+        let tempFreezeEndTick = 0;
+        let tempDefuser: string | undefined = undefined;
+        
+        // Replicate the exact state machine of the main loop to ensure round alignment
+        events.forEach(e => {
+            if (e.event_name === 'round_announce_match_start') {
+                tempMatchStarted = true;
+                tempRound = 1;
+                roundResults.clear();
+                roundFreezeEnds.clear();
+                tempRoundStartTick = 0;
+                tempFreezeEndTick = 0;
+                tempDefuser = undefined;
+            }
+            if (!tempMatchStarted) return;
+
+            if (e.event_name === 'round_start') {
+                tempRoundStartTick = e.tick;
+                tempDefuser = undefined;
+            }
+            if (e.event_name === 'round_freeze_end') {
+                tempFreezeEndTick = e.tick;
+            }
+            
+            // LAZY INIT REPLICATION: Match Phase 6 logic
+            if (tempRoundStartTick === 0 && tempFreezeEndTick === 0 && e.tick > 0) {
+                 const type = e.event_name;
+                 if (type === 'player_death' || type === 'player_hurt' || type === 'bomb_planted' || type.includes('grenade')) {
+                     tempFreezeEndTick = e.tick;
+                     tempRoundStartTick = e.tick; // Implicit start
+                 }
+            }
+
+            if (e.event_name === 'bomb_defused') {
+                tempDefuser = normalizeSteamId(e.userid || e.user_steamid);
+            }
+            
+            if (e.event_name === 'round_end') {
+                let winner: 'T' | 'CT' | null = null;
+                
+                // 1. Try standard winner field
+                if (e.winner == 2 || String(e.winner) === '2') winner = 'T';
+                else if (e.winner == 3 || String(e.winner) === '3') winner = 'CT';
+                
+                // 2. Fallback text check
+                if (!winner && e.winner) {
+                     const w = String(e.winner).toLowerCase();
+                     if (w === 't' || w.includes('terrorist')) winner = 'T';
+                     if (w === 'ct' || w.includes('counter')) winner = 'CT';
+                }
+
+                // 3. PRIORITY OVERRIDE: Reason-based determination
+                // Some demos have incorrect winner ID but correct reason.
+                // Reason 1 (TargetBombed) & 12 (TargetBombed) -> Always T Win
+                // Reason 7 (TargetSaved) -> Always CT Win
+                if (e.reason !== undefined) {
+                     const r = Number(e.reason);
+                     if (r === 1 || r === 12) winner = 'T';
+                     if (r === 7) winner = 'CT';
+                     // Note: Reason 8 (TerroristsWin) and 9 (CTsWin) usually match the winner field, 
+                     // so we don't strictly override unless missing, but 1/7/12 are objective outcomes.
+                     if (!winner) {
+                         if (r === 8 || r === 9) winner = r === 8 ? 'T' : 'CT';
+                     }
+                }
+
+                if (winner) {
+                    const reason = Number(e.reason);
+                    const endTick = e.tick;
+                    
+                    // --- WARMUP CHECK REPLICATION ---
+                    const checkAnchor = tempFreezeEndTick || tempRoundStartTick;
+                    const checkDuration = Math.max(0, (endTick - checkAnchor) / tickRate);
+                    
+                    let isWarmup = false;
+                    if (tempRound === 1) {
+                        if (checkDuration < 15) isWarmup = true;
+                        if (reason === 7 && (checkDuration < 114 || checkDuration > 116)) isWarmup = true;
+                    }
+
+                    if (!isWarmup) {
+                        roundResults.set(tempRound, { winner, reason, endTick, defuserSid: tempDefuser });
+                        if (tempFreezeEndTick > 0) {
+                            roundFreezeEnds.set(tempRound, tempFreezeEndTick);
+                        }
+                        tempRound++;
+                    } else {
+                        // If warmup, we don't increment tempRound, effectively discarding it
+                        // Reset state just like main loop
+                        tempRoundStartTick = 0;
+                        tempFreezeEndTick = 0;
+                        tempDefuser = undefined;
+                    }
+                }
+            }
+        });
+    }
+
     // --- PHASE 6: CALCULATE STATS (Engine Loop) ---
     // Note: The rest of this function is largely preserved to ensure exact metric behavior
     
@@ -488,6 +593,10 @@ export const parseDemoJson = (data: DemoData): Match => {
                 { event_name: 'round_freeze_end', tick: effectiveStart },
                 currentRound, teammateSteamIds, aliveTs, aliveCTs, roundTs, roundCTs
             );
+            
+            // Pass Pre-Analyzed Result to Engine
+            const result = roundResults.get(currentRound);
+            if (result) ratingEngine.setRoundResult(result);
 
             // Add visual start event
             currentFreezeEndTick = effectiveStart;
@@ -540,14 +649,65 @@ export const parseDemoJson = (data: DemoData): Match => {
             
             if (type === 'round_start') {
                 currentRoundStartTick = tick;
-                if (!pendingRoundEnd) currentFreezeEndTick = null; 
+                if (!pendingRoundEnd) {
+                    // Try to pre-load freeze end tick from pre-analysis
+                    const preFreeze = roundFreezeEnds.get(currentRound);
+                    if (preFreeze) {
+                        currentFreezeEndTick = preFreeze;
+                    } else {
+                        currentFreezeEndTick = null; 
+                    }
+                }
+                
+                // Ensure Round Result is set even if we miss round_freeze_end
+                let result = roundResults.get(currentRound);
+                
+                // FORCE FIX: Fuzzy Round Matching
+                if (!result) {
+                    // Try neighbors
+                    result = roundResults.get(currentRound - 1);
+                    if (!result) result = roundResults.get(currentRound + 1);
+                    
+                    // If still not found, try to find ANY result with similar endTick
+                    if (!result) {
+                        for (const [rNum, res] of roundResults.entries()) {
+                             // If the round result end tick is in the future relative to current tick, it might be this round
+                             // But we need to be careful not to pick a past round.
+                             if (res.endTick > tick && res.endTick < tick + 120 * 128) { // Within ~2 mins
+                                 result = res;
+                                 break;
+                             }
+                        }
+                    }
+                }
+                
+                if (result) ratingEngine.setRoundResult(result);
+                
             } else if (type === 'round_freeze_end') {
                 currentFreezeEndTick = tick;
+                
+                // Redundant but safe
+                const result = roundResults.get(currentRound);
+                if (result) ratingEngine.setRoundResult(result);
             }
         }
         
+        // Filter out events during freeze time (negative seconds)
+        if (currentFreezeEndTick && tick < currentFreezeEndTick) {
+            // STRICT FILTER: Only allow item/econ events during freeze time.
+            // Absolutely NO damage, kills, plants, or defuses allowed.
+            const allowedTypes = ['item_pickup', 'item_drop', 'item_purchase', 'player_spawn', 'player_team'];
+            if (!allowedTypes.includes(type)) {
+                 continue;
+            }
+        }
 
-        
+        if (type === 'begin_defuse') {
+            const sid = normalizeSteamId(e.user_steamid || e.userid);
+            const hasKit = e.haskit === true || e.haskit === 'true' || e.haskit === 1;
+            ratingEngine.handleDefuseStart(sid, hasKit);
+        }
+
         // LAZY INIT FIX: For visual timeline
         // If we missed the start/freeze_end events (broken demo), initialize anchor now
         // so we don't get huge negative numbers or absurd durations
@@ -563,6 +723,10 @@ export const parseDemoJson = (data: DemoData): Match => {
                     { event_name: 'round_freeze_end', tick: tick },
                     currentRound, teammateSteamIds, aliveTs, aliveCTs, roundTs, roundCTs
                  );
+
+                 // Pass Pre-Analyzed Result to Engine (Ensure it's set for the new round)
+                 const result = roundResults.get(currentRound);
+                 if (result) ratingEngine.setRoundResult(result);
 
                  currentRoundEvents.push({
                     tick,
@@ -601,8 +765,8 @@ export const parseDemoJson = (data: DemoData): Match => {
             }
             if (!winner && e.reason !== undefined) {
                  const r = e.reason;
-                 if (r == 9 || r == 12) winner = 'T';
-                 if (r == 7 || r == 8 || r == 1) winner = 'CT';
+                 if (r == 1 || r == 8 || r == 9 || r == 12) winner = 'T'; // TargetBombed, TerroristsWin
+                 if (r == 7) winner = 'CT'; // TargetSaved, CTsWin
             }
 
             if (winner) {
