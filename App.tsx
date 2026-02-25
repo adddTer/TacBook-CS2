@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TacticCard } from './components/TacticCard';
 import { UtilityCard } from './components/UtilityCard';
+import { MapViewer } from './components/MapViewer';
 import { Header } from './components/Header';
 import { FilterPanel } from './components/FilterPanel';
 import { TacticEditor } from './components/TacticEditor';
@@ -52,6 +53,7 @@ const App: React.FC = () => {
   const [selectedTactic, setSelectedTactic] = useState<Tactic | null>(null);
   const [selectedUtility, setSelectedUtility] = useState<Utility | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isMapView, setIsMapView] = useState(false);
   
   // Confirm Modal
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -232,6 +234,16 @@ const App: React.FC = () => {
                         )}
                     </div>
                     
+                    {viewMode === 'tactics' && (
+                        <button
+                            onClick={() => setIsMapView(!isMapView)}
+                            className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center transition-all relative mr-2 ${isMapView ? 'bg-blue-600 text-white shadow-md' : 'bg-neutral-100 dark:bg-neutral-900 text-neutral-500'}`}
+                            title="Toggle Map View"
+                        >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.806-.98l-4.553-2.276M15 7V3" /></svg>
+                        </button>
+                    )}
+                    
                     <button 
                         onClick={() => setIsFilterOpen(!isFilterOpen)}
                         className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center transition-all relative ${isFilterOpen || filterActive ? 'bg-blue-600 text-white shadow-md' : 'bg-neutral-100 dark:bg-neutral-900 text-neutral-500'}`}
@@ -265,27 +277,33 @@ const App: React.FC = () => {
           {/* Main Content Area */}
           <main className="px-4 lg:px-8 pb-32 max-w-[1920px] mx-auto pt-4">
             {viewMode === 'tactics' && (
-                filteredTactics.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                        {filteredTactics.map((tactic) => (
-                        <div key={tactic.id} className="relative group">
-                            <button 
-                                onClick={(e) => handleCopyId(e, tactic.id)}
-                                className="absolute top-6 right-10 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-neutral-400 hover:text-blue-500 flex items-center gap-1 bg-white/50 dark:bg-black/50 backdrop-blur px-1.5 py-0.5 rounded"
-                            >
-                                {copiedId === tactic.id ? <span className="text-green-500">Copied!</span> : `#${tactic.id}`}
-                            </button>
-                            <TacticCard tactic={tactic} onClick={() => setSelectedTactic(tactic)} />
-                        </div>
-                        ))}
+                isMapView ? (
+                    <div className="h-[calc(100vh-140px)] w-full max-w-[1920px] mx-auto rounded-xl overflow-hidden shadow-sm border border-neutral-200 dark:border-neutral-800">
+                        <MapViewer mapId={currentMap} />
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-20 text-neutral-400 dark:text-neutral-600">
-                        <div className="w-16 h-16 rounded-full bg-neutral-200 dark:bg-neutral-900 flex items-center justify-center mb-4">
-                            <svg className="w-6 h-6 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    filteredTactics.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                            {filteredTactics.map((tactic) => (
+                            <div key={tactic.id} className="relative group">
+                                <button 
+                                    onClick={(e) => handleCopyId(e, tactic.id)}
+                                    className="absolute top-6 right-10 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-neutral-400 hover:text-blue-500 flex items-center gap-1 bg-white/50 dark:bg-black/50 backdrop-blur px-1.5 py-0.5 rounded"
+                                >
+                                    {copiedId === tactic.id ? <span className="text-green-500">Copied!</span> : `#${tactic.id}`}
+                                </button>
+                                <TacticCard tactic={tactic} onClick={() => setSelectedTactic(tactic)} />
+                            </div>
+                            ))}
                         </div>
-                        <p className="text-sm font-medium">{isDataLoaded ? `暂无战术` : '加载中...'}</p>
-                    </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-20 text-neutral-400 dark:text-neutral-600">
+                            <div className="w-16 h-16 rounded-full bg-neutral-200 dark:bg-neutral-900 flex items-center justify-center mb-4">
+                                <svg className="w-6 h-6 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                            </div>
+                            <p className="text-sm font-medium">{isDataLoaded ? `暂无战术` : '加载中...'}</p>
+                        </div>
+                    )
                 )
             )}
 

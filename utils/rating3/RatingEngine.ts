@@ -227,6 +227,15 @@ export class RatingEngine {
         const tPlayers = Array.from(this.knownRoundTs);
         const ctPlayers = Array.from(this.knownRoundCTs);
 
+        // --- WPA Time Update ---
+        // Isolate time decay from event impact
+        const timeUpdates = this.wpaEngine.handleTimeUpdate(
+            timeElapsed,
+            tPlayers,
+            ctPlayers
+        );
+        this.wpaEngine.commitUpdates(timeUpdates);
+
         if (type === 'player_hurt') {
             // Fix ID: attacker_steamid / attacker / userid
             const rawAtt = event.attacker_steamid || event.attacker;

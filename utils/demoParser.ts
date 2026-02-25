@@ -48,8 +48,13 @@ export const parseDemoJson = (data: DemoData): Match => {
         let tempRoundStartTick = 0;
         let tempFreezeEndTick = 0;
         let tempDefuser: string | undefined = undefined;
+        let tempExploded = false;
         
         // Replicate the exact state machine of the main loop to ensure round alignment
+        // We must handle 'round_announce_match_start' exactly as Phase 2 does.
+        const hasMatchStart = events.some(e => e.event_name === 'round_announce_match_start');
+        tempMatchStarted = !hasMatchStart; // If no match start event, assume started immediately (like Phase 2)
+
         events.forEach(e => {
             if (e.event_name === 'round_announce_match_start') {
                 tempMatchStarted = true;
@@ -59,12 +64,55 @@ export const parseDemoJson = (data: DemoData): Match => {
                 tempRoundStartTick = 0;
                 tempFreezeEndTick = 0;
                 tempDefuser = undefined;
+                tempExploded = false;
             }
             if (!tempMatchStarted) return;
 
             if (e.event_name === 'round_start') {
+                // IMPLICIT ROUND END CHECK: Match Phase 6 logic
+                // If we see a new round_start while already in a round (and haven't seen round_end),
+                // it means the previous round ended implicitly.
+                // We must increment tempRound to keep indices aligned with the main loop.
+                if (tempRoundStartTick > 0) {
+                    // FIX: Infer result for implicit round end
+                    // If we have a defuser, it's a CT win. If exploded, it's a T win.
+                    let implicitWinner: 'T' | 'CT' | null = null;
+                    let implicitReason = 0;
+                    
+                    if (tempDefuser) {
+                        implicitWinner = 'CT';
+                        implicitReason = 7; // TargetSaved (Defused)
+                    } else if (tempExploded) {
+                        implicitWinner = 'T';
+                        implicitReason = 1; // TargetBombed
+                    }
+                    
+                    // If we can't infer from bomb, check if we have any result stored for this round? No.
+                    // Just save what we have.
+                    
+                    if (implicitWinner) {
+                         roundResults.set(tempRound, { 
+                             winner: implicitWinner, 
+                             reason: implicitReason, 
+                             endTick: e.tick, // Use current tick as end tick
+                             defuserSid: tempDefuser 
+                         });
+                    }
+                    
+                    if (tempFreezeEndTick > 0) {
+                         roundFreezeEnds.set(tempRound, tempFreezeEndTick);
+                    }
+
+                    tempRound++;
+                    // Reset state for new round
+                    tempFreezeEndTick = 0;
+                    tempDefuser = undefined;
+                    tempExploded = false;
+                }
+                
                 tempRoundStartTick = e.tick;
                 tempDefuser = undefined;
+                tempExploded = false;
             }
             if (e.event_name === 'round_freeze_end') {
                 tempFreezeEndTick = e.tick;
@@ -83,6 +131,10 @@ export const parseDemoJson = (data: DemoData): Match => {
                 tempDefuser = normalizeSteamId(e.userid || e.user_steamid);
             }
             
+            if (e.event_name === 'bomb_exploded') {
+                tempExploded = true;
+            }
+            
             if (e.event_name === 'round_end') {
                 let winner: 'T' | 'CT' | null = null;
                 
@@ -98,15 +150,10 @@ export const parseDemoJson = (data: DemoData): Match => {
                 }
 
                 // 3. PRIORITY OVERRIDE: Reason-based determination
-                // Some demos have incorrect winner ID but correct reason.
-                // Reason 1 (TargetBombed) & 12 (TargetBombed) -> Always T Win
-                // Reason 7 (TargetSaved) -> Always CT Win
                 if (e.reason !== undefined) {
                      const r = Number(e.reason);
                      if (r === 1 || r === 12) winner = 'T';
                      if (r === 7) winner = 'CT';
-                     // Note: Reason 8 (TerroristsWin) and 9 (CTsWin) usually match the winner field, 
-                     // so we don't strictly override unless missing, but 1/7/12 are objective outcomes.
                      if (!winner) {
                          if (r === 8 || r === 9) winner = r === 8 ? 'T' : 'CT';
                      }
@@ -117,6 +164,7 @@ export const parseDemoJson = (data: DemoData): Match => {
                     const endTick = e.tick;
                     
                     // --- WARMUP CHECK REPLICATION ---
+                    const tickRate = 64; // Assume 64 for check
                     const checkAnchor = tempFreezeEndTick || tempRoundStartTick;
                     const checkDuration = Math.max(0, (endTick - checkAnchor) / tickRate);
                     
@@ -131,13 +179,22 @@ export const parseDemoJson = (data: DemoData): Match => {
                         if (tempFreezeEndTick > 0) {
                             roundFreezeEnds.set(tempRound, tempFreezeEndTick);
                         }
+                        
+                        // IMPORTANT: Phase 2 increments round AFTER processing round_end
                         tempRound++;
+                        
+                        // Reset state
+                        tempRoundStartTick = 0;
+                        tempFreezeEndTick = 0;
+                        tempDefuser = undefined;
+                        tempExploded = false;
                     } else {
                         // If warmup, we don't increment tempRound, effectively discarding it
                         // Reset state just like main loop
                         tempRoundStartTick = 0;
                         tempFreezeEndTick = 0;
                         tempDefuser = undefined;
+                        tempExploded = false;
                     }
                 }
             }
@@ -620,19 +677,22 @@ export const parseDemoJson = (data: DemoData): Match => {
                 processRoundEnd();
                 resetRoundState();
                 pendingRoundEnd = null;
-            } else if (currentRoundEvents.length > 0 && type === 'round_start') {
+            } else if (currentRoundStartTick > 0 && type === 'round_start') {
                 // FIX: Implicit round end detected (missing round_end event)
                 // We must finalize the previous round instead of discarding it.
+                // Match Phase 1 logic: Any new round_start while in a round means the previous one ended.
                 
-                // 1. Infer Winner
+                // 1. Infer Winner (if not already set)
                 let inferredWinner: 'T' | 'CT' = 'CT'; // Default
-                const hasExplosion = currentRoundEvents.some(e => e.type === 'explode');
-                const hasDefuse = currentRoundEvents.some(e => e.type === 'defuse');
-                
-                if (hasExplosion) inferredWinner = 'T';
-                else if (hasDefuse) inferredWinner = 'CT';
-                else if (aliveTs.size === 0 && aliveCTs.size > 0) inferredWinner = 'CT';
-                else if (aliveCTs.size === 0 && aliveTs.size > 0) inferredWinner = 'T';
+                if (currentRoundEvents.length > 0) {
+                    const hasExplosion = currentRoundEvents.some(e => e.type === 'explode');
+                    const hasDefuse = currentRoundEvents.some(e => e.type === 'defuse');
+                    
+                    if (hasExplosion) inferredWinner = 'T';
+                    else if (hasDefuse) inferredWinner = 'CT';
+                    else if (aliveTs.size === 0 && aliveCTs.size > 0) inferredWinner = 'CT';
+                    else if (aliveCTs.size === 0 && aliveTs.size > 0) inferredWinner = 'T';
+                }
                 
                 // 2. Set Pending End
                 pendingRoundEnd = {

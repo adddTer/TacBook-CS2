@@ -113,65 +113,76 @@ export class WPAEngine {
             p += (this.roundStartEconMod * 0.3);
 
             // --- Retrospective Retake Correction (v4.0) ---
-            if (this.roundResult) {
-                // Determine Scenario
-                let isScenario1 = false; // Defused (CT Win)
-                let isScenario2 = false; // Exploded / T Win
+            // Determine Scenario
+            let isScenario1 = false; // Defused (CT Win)
+            // Default to Scenario 2 (Exploded / T Win / Unknown)
+            // If we don't know the result, we assume standard time decay (Scenario 2).
+            // This prevents probability from staying flat when time runs out.
 
-                if (this.roundResult.winner === 'CT') {
-                    // CT Win + Planted = Scenario 1 (Defuse)
-                    isScenario1 = true;
-                } else {
-                    // T Win + Planted = Scenario 2 (Explosion or CT Eliminated)
-                    isScenario2 = true;
+            if (this.roundResult && this.roundResult.winner === 'CT') {
+                // CT Win + Planted = Scenario 1 (Defuse)
+                isScenario1 = true;
+            }
+            
+            const ctProbBase = 1.0 - p;
+            let x = 1.0;
+
+            if (isScenario1) {
+                // Scenario 1: Defuse Success (CT Win)
+                if (this.tAlive === 0) {
+                    return 0.0; // Lock to CT Win (T Prob = 0) if all T are dead
                 }
                 
-                const ctProbBase = 1.0 - p;
-                let x = 1.0;
-
-                if (isScenario1) {
-                    // Scenario 1: Defuse Success
-                    if (this.tAlive === 0) {
-                        return 0.0; // Lock to CT Win (T Prob = 0) if all T are dead
-                    }
-                    
-                    // "Time decay effect on WP should be weakened."
-                    // "Always keep slow decay, never accelerate."
-                    // Use linear slow decay: 1.0 -> 0.5 over 40s.
-                    const timePassed = Math.max(0, COEFF.C4_TIME - this.roundTime);
-                    const decayRate = 0.5 / 40.0;
-                    x = Math.max(0.5, 1.0 - (decayRate * timePassed));
-                    
+                // "Convergence to Victory" Model
+                // Instead of decaying, we should slowly increase confidence in CT victory as time passes without them losing.
+                // Even if 1v2, if they survive long enough to defuse, their probability should rise.
+                
+                const timePassed = Math.max(0, COEFF.C4_TIME - this.roundTime);
+                
+                // Confidence Factor: 0.0 -> 0.8 over 40s
+                // At 0s (Plant): 0% confidence (rely on base prob)
+                // At 40s (Explosion/Defuse): 80% confidence (rely on outcome knowledge)
+                const confidence = Math.min(0.8, (timePassed / 40.0) * 0.8);
+                
+                // Interpolate between Base Probability and 1.0 (Victory)
+                // ctProb = Base * (1 - confidence) + 1.0 * confidence
+                const boostedCtProb = ctProbBase * (1.0 - confidence) + confidence;
+                
+                // Ensure we don't accidentally lower the probability below base (unless base was > 1.0 which is impossible)
+                // Actually, base could be high.
+                // But generally, we use the boosted prob.
+                
+                p = 1.0 - boostedCtProb;
+                
+            } else {
+                // Scenario 2: Bomb Exploded / T Win / Unknown
+                // Multiplier x(t) applied to CT win probability
+                // Front 24s: Slow decay. Back 16s: Fast decay.
+                // t=0 (Plant): x=1
+                // t=24 (24s elapsed, 16s remaining): Breakpoint
+                // t=40 (40s elapsed, 0s remaining): x=0
+                
+                const timePassed = Math.max(0, COEFF.C4_TIME - this.roundTime);
+                
+                if (timePassed <= 24) {
+                    // Slow decay phase (0 to 24s)
+                    // Starts at 1.0. Ends at 0.6 (assumption for "slow").
+                    const progress = timePassed / 24.0;
+                    x = 1.0 - (0.4 * progress); // 1.0 -> 0.6
                 } else {
-                    // Scenario 2: Bomb Exploded / T Win
-                    // Multiplier x(t) applied to CT win probability
-                    // Front 24s: Slow decay. Back 16s: Fast decay.
-                    // t=0 (Plant): x=1
-                    // t=24 (24s elapsed, 16s remaining): Breakpoint
-                    // t=40 (40s elapsed, 0s remaining): x=0
+                    // Fast decay phase (24 to 40s)
+                    // Starts at 0.6. Ends at 0.0.
+                    // Target: 0.0 at 1s remaining (timePassed = 39)
+                    // Duration: 39 - 24 = 15s
                     
-                    const timePassed = Math.max(0, COEFF.C4_TIME - this.roundTime);
-                    
-                    if (timePassed <= 24) {
-                        // Slow decay phase (0 to 24s)
-                        // Starts at 1.0. Ends at 0.6 (assumption for "slow").
-                        const progress = timePassed / 24.0;
-                        x = 1.0 - (0.4 * progress); // 1.0 -> 0.6
-                    } else {
-                        // Fast decay phase (24 to 40s)
-                        // Starts at 0.6. Ends at 0.0.
-                        // Target: 0.0 at 1s remaining (timePassed = 39)
-                        // Duration: 39 - 24 = 15s
-                        
-                        const progress = (timePassed - 24) / 15.0;
-                        // Linear: 0.6 * (1 - p)
-                        // Square: 0.6 * (1 - p)^2
-                        const factor = Math.max(0, 1.0 - progress);
-                        x = 0.6 * (factor * factor); 
-                    }
+                    const progress = (timePassed - 24) / 15.0;
+                    // Linear: 0.6 * (1 - p)
+                    // Square: 0.6 * (1 - p)^2
+                    const factor = Math.max(0, 1.0 - progress);
+                    x = 0.6 * (factor * factor); 
                 }
                 
-                // Apply multiplier to CT Win Probability
+                // Apply multiplier to CT Win Probability (Scenario 2 Only)
                 const ctProb = ctProbBase * x;
                 p = 1.0 - ctProb;
             }
@@ -245,6 +256,43 @@ export class WPAEngine {
     
     public handlePlayerDeath(sid: string) {
         // Deprecated
+    }
+
+    public handleTimeUpdate(timeElapsed: number, allTs: string[], allCTs: string[]): WPAUpdate[] {
+        this.updateRoundTime(timeElapsed);
+        
+        const prevProb = this.currentWinProb;
+        const newProb = this.calculateWinProb();
+        
+        // Optimization: Ignore small time decays to reduce noise
+        if (Math.abs(newProb - prevProb) < 0.005) {
+            // Even if small, we MUST update currentWinProb so the next event doesn't inherit the drift
+            this.currentWinProb = newProb;
+            return [];
+        }
+        
+        this.currentWinProb = newProb;
+        const probDelta = newProb - prevProb;
+        const totalPoints = probDelta * COEFF.SCALING;
+        
+        const updates: WPAUpdate[] = [];
+        
+        // Distribute time decay impact to teams
+        // If T Win Prob increases (probDelta > 0), T gains, CT loses.
+        // If T Win Prob decreases (probDelta < 0), T loses, CT gains.
+        
+        if (probDelta > 0) {
+            this.distributeToSide(totalPoints, allTs, updates);
+            this.distributeToSide(-totalPoints, allCTs, updates);
+        } else {
+            this.distributeToSide(totalPoints, allTs, updates);
+            this.distributeToSide(-totalPoints, allCTs, updates);
+        }
+        
+        // Mark these updates as 'time' reason
+        updates.forEach(u => u.reason = 'time');
+        
+        return updates;
     }
 
     public handleObjective(
