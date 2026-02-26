@@ -21,6 +21,7 @@ export interface RoundContext {
     tradePenalty: number;
     impactPoints: number;
     killValue: number; // For Econ Rating
+    killShareRating: number; // New: Accumulated kill share rating
     rating: number; 
     wpa: number; // Accumulated WPA for this round
 }

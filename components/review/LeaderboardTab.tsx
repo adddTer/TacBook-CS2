@@ -75,7 +75,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
             
             const adr = safeDiv(stats.damage, rounds);
             const kpr = safeDiv(stats.kills, rounds);
-            const avgRating = safeDiv(stats.ratingSum, rounds) * 1.30;
+            const avgRating = safeDiv(stats.ratingSum, rounds);
             const wpaAvg = safeDiv(stats.wpaSum, rounds);
             const kastPct = Math.min(100, (stats.roundsWithKills + stats.assists + stats.survivedRounds + stats.tradedDeaths) / rounds * 100);
 

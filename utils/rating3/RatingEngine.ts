@@ -47,7 +47,8 @@ export class RatingEngine {
                 traded: false, wasTraded: false,
                 tradeBonus: 0, tradePenalty: 0, 
                 impactPoints: 0, killValue: 0, rating: 0,
-                wpa: 0
+                wpa: 0,
+                killShareRating: 0 // Init
             });
         }
         return this.roundStats.get(sid)!;
@@ -146,6 +147,17 @@ export class RatingEngine {
             if (type === 'round_start') {
                  // FIX: Initialize with current tick to avoid 0-based time panic if freeze_end is missing
                  this.roundStartTick = tick;
+
+                 // FIX: Reset Inventory on Side Switches (R1, R13, OT Start/Switch)
+                 // Moved from round_freeze_end to round_start to avoid clearing items purchased during freeze time.
+                 const isGameStart = currentRound === 1;
+                 const isHalftime = currentRound === 13;
+                 const isOtSwitch = currentRound >= 25 && (currentRound - 25) % 3 === 0;
+
+                 if (isGameStart || isHalftime || isOtSwitch) {
+                     // console.log(`[RatingEngine] Side Switch Detected at Round ${currentRound} Start. Resetting Inventory.`);
+                     this.inventory.reset();
+                 }
             }
 
             if (type === 'round_freeze_end') {
@@ -388,6 +400,51 @@ export class RatingEngine {
                     this.firstKillHappened = true;
                 }
 
+                // --- Kill Share Distribution (RTG v5.0) ---
+                // Total Rating Pool for 1 Kill = 1.0 (Baseline)
+                // 50% Fixed to Killer
+                // 50% Distributed by Damage Weight (Flash = 30 dmg)
+                
+                const BASE_KILL_RATING = 1.0;
+                const FIXED_SHARE = 0.5;
+                const DAMAGE_SHARE = 0.5;
+
+                // Calculate Total Damage Weight
+                let totalWeight = 0;
+                const contributors: { sid: string, weight: number }[] = [];
+
+                // 1. Damage Contributors
+                this.damageGraph.forEach((victimMap, attackerSid) => {
+                    if (victimMap.has(vic)) {
+                        const dmg = victimMap.get(vic)!;
+                        contributors.push({ sid: attackerSid, weight: dmg });
+                        totalWeight += dmg;
+                    }
+                });
+
+                // 2. Flash Assist (if any)
+                if (ast && ast !== "BOT" && ast !== "0" && event.assistedflash) {
+                    const FLASH_WEIGHT = 30;
+                    contributors.push({ sid: ast, weight: FLASH_WEIGHT });
+                    totalWeight += FLASH_WEIGHT;
+                }
+
+                // Distribute Shares
+                if (totalWeight > 0) {
+                    // Fixed Share to Killer
+                    attStats.killShareRating += (BASE_KILL_RATING * FIXED_SHARE);
+
+                    // Damage Share to Contributors
+                    contributors.forEach(c => {
+                        const share = (c.weight / totalWeight) * (BASE_KILL_RATING * DAMAGE_SHARE);
+                        const pStats = this.getRoundStats(c.sid);
+                        pStats.killShareRating += share;
+                    });
+                } else {
+                    // Fallback: If no damage recorded (e.g. suicide or weird bug), killer takes all
+                    attStats.killShareRating += BASE_KILL_RATING;
+                }
+
                 // --- Trade Logic ---
                 const TRADE_WINDOW_TICKS = 256; 
                 
@@ -475,7 +532,9 @@ export class RatingEngine {
             const ratingData = this.playerRatings.get(sid);
             if (ratingData && ratingData.rounds > 0) {
                 const avgRating = ratingData.sumRating / ratingData.rounds;
-                const finalRating = avgRating * 1.30; 
+                // Mapping is now applied per-round in calculateRoundRating
+                // So avgRating is already the mapped average.
+                const finalRating = avgRating; 
                 
                 playerStats.rating = parseFloat(finalRating.toFixed(2));
                 

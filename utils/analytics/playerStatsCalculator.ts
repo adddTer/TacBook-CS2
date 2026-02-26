@@ -115,7 +115,7 @@ export const calculatePlayerStats = (
 
     const adr = safeDiv(stats.damage, rounds);
     const kpr = safeDiv(stats.kills, rounds);
-    const avgRating = safeDiv(stats.ratingSum, rounds) * 1.30; 
+    const avgRating = safeDiv(stats.ratingSum, rounds); 
     
     // WPA accumulation
     let wpaSum = 0;
@@ -248,7 +248,7 @@ export const calculatePlayerStats = (
         dpr: adr,
         multiKillRounds: safeDiv(stats.multiKillRounds, rounds) * 100,
         dprWin: safeDiv(stats.damageInWins, stats.roundsWon),
-        pistolRating: safeDiv(stats.pistolRatingSum, stats.pistolRoundsPlayed) * 1.30,
+        pistolRating: safeDiv(stats.pistolRatingSum, stats.pistolRoundsPlayed),
 
         // Entry
         savedByTeammatePerRound: safeDiv(stats.savedByTeammate, rounds),
@@ -302,9 +302,9 @@ export const calculatePlayerStats = (
 
     return {
         overall: {
-            rating: safeDiv(totalRating, totalRounds) * 1.30,
-            ctRating: safeDiv(ctRatingSum, ctRounds) * 1.30,
-            tRating: safeDiv(tRatingSum, tRounds) * 1.30,
+            rating: safeDiv(totalRating, totalRounds),
+            ctRating: safeDiv(ctRatingSum, ctRounds),
+            tRating: safeDiv(tRatingSum, tRounds),
         },
         filtered: {
             adr: adr,

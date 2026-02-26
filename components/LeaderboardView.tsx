@@ -109,7 +109,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
 
             const totalRounds = Math.max(1, sums.rounds);
             const totalDeaths = Math.max(1, sums.deaths);
-            const rating = (sums.ratingSum / totalRounds) * 1.30;
+            const rating = sums.ratingSum / totalRounds;
 
             return {
                 id: player.id,
@@ -125,7 +125,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                 adr: sums.damage / totalRounds,
                 kast: (sums.kastRounds / totalRounds) * 100,
                 kd: sums.kills / totalDeaths,
-                impact: (sums.impactSum / totalRounds) * 1.30,
+                impact: sums.impactSum / totalRounds,
                 
                 // Detailed Stats
                 entryRate: sums.entryAttempts > 0 ? (sums.entrySuccess / sums.entryAttempts) * 100 : 0,

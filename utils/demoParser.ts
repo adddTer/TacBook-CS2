@@ -559,6 +559,12 @@ export const parseDemoJson = (data: DemoData): Match => {
     let latestFreezeEndTick = 0; // Track last freeze_end seen (even in warmup)
     let hasRoundStartSeen = !hasMatchStart; // If no match start announce, assume we are in game
 
+    // Determine the last round number from pre-analysis
+    let lastRound = 0;
+    if (roundResults.size > 0) {
+        lastRound = Math.max(...Array.from(roundResults.keys()));
+    }
+
     for (const e of events) {
         const type = e.event_name;
         const tick = e.tick || 0;
@@ -680,6 +686,17 @@ export const parseDemoJson = (data: DemoData): Match => {
         }
 
         if (!matchStarted) continue;
+
+        // Helper to check if current round is a side-switch round
+        const isSwitchSideRound = (round: number) => {
+            if (round === 12) return true;
+            if (round === 24) return true;
+            if (round > 24) {
+                const otRound = round - 24;
+                return otRound % 3 === 0;
+            }
+            return false;
+        };
 
         if (type === 'round_start' || type === 'round_freeze_end') {
             hasRoundStartSeen = true; // Confirmed round start
@@ -905,6 +922,16 @@ export const parseDemoJson = (data: DemoData): Match => {
             }
         }
         else if (type === 'player_death') {
+            // FIX: Ignore post-round deaths in switch-side rounds (12, 24, 27, 30...) OR the last round
+            // These are "garbage time" kills that shouldn't count for stats or RTG
+            if (isSwitchSideRound(currentRound) || currentRound === lastRound) {
+                const roundResult = roundResults.get(currentRound);
+                if (roundResult && tick > roundResult.endTick) {
+                    // console.log(`[Parser] Ignoring post-round death in switch/last round ${currentRound} (Tick: ${tick} > ${roundResult.endTick})`);
+                    continue;
+                }
+            }
+
             const vic = normalizeSteamId(e.user_steamid);
             const att = normalizeSteamId(e.attacker_steamid);
             const ast = normalizeSteamId(e.assister_steamid);
@@ -1003,6 +1030,14 @@ export const parseDemoJson = (data: DemoData): Match => {
             }
         }
         else if (type === 'player_hurt') {
+            // FIX: Ignore post-round damage in switch-side rounds OR the last round
+            if (isSwitchSideRound(currentRound) || currentRound === lastRound) {
+                const roundResult = roundResults.get(currentRound);
+                if (roundResult && tick > roundResult.endTick) {
+                    continue;
+                }
+            }
+
             const att = normalizeSteamId(e.attacker_steamid);
             const vic = normalizeSteamId(e.user_steamid);
             const rawDmg = parseInt(e.dmg_health || 0);

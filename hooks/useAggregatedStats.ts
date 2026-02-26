@@ -3,6 +3,8 @@ import { Match, PlayerMatchStats, ClutchRecord, PlayerRoundStats } from '../type
 
 type SideFilter = 'ALL' | 'CT' | 'T';
 
+const safeDiv = (a: number, b: number) => b === 0 ? 0 : a / b;
+
 export const useAggregatedStats = (match: Match, targetPlayers: PlayerMatchStats[], filter: SideFilter) => useMemo(() => {
     if (!match.rounds || match.rounds.length === 0) return targetPlayers;
 
@@ -108,8 +110,8 @@ export const useAggregatedStats = (match: Match, targetPlayers: PlayerMatchStats
             };
         }
 
-        // Corrected Rating Calculation: Average Round Rating * 1.30 Scaling Factor
-        const calculatedRating = (acc.ratingSum / roundsPlayed) * 1.30;
+        // Corrected Rating Calculation: Average Round Rating (Mapping applied in RatingEngine)
+        const calculatedRating = safeDiv(acc.ratingSum, roundsPlayed);
         
         // Average WPA calculation
         const avgWpa = acc.wpaSum / roundsPlayed;
