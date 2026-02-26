@@ -40,7 +40,7 @@ export const parseDemoJson = (data: DemoData): Match => {
     const initialRosterSide = determineStartingSide(events, teammateSteamIds);
 
     // --- PHASE 5.5: Pre-Analyze Round Results (Retrospective Logic) ---
-    const roundResults = new Map<number, { winner: 'T' | 'CT', reason: number, endTick: number, defuserSid?: string }>();
+    const roundResults = new Map<number, { winner: 'T' | 'CT', reason: number, endTick: number, defuserSid?: string, defuseTick?: number }>();
     const roundFreezeEnds = new Map<number, number>(); // Store freeze end ticks for filtering
     {
         let tempRound = 1;
@@ -48,6 +48,7 @@ export const parseDemoJson = (data: DemoData): Match => {
         let tempRoundStartTick = 0;
         let tempFreezeEndTick = 0;
         let tempDefuser: string | undefined = undefined;
+        let tempDefuseTick: number | undefined = undefined; // NEW
         let tempExploded = false;
         
         // Replicate the exact state machine of the main loop to ensure round alignment
@@ -64,6 +65,7 @@ export const parseDemoJson = (data: DemoData): Match => {
                 tempRoundStartTick = 0;
                 tempFreezeEndTick = 0;
                 tempDefuser = undefined;
+                tempDefuseTick = undefined;
                 tempExploded = false;
             }
             if (!tempMatchStarted) return;
@@ -95,7 +97,8 @@ export const parseDemoJson = (data: DemoData): Match => {
                              winner: implicitWinner, 
                              reason: implicitReason, 
                              endTick: e.tick, // Use current tick as end tick
-                             defuserSid: tempDefuser 
+                             defuserSid: tempDefuser,
+                             defuseTick: tempDefuseTick
                          });
                     }
                     
@@ -107,11 +110,13 @@ export const parseDemoJson = (data: DemoData): Match => {
                     // Reset state for new round
                     tempFreezeEndTick = 0;
                     tempDefuser = undefined;
+                    tempDefuseTick = undefined;
                     tempExploded = false;
                 }
                 
                 tempRoundStartTick = e.tick;
                 tempDefuser = undefined;
+                tempDefuseTick = undefined;
                 tempExploded = false;
             }
             if (e.event_name === 'round_freeze_end') {
@@ -129,6 +134,7 @@ export const parseDemoJson = (data: DemoData): Match => {
 
             if (e.event_name === 'bomb_defused') {
                 tempDefuser = normalizeSteamId(e.userid || e.user_steamid);
+                tempDefuseTick = e.tick; // NEW
             }
             
             if (e.event_name === 'bomb_exploded') {
@@ -175,7 +181,8 @@ export const parseDemoJson = (data: DemoData): Match => {
                     }
 
                     if (!isWarmup) {
-                        roundResults.set(tempRound, { winner, reason, endTick, defuserSid: tempDefuser });
+                        // console.log(`[Parser] Phase 5.5: Found Round ${tempRound} Result: Winner=${winner}, Reason=${reason}, EndTick=${endTick}`);
+                        roundResults.set(tempRound, { winner, reason, endTick, defuserSid: tempDefuser, defuseTick: tempDefuseTick });
                         if (tempFreezeEndTick > 0) {
                             roundFreezeEnds.set(tempRound, tempFreezeEndTick);
                         }
@@ -187,6 +194,7 @@ export const parseDemoJson = (data: DemoData): Match => {
                         tempRoundStartTick = 0;
                         tempFreezeEndTick = 0;
                         tempDefuser = undefined;
+                        tempDefuseTick = undefined;
                         tempExploded = false;
                     } else {
                         // If warmup, we don't increment tempRound, effectively discarding it
@@ -194,11 +202,13 @@ export const parseDemoJson = (data: DemoData): Match => {
                         tempRoundStartTick = 0;
                         tempFreezeEndTick = 0;
                         tempDefuser = undefined;
+                        tempDefuseTick = undefined;
                         tempExploded = false;
                     }
                 }
             }
         });
+        console.log(`[Parser] Phase 5.5 Complete. Found ${roundResults.size} rounds.`);
     }
 
     // --- PHASE 6: CALCULATE STATS (Engine Loop) ---
@@ -723,25 +733,36 @@ export const parseDemoJson = (data: DemoData): Match => {
                 let result = roundResults.get(currentRound);
                 
                 // FORCE FIX: Fuzzy Round Matching
-                if (!result) {
-                    // Try neighbors
-                    result = roundResults.get(currentRound - 1);
-                    if (!result) result = roundResults.get(currentRound + 1);
+                // If direct match is missing OR refers to a past round (lagging index), search for the correct future round
+                if (!result || result.endTick <= tick) {
+                    let bestCandidate: typeof result | undefined;
+                    let minDistance = Infinity;
                     
-                    // If still not found, try to find ANY result with similar endTick
-                    if (!result) {
-                        for (const [rNum, res] of roundResults.entries()) {
-                             // If the round result end tick is in the future relative to current tick, it might be this round
-                             // But we need to be careful not to pick a past round.
-                             if (res.endTick > tick && res.endTick < tick + 120 * 128) { // Within ~2 mins
-                                 result = res;
-                                 break;
-                             }
+                    for (const [rNum, res] of roundResults.entries()) {
+                        // We are looking for a round that ends AFTER the current start tick
+                        if (res.endTick > tick) {
+                            const dist = res.endTick - tick;
+                            // We want the CLOSEST future round (which is the current one)
+                            // Filter out rounds that are too far away (e.g. > 5 mins) to avoid jumping to end of match
+                            if (dist < minDistance && dist < (64 * 300)) {
+                                minDistance = dist;
+                                bestCandidate = res;
+                            }
                         }
+                    }
+                    
+                    if (bestCandidate) {
+                        result = bestCandidate;
+                        // console.log(`[Parser] Fuzzy Match: Snapped to round ending at ${result.endTick} (dist: ${minDistance})`);
                     }
                 }
                 
-                if (result) ratingEngine.setRoundResult(result);
+                if (result) {
+                    console.log(`[Parser] Phase 6: Setting Round ${currentRound} Result: Winner=${result.winner}, Reason=${result.reason}, EndTick=${result.endTick}`);
+                    ratingEngine.setRoundResult(result);
+                } else {
+                    console.warn(`[Parser] Phase 6: No Round Result found for Round ${currentRound} (Tick: ${tick})`);
+                }
                 
             } else if (type === 'round_freeze_end') {
                 currentFreezeEndTick = tick;
@@ -803,6 +824,46 @@ export const parseDemoJson = (data: DemoData): Match => {
 
         // MOVED: Win Probability Event generation AFTER handleEvent so engine is initialized
         if (type === 'round_freeze_end') {
+            // FIX: Re-apply round result because handleEvent -> startNewRound -> reset() wipes it out
+            let result = roundResults.get(currentRound);
+            
+            console.log(`[Parser_DEBUG] Phase 6: Round ${currentRound} Freeze End (Tick: ${tick}). Searching for result...`);
+
+            if (!result || result.endTick <= tick) {
+                let bestCandidate: typeof result | undefined;
+                let minDistance = Infinity;
+                
+                console.log(`[Parser_DEBUG] Direct match failed or invalid (EndTick=${result?.endTick}). Starting Fuzzy Search...`);
+
+                for (const [rNum, res] of roundResults.entries()) {
+                    if (res.endTick > tick) {
+                        const dist = res.endTick - tick;
+                        // We want the CLOSEST future round (which is the current one)
+                        // Filter out rounds that are too far away (e.g. > 5 mins) to avoid jumping to end of match
+                        if (dist < minDistance && dist < (64 * 300)) {
+                            minDistance = dist;
+                            bestCandidate = res;
+                        }
+                    }
+                }
+                
+                if (bestCandidate) {
+                    result = bestCandidate;
+                    console.log(`[Parser_DEBUG] Fuzzy Match Found: Round ending at ${result.endTick} (dist: ${minDistance})`);
+                } else {
+                    console.warn(`[Parser_DEBUG] Fuzzy Match Failed: No suitable future round found.`);
+                }
+            } else {
+                console.log(`[Parser_DEBUG] Direct Match Found: Round ending at ${result.endTick}`);
+            }
+
+            if (result) {
+                console.log(`[Parser_DEBUG] Setting Round Result for Engine: Winner=${result.winner}, Reason=${result.reason}, EndTick=${result.endTick}`);
+                ratingEngine.setRoundResult(result);
+            } else {
+                console.error(`[Parser_DEBUG] CRITICAL: Could not determine result for Round ${currentRound}! WPA will be broken.`);
+            }
+
             currentRoundEvents.push({
                 tick,
                 seconds: 0,

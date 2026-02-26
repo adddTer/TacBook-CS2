@@ -83,7 +83,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({ mapId, className }) => {
             (err) => {
                 setLoading(false);
                 console.error('Error loading DDS:', err);
-                setError(`Failed to load map: ${url}`);
+                setError(`Failed to load map texture: ${mapName}${suffix}.dds`);
             }
         );
 
@@ -117,18 +117,29 @@ export const MapViewer: React.FC<MapViewerProps> = ({ mapId, className }) => {
             <div ref={containerRef} className="w-full h-full flex items-center justify-center" />
             
             {loading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white">
-                    Loading Map...
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white backdrop-blur-sm z-10">
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span className="text-sm font-medium">Loading Map...</span>
+                    </div>
                 </div>
             )}
 
             {error && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-red-500 p-4 text-center">
-                    {error}
-                    <br />
-                    <span className="text-xs text-neutral-400 mt-2 block">
-                        Please ensure .dds files are in /public/maps/
-                    </span>
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-6 text-center z-20">
+                    <div className="max-w-md bg-neutral-800 p-6 rounded-xl border border-neutral-700 shadow-2xl">
+                        <div className="text-red-500 mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-lg font-bold mb-2">Map Load Error</h3>
+                        <p className="text-neutral-300 text-sm mb-4">{error}</p>
+                        <div className="text-xs text-neutral-500 bg-neutral-900/50 p-3 rounded text-left font-mono">
+                            Expected location: <br/>
+                            /public/maps/{mapId === 'dust2' ? 'de_dust2' : `de_${mapId}`}{layer === 'lower' ? '_lower_radar' : '_radar'}.dds
+                        </div>
+                    </div>
                 </div>
             )}
 

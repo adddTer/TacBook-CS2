@@ -120,18 +120,22 @@ export class InventoryTracker {
 
     public calculateValue(sid: string): number {
         const items = this.inventory.get(String(sid));
-        if (!items) return 200; // Default glock/usp value assumption
+        if (!items) return 0; // No items = 0 value (default pistol doesn't count)
 
         let value = 0;
         
         items.forEach(item => {
+            // Exclude default pistols from value calculation as per user request
+            if (['glock', 'hkp2000', 'usp_silencer'].includes(item)) {
+                return;
+            }
+
             if (WEAPON_VALUES[item]) {
                 value += WEAPON_VALUES[item];
             }
         });
 
-        // Basic correction: If value is 0, they probably have a default pistol that wasn't picked up explicitly
-        if (value < 200) value = 200;
+        // Removed the < 200 check to allow 0 value (eco rounds)
         
         return value;
     }

@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Tactic } from '../types';
 import { ActionList } from './ActionList';
+import { MapViewer } from './MapViewer';
 import { calculateLoadoutCost } from '../utils/economyHelper';
 import { exportTacticToZip } from '../utils/exportHelper';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
@@ -230,7 +231,7 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
             )}
 
             {/* Map Visual */}
-            {tactic.map_visual && (
+            {tactic.map_visual ? (
               <div className="relative mb-8 rounded-2xl overflow-hidden bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 shadow-sm">
                   <div 
                       className="aspect-video w-full cursor-zoom-in relative group"
@@ -247,6 +248,10 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                           </span>
                       </div>
                   </div>
+              </div>
+            ) : (
+              <div className="relative mb-8 rounded-2xl overflow-hidden bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 shadow-sm aspect-video">
+                  <MapViewer mapId={tactic.mapId} className="w-full h-full" />
               </div>
             )}
 

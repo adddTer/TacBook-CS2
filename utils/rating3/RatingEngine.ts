@@ -183,18 +183,8 @@ export class RatingEngine {
                 this.knownRoundTs.forEach(sid => tVal += this.inventory.getStartValue(sid));
                 this.knownRoundCTs.forEach(sid => ctVal += this.inventory.getStartValue(sid));
 
-                // Fallback for empty sets (e.g. pistol round or parsing error)
-                if (tVal === 0 && ctVal === 0) {
-                    tVal = 4000; ctVal = 4000;
-                }
-
-                // [Bug Fix] Pistol Round Force Equal
-                // Demo parsing often misses initial purchases before freeze_end due to tick timing.
-                // Assuming MR12 for CS2 (Pistols at 1 and 13).
-                const isPistol = (currentRound === 1 || currentRound === 13);
-                if (isPistol) {
-                    tVal = 4000; ctVal = 4000;
-                }
+                // Removed Fallback for empty sets (tVal=4000) to allow true 0 value (Eco)
+                // Removed Pistol Round Force Equal (tVal=4000) to allow accurate tracking of armor/utility purchases
 
                 // 3. Initialize WPA Engine with Economy Context
                 this.wpaEngine.startNewRound(); // Ensure clean slate
@@ -291,7 +281,8 @@ export class RatingEngine {
             
             const wpaUpdates = this.wpaEngine.handleObjective(
                 sid, isPlant ? 'plant' : 'defuse', timeElapsed, 
-                tPlayers, ctPlayers,
+                isPlant ? tPlayers : Array.from(aliveTs), 
+                isPlant ? ctPlayers : Array.from(aliveCTs),
                 isPlant ? activeKits : undefined
             );
             this.wpaEngine.commitUpdates(wpaUpdates);
@@ -378,7 +369,8 @@ export class RatingEngine {
                     att, vic, victimSide, assisters, timeElapsed,
                     tPlayers, ctPlayers,
                     hasKit, // Pass kit loss info to WPA
-                    damageContributors // NEW Argument
+                    damageContributors, // NEW Argument
+                    tick // Pass current tick for 5s window check
                 );
                 this.wpaEngine.commitUpdates(updates);
             } else {

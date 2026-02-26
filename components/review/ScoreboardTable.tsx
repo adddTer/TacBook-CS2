@@ -96,8 +96,8 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
         return '';
     };
 
-    // Sort players by rating descending
-    const sortedPlayers = [...players].sort((a, b) => b.rating - a.rating);
+    // Sort players by WPA descending (default)
+    const sortedPlayers = [...players].sort((a, b) => (b.wpa || 0) - (a.wpa || 0));
 
     return (
         <div className="overflow-x-auto pb-4" onClick={closePopup}> 
@@ -112,10 +112,10 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                         <th className="px-2 py-3 text-center w-12" title="平均每回合伤害">ADR</th>
                         <th className="px-2 py-3 text-center w-12" title="KAST% (Kill, Assist, Survive, Traded) - 回合贡献率">KAST%</th>
                         <th className="px-2 py-3 text-center w-12" title="Rating 4.0">RTG</th>
+                        <th className="px-2 py-3 text-center w-14" title="Win Probability Added Avg per Round (Total Points)">WPA</th>
                         <th className="px-2 py-3 text-center w-12" title="首杀 (Entry Kills)">首杀</th>
                         <th className="px-2 py-3 text-center w-12" title="多杀 (Multi-Kills)">多杀</th>
                         <th className="px-2 py-3 text-center w-12" title="残局获胜 (1vN Wins)">残局</th>
-                        <th className="px-2 py-3 text-center w-14" title="Win Probability Added Avg per Round (Total Points)">WPA</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-50 dark:divide-neutral-800/50">
@@ -174,6 +174,10 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                                         {p.rating.toFixed(2)}
                                     </div>
                                 </td>
+
+                                <td className={`px-2 py-3 text-center font-sans tabular-nums text-xs font-bold ${wpaVal > 0 ? 'text-green-500' : wpaVal < 0 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                    {wpaVal > 0 ? '+' : ''}{wpaDisplay}%
+                                </td>
                                 
                                 <td className="px-2 py-3 text-center font-sans tabular-nums text-xs text-neutral-600 dark:text-neutral-400">
                                     {p.entry_kills || 0}
@@ -204,10 +208,6 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                                         align={popupAlign}
                                         highlight={true}
                                     />
-                                </td>
-
-                                <td className={`px-2 py-3 text-center font-sans tabular-nums text-xs font-bold ${wpaVal > 0 ? 'text-green-500' : wpaVal < 0 ? 'text-red-500' : 'text-neutral-400'}`}>
-                                    {wpaVal > 0 ? '+' : ''}{wpaDisplay}%
                                 </td>
                             </tr>
                         );

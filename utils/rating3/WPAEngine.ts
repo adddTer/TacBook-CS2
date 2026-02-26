@@ -21,7 +21,7 @@ export class WPAEngine {
     private ctKits: number = 0; // Track defuse kits for Post-Plant calc
     
     // NEW: Retrospective Result
-    private roundResult: { winner: 'T' | 'CT', reason: number, endTick: number, defuserSid?: string } | null = null;
+    private roundResult: { winner: 'T' | 'CT', reason: number, endTick: number, defuserSid?: string, defuseTick?: number } | null = null;
     
     // NEW: Terminal State Flags
     private isDefusedState: boolean = false;
@@ -34,7 +34,8 @@ export class WPAEngine {
         this.reset();
     }
 
-    public setRoundResult(result: { winner: 'T' | 'CT', reason: number, endTick: number, defuserSid?: string }) {
+    public setRoundResult(result: { winner: 'T' | 'CT', reason: number, endTick: number, defuserSid?: string, defuseTick?: number }) {
+        // console.log('[WPAEngine] setRoundResult:', result);
         this.roundResult = result;
     }
 
@@ -124,68 +125,84 @@ export class WPAEngine {
                 isScenario1 = true;
             }
             
+            // Debug Log for Scene Logic
+            if (this.isPlanted && Math.random() < 0.1) {
+                 console.log(`[WPA_DEBUG] Post-Plant Calc:
+                    RoundResult: ${this.roundResult ? JSON.stringify(this.roundResult) : 'NULL'}
+                    Winner: ${this.roundResult?.winner}
+                    Defuser: ${this.roundResult?.defuserSid}
+                    Scenario1 (Defuse): ${isScenario1}
+                    TimeRemaining: ${this.roundTime.toFixed(1)}
+                    Alive: T=${this.tAlive}, CT=${this.ctAlive}
+                    DefusedState: ${this.isDefusedState}
+                    ExplodedState: ${this.isExplodedState}
+                 `);
+            }
+            
             const ctProbBase = 1.0 - p;
             let x = 1.0;
 
+            // Apply Time Decay based on Scenario
+            const timePassed = Math.max(0, COEFF.C4_TIME - this.roundTime);
+            
+            // Helper for Piecewise Linear Interpolation
+            const interpolate = (t: number, points: number[][]) => {
+                if (t <= points[0][0]) return points[0][1];
+                if (t >= points[points.length-1][0]) return points[points.length-1][1];
+                
+                for (let i = 0; i < points.length - 1; i++) {
+                    const [t1, x1] = points[i];
+                    const [t2, x2] = points[i+1];
+                    if (t >= t1 && t <= t2) {
+                        const ratio = (t - t1) / (t2 - t1);
+                        return x1 + ratio * (x2 - x1);
+                    }
+                }
+                return points[points.length-1][1];
+            };
+
             if (isScenario1) {
                 // Scenario 1: Defuse Success (CT Win)
+                
+                // SPECIAL CASE: If T are all dead, CT win is guaranteed (100%)
+                // "无论何时，T方全部被消灭后，胜率升至100%，系数恢复为1.0。"
+                // FIX: Only applies in Scenario 1 (CT Win). In Scenario 2 (T Win), T dead doesn't mean CT Win (bomb could explode).
                 if (this.tAlive === 0) {
-                    return 0.0; // Lock to CT Win (T Prob = 0) if all T are dead
+                     return 0.0; // T Prob = 0.0 -> CT Prob = 1.0
                 }
-                
-                // "Convergence to Victory" Model
-                // Instead of decaying, we should slowly increase confidence in CT victory as time passes without them losing.
-                // Even if 1v2, if they survive long enough to defuse, their probability should rise.
-                
-                const timePassed = Math.max(0, COEFF.C4_TIME - this.roundTime);
-                
-                // Confidence Factor: 0.0 -> 0.8 over 40s
-                // At 0s (Plant): 0% confidence (rely on base prob)
-                // At 40s (Explosion/Defuse): 80% confidence (rely on outcome knowledge)
-                const confidence = Math.min(0.8, (timePassed / 40.0) * 0.8);
-                
-                // Interpolate between Base Probability and 1.0 (Victory)
-                // ctProb = Base * (1 - confidence) + 1.0 * confidence
-                const boostedCtProb = ctProbBase * (1.0 - confidence) + confidence;
-                
-                // Ensure we don't accidentally lower the probability below base (unless base was > 1.0 which is impossible)
-                // Actually, base could be high.
-                // But generally, we use the boosted prob.
-                
-                p = 1.0 - boostedCtProb;
+
+                // Data Points: 0s:1.0, 10s:0.95, 20s:0.82, 28s:0.68, 35s:0.40
+                // We extrapolate 40s to 0.20 to maintain the "slow decay" trend
+                const points = [
+                    [0, 1.0],
+                    [10, 0.95],
+                    [20, 0.82],
+                    [28, 0.68],
+                    [35, 0.40],
+                    [40, 0.20]
+                ];
+                x = interpolate(timePassed, points);
                 
             } else {
                 // Scenario 2: Bomb Exploded / T Win / Unknown
-                // Multiplier x(t) applied to CT win probability
-                // Front 24s: Slow decay. Back 16s: Fast decay.
-                // t=0 (Plant): x=1
-                // t=24 (24s elapsed, 16s remaining): Breakpoint
-                // t=40 (40s elapsed, 0s remaining): x=0
-                
-                const timePassed = Math.max(0, COEFF.C4_TIME - this.roundTime);
-                
-                if (timePassed <= 24) {
-                    // Slow decay phase (0 to 24s)
-                    // Starts at 1.0. Ends at 0.6 (assumption for "slow").
-                    const progress = timePassed / 24.0;
-                    x = 1.0 - (0.4 * progress); // 1.0 -> 0.6
-                } else {
-                    // Fast decay phase (24 to 40s)
-                    // Starts at 0.6. Ends at 0.0.
-                    // Target: 0.0 at 1s remaining (timePassed = 39)
-                    // Duration: 39 - 24 = 15s
-                    
-                    const progress = (timePassed - 24) / 15.0;
-                    // Linear: 0.6 * (1 - p)
-                    // Square: 0.6 * (1 - p)^2
-                    const factor = Math.max(0, 1.0 - progress);
-                    x = 0.6 * (factor * factor); 
-                }
-                
-                // Apply multiplier to CT Win Probability (Scenario 2 Only)
-                const ctProb = ctProbBase * x;
-                p = 1.0 - ctProb;
+                // Data Points: 0-28s same as above.
+                // 32s:0.35, 35s:0.08, 37s:0.0
+                const points = [
+                    [0, 1.0],
+                    [10, 0.95],
+                    [20, 0.82],
+                    [28, 0.68],
+                    [32, 0.35],
+                    [35, 0.08],
+                    [37, 0.0],
+                    [40, 0.0]
+                ];
+                x = interpolate(timePassed, points);
             }
+            
+            // Apply multiplier to CT Win Probability
+            const ctProb = ctProbBase * x;
+            p = 1.0 - ctProb;
         } else {
             // Pre-Plant Logic
             p = MATRIX_PRE[tIdx][ctIdx];
@@ -229,7 +246,8 @@ export class WPAEngine {
         timeElapsed: number,
         allTs: string[], allCTs: string[],
         kitsLost: boolean = false, 
-        damageContributors: Map<string, number> = new Map()
+        damageContributors: Map<string, number> = new Map(),
+        currentTick: number = 0 // NEW
     ): WPAUpdate[] {
         this.updateRoundTime(timeElapsed); 
 
@@ -246,7 +264,8 @@ export class WPAEngine {
             victimSid,
             allTs, allCTs,
             'kill',
-            { killerSid, damageContributors, assisters }
+            { killerSid, damageContributors, assisters },
+            currentTick
         );
     }
 
@@ -380,7 +399,8 @@ export class WPAEngine {
             killerSid: string,
             damageContributors: Map<string, number>,
             assisters: { sid: string, isFlash?: boolean }[]
-        }
+        },
+        currentTick: number = 0
     ): WPAUpdate[] {
         const prevProb = this.currentWinProb;
         const newProb = this.calculateWinProb();
@@ -396,7 +416,7 @@ export class WPAEngine {
 
         // Identify Defuser (if any)
         const defuserSid = this.roundResult?.defuserSid;
-        const isPostPlantCTWin = this.isPlanted && this.roundResult?.winner === 'CT' && !!defuserSid;
+        // const isPostPlantCTWin = this.isPlanted && this.roundResult?.winner === 'CT' && !!defuserSid;
 
         // --- Kill Logic ---
         if (killContext && reason === 'kill') {
@@ -407,23 +427,33 @@ export class WPAEngine {
              let weightedPool = impactMagnitude * 0.5;
              
              // DEFUSER BONUS (35%)
-             // If we are in a CT Win Post-Plant scenario, the defuser gets 35% of the credit for kills.
-             if (isPostPlantCTWin && defuserSid && allCTs.includes(defuserSid)) {
+             // Rule: If Scenario 1 (Defuse Win) AND Kill is within 5s of Defuse, Defuser gets 35%.
+             let applyDefuserBonus = false;
+             
+             if (this.isPlanted && this.roundResult?.winner === 'CT' && defuserSid) {
+                 // Check 5s window
+                 // We need endTick from roundResult and currentTick
+                 // FIX: Use defuseTick if available, otherwise endTick
+                 const targetTick = this.roundResult.defuseTick || this.roundResult.endTick;
+
+                 if (targetTick > 0 && currentTick > 0) {
+                     const ticksToDefuse = targetTick - currentTick;
+                     const secondsToDefuse = ticksToDefuse / 64.0;
+                     
+                     // 5s window (allow slightly negative if tick alignment is off, but generally > -1)
+                     if (secondsToDefuse <= 5.0 && secondsToDefuse >= -1.0) {
+                         applyDefuserBonus = true;
+                     }
+                 }
+             }
+
+             if (applyDefuserBonus && defuserSid) {
                  const defuserBonus = impactMagnitude * 0.35;
                  
-                 // If Killer IS Defuser, they get this bonus + their normal share (calculated from reduced pool)
+                 // If Killer IS Defuser, they get this bonus + their normal share
                  // If Killer is NOT Defuser, Defuser gets this bonus separate.
                  
-                 if (killContext.killerSid !== defuserSid) {
-                     updates.push({ sid: defuserSid, delta: defuserBonus, ...debugInfo });
-                 } else {
-                     // Killer is Defuser. We will add this bonus to their killerFixedShare later?
-                     // Or just treat it as "Killer gets 35% off the top, then 50% of remainder?"
-                     // Let's keep it simple: Defuser gets 35% off the top.
-                     // Remaining 65% is distributed normally (50/50 split of the 65%).
-                     // So Killer (Defuser) gets 35% + (65% * 0.5) = 67.5%.
-                     updates.push({ sid: defuserSid, delta: defuserBonus, ...debugInfo });
-                 }
+                 updates.push({ sid: defuserSid, delta: defuserBonus, ...debugInfo });
 
                  // Reduce the pool for standard distribution
                  // Remaining: 65%
@@ -468,88 +498,38 @@ export class WPAEngine {
              if (victimSid) updates.push({ sid: victimSid, delta: penaltyTotal, ...debugInfo });
              
              return updates;
-        }
+         }
 
-        // --- Defuse Exception Logic (Ninja Defuse) ---
+        // --- Defuse Exception Logic ---
         if (reason === 'defuse') {
             // probDelta is negative (T Prob drops to 0)
             // CT gains = -probDelta
-            const ctGain = -probDelta; // e.g. 0.8
+            const ctGain = -probDelta; 
             const totalGainPoints = ctGain * COEFF.SCALING;
             
-            // Check if defuse started when outcome was uncertain
-            // Use captured defuseStartProb if available, otherwise fallback to prevProb
-            const checkProb = (this.defuseStartProb !== null) ? this.defuseStartProb : prevProb;
+            // User Request:
+            // 1. If T alive > 0: Defuser gets remaining WPA (probDelta). T survivors share loss.
+            // 2. If T alive == 0: Standard logic (likely 0 delta).
             
-            // If T Win Prob at start was > 1% (meaning CT Win Prob < 99%)
-            if (checkProb > 0.01) {
-                // Calculate Total Gain from Start of Defuse
-                // Gain = (1.0 - StartProb) - (1.0 - EndProb) ?? No.
-                // Gain = (CT Win Prob End) - (CT Win Prob Start)
-                //      = (1.0) - (1.0 - checkProb) = checkProb.
-                
-                // But we only have `totalGainPoints` which is based on `prevProb`.
-                // If `prevProb` is 0 (because T died), `totalGainPoints` is 0.
-                // But `checkProb` might be 0.8.
-                // We want to award points based on `checkProb`.
-                
-                const effectiveGain = checkProb * COEFF.SCALING;
-                
-                // Determine Share based on Scenario
-                // If T is still alive (Ninja Defuse / Clutch Defuse), defuser gets 100% of the gain.
-                // If T is dead (Cleanup Defuse), defuser gets 35% (standard bonus).
-                let shareRatio = 0.35;
-                if (this.tAlive > 0) {
-                    shareRatio = 1.0;
-                }
-
-                const defuserShare = effectiveGain * shareRatio;
-                
-                // Award to Defuser
+            if (this.tAlive > 0) {
+                // Give 100% of the gain to the defuser
                 primaryContributors.forEach(sid => {
-                    updates.push({ sid, delta: defuserShare, ...debugInfo });
+                    updates.push({ sid, delta: totalGainPoints, ...debugInfo });
                 });
                 
-                // "Kill contributors obtain WPA correspondingly reduced".
-                // We deduct this share from the REST of the team.
-                // This simulates that the defuser "stole" the glory of the round win.
-                const teamToPenalize = allCTs.filter(id => !primaryContributors.includes(id));
-                
-                if (teamToPenalize.length > 0) {
-                    // Only penalize team if it's NOT a Ninja Defuse (or if user wants penalty regardless)
-                    // User said: "Jame is Ninja... he should enjoy these WPA exclusively".
-                    // This implies we shouldn't penalize teammates who did nothing?
-                    // But if we don't penalize, we create points out of thin air.
-                    // However, if teammates did nothing (0 kills), they have 0 WPA to lose?
-                    // No, WPA is delta. They start at 0.
-                    // If we give Jame +0.94, and teammates 0.
-                    // Total CT change = +0.94.
-                    // T change = -0.94 (from distributeToSide below, if prevProb was high).
-                    // Wait, `totalGainPoints` is based on `prevProb`.
-                    // If `prevProb` (at end) is close to `checkProb` (at start), then T loses 0.94.
-                    // So Sum = +0.94 - 0.94 = 0. Balanced.
-                    // So we DON'T need to penalize teammates in the Ninja case (where teammates contributed nothing).
-                    
-                    // But what if teammates contributed kills?
-                    // If shareRatio is 1.0, we are giving the ENTIRE pot to defuser.
-                    // If teammates also got points from kills earlier, the total CT gain > 1.0.
-                    // So we MUST penalize teammates to balance it back.
-                    // So yes, always penalize/redistribute.
-                    
-                    this.distributeToSide(-defuserShare, teamToPenalize, updates);
-                }
-                
-                // Also apply the standard T Penalty (if any remaining delta exists from the actual event)
-                // This ensures Ts lose points for losing the round.
-                // Note: totalGainPoints is based on prevProb (last tick).
-                // If prevProb was 0 (CT 100%), totalGainPoints is 0. Ts don't lose more points (they already lost them when they died).
-                // If prevProb was > 0, Ts lose the remaining probability.
-                if (Math.abs(totalGainPoints) > 0.001) {
-                     this.distributeToSide(-totalGainPoints, allTs, updates);
-                }
+                // Distribute loss to Ts
+                // Note: totalGainPoints is positive (CT gain). We need to penalize Ts.
+                // probDelta is negative. totalPoints is negative.
+                // So we distribute totalPoints (negative) to Ts.
+                this.distributeToSide(totalPoints, allTs, updates);
                 
                 return updates;
             }
+            
+            // If T alive == 0, fall through to standard logic (or handle here)
+            // If T alive == 0, prob should be 0.0 or close to it.
+            // If prob was not 0.0 (e.g. 0.01), then we have a small delta.
+            // Standard logic below distributes to primaryContributors (defuser).
         }
 
         // --- Standard Logic for Plant/Defuse/Damage ---

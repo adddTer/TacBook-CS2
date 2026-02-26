@@ -7,6 +7,7 @@ import { ALL_TAGS } from '../constants/tags';
 import { UTILITIES } from '../data/utilities';
 import { AiConfigModal } from './AiConfigModal';
 import { CopilotChat } from './ai/CopilotChat';
+import { MapViewer } from './MapViewer';
 import { compressImage } from '../utils/imageHelper';
 import { exportTacticToZip } from '../utils/exportHelper';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
@@ -437,10 +438,16 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                                             </div>
                                         </>
                                     ) : (
-                                        <div className="text-center text-neutral-400 group-hover:text-blue-500 transition-colors">
-                                            <svg className="w-8 h-8 mx-auto mb-1 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                            <span className="text-xs font-bold">点击上传图片</span>
-                                        </div>
+                                        <>
+                                            <div className="absolute inset-0 opacity-50 grayscale group-hover:grayscale-0 transition-all">
+                                                <MapViewer mapId={formData.mapId} className="w-full h-full pointer-events-none" />
+                                            </div>
+                                            <div className="relative z-10 text-center text-neutral-400 group-hover:text-blue-500 transition-colors bg-white/80 dark:bg-black/80 p-4 rounded-xl backdrop-blur-sm shadow-sm">
+                                                <svg className="w-8 h-8 mx-auto mb-1 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                                <span className="text-xs font-bold">点击上传自定义图片</span>
+                                                <div className="text-[9px] mt-1 opacity-70">或使用默认地图背景</div>
+                                            </div>
+                                        </>
                                     )}
                                     <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleMapImageUpload(e.target.files[0])} />
                                 </label>
