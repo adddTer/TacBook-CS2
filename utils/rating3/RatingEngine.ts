@@ -48,7 +48,8 @@ export class RatingEngine {
                 tradeBonus: 0, tradePenalty: 0, 
                 impactPoints: 0, killValue: 0, rating: 0,
                 wpa: 0,
-                killShareRating: 0 // Init
+                killShareRating: 0, // Init
+                botKills: 0 // Init
             });
         }
         return this.roundStats.get(sid)!;
@@ -377,12 +378,15 @@ export class RatingEngine {
                     }
                 });
                 
+                const isBot = vic === 'BOT' || vic === '0' || vic.startsWith('BOT');
+
                 const updates = this.wpaEngine.handleKill(
                     att, vic, victimSide, assisters, timeElapsed,
                     tPlayers, ctPlayers,
                     hasKit, // Pass kit loss info to WPA
                     damageContributors, // NEW Argument
-                    tick // Pass current tick for 5s window check
+                    tick, // Pass current tick for 5s window check
+                    isBot // NEW
                 );
                 this.wpaEngine.commitUpdates(updates);
             } else {
@@ -393,11 +397,18 @@ export class RatingEngine {
             if (att !== "BOT" && att !== vic && att !== "0") {
                 const attStats = this.getRoundStats(att);
                 attStats.kills++;
-                attStats.killValue += this.inventory.getStartValue(vic);
 
-                if (!this.firstKillHappened) {
-                    attStats.isEntryKill = true;
-                    this.firstKillHappened = true;
+                const isBot = vic === 'BOT' || vic === '0' || vic.startsWith('BOT');
+
+                if (isBot) {
+                    attStats.botKills++;
+                } else {
+                    attStats.killValue += this.inventory.getStartValue(vic);
+
+                    if (!this.firstKillHappened) {
+                        attStats.isEntryKill = true;
+                        this.firstKillHappened = true;
+                    }
                 }
 
                 // --- Kill Share Distribution (RTG v5.0) ---
@@ -405,44 +416,46 @@ export class RatingEngine {
                 // 50% Fixed to Killer
                 // 50% Distributed by Damage Weight (Flash = 30 dmg)
                 
-                const BASE_KILL_RATING = 1.0;
-                const FIXED_SHARE = 0.5;
-                const DAMAGE_SHARE = 0.5;
+                if (!isBot) {
+                    const BASE_KILL_RATING = 1.0;
+                    const FIXED_SHARE = 0.5;
+                    const DAMAGE_SHARE = 0.5;
 
-                // Calculate Total Damage Weight
-                let totalWeight = 0;
-                const contributors: { sid: string, weight: number }[] = [];
+                    // Calculate Total Damage Weight
+                    let totalWeight = 0;
+                    const contributors: { sid: string, weight: number }[] = [];
 
-                // 1. Damage Contributors
-                this.damageGraph.forEach((victimMap, attackerSid) => {
-                    if (victimMap.has(vic)) {
-                        const dmg = victimMap.get(vic)!;
-                        contributors.push({ sid: attackerSid, weight: dmg });
-                        totalWeight += dmg;
-                    }
-                });
-
-                // 2. Flash Assist (if any)
-                if (ast && ast !== "BOT" && ast !== "0" && event.assistedflash) {
-                    const FLASH_WEIGHT = 30;
-                    contributors.push({ sid: ast, weight: FLASH_WEIGHT });
-                    totalWeight += FLASH_WEIGHT;
-                }
-
-                // Distribute Shares
-                if (totalWeight > 0) {
-                    // Fixed Share to Killer
-                    attStats.killShareRating += (BASE_KILL_RATING * FIXED_SHARE);
-
-                    // Damage Share to Contributors
-                    contributors.forEach(c => {
-                        const share = (c.weight / totalWeight) * (BASE_KILL_RATING * DAMAGE_SHARE);
-                        const pStats = this.getRoundStats(c.sid);
-                        pStats.killShareRating += share;
+                    // 1. Damage Contributors
+                    this.damageGraph.forEach((victimMap, attackerSid) => {
+                        if (victimMap.has(vic)) {
+                            const dmg = victimMap.get(vic)!;
+                            contributors.push({ sid: attackerSid, weight: dmg });
+                            totalWeight += dmg;
+                        }
                     });
-                } else {
-                    // Fallback: If no damage recorded (e.g. suicide or weird bug), killer takes all
-                    attStats.killShareRating += BASE_KILL_RATING;
+
+                    // 2. Flash Assist (if any)
+                    if (ast && ast !== "BOT" && ast !== "0" && event.assistedflash) {
+                        const FLASH_WEIGHT = 30;
+                        contributors.push({ sid: ast, weight: FLASH_WEIGHT });
+                        totalWeight += FLASH_WEIGHT;
+                    }
+
+                    // Distribute Shares
+                    if (totalWeight > 0) {
+                        // Fixed Share to Killer
+                        attStats.killShareRating += (BASE_KILL_RATING * FIXED_SHARE);
+
+                        // Damage Share to Contributors
+                        contributors.forEach(c => {
+                            const share = (c.weight / totalWeight) * (BASE_KILL_RATING * DAMAGE_SHARE);
+                            const pStats = this.getRoundStats(c.sid);
+                            pStats.killShareRating += share;
+                        });
+                    } else {
+                        // Fallback: If no damage recorded (e.g. suicide or weird bug), killer takes all
+                        attStats.killShareRating += BASE_KILL_RATING;
+                    }
                 }
 
                 // --- Trade Logic ---

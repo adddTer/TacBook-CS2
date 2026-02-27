@@ -23,16 +23,20 @@ export const calculateRoundRating = (stats: RoundContext, startEconomyValue: num
     // Since base kill value is handled in KillShare, this is purely for "Multi-Kill" bonus
     // Non-linear scaling for multi-kills + Entry Bonus
     let impactVal = 0;
+    
+    // Use effective kills (excluding BOTs) for impact calculation
+    const effectiveKills = stats.kills - (stats.botKills || 0);
+
     // Bonus only starts at 2K because 1K is covered by KillShare
-    if (stats.kills === 2) impactVal = 0.5; // Bonus for 2K
-    else if (stats.kills >= 3) impactVal = 1.2; // Bonus for 3K+
+    if (effectiveKills === 2) impactVal = 0.5; // Bonus for 2K
+    else if (effectiveKills >= 3) impactVal = 1.2; // Bonus for 3K+
     
     if (stats.isEntryKill) impactVal += 0.3; // Reduced from 0.5 because Entry Kill gets full KillShare usually
     
     const scoreImpact = impactVal * 0.30;
 
     // 4. KAST (Consistency)
-    const isKast = stats.kills > 0 || stats.assists > 0 || stats.survived || stats.traded || stats.wasTraded;
+    const isKast = effectiveKills > 0 || stats.assists > 0 || stats.survived || stats.traded || stats.wasTraded;
     const scoreKast = isKast ? 0.20 : 0.0;
 
     // 5. Economy Rating (ROI)

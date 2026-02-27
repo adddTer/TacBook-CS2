@@ -11,7 +11,8 @@ Rating 5.0 represents a paradigm shift from pure statistical aggregation to impa
     *   **Fixed Share**: 50% (0.5 pts) goes directly to the killer.
     *   **Damage Share**: 50% (0.5 pts) is distributed among all contributors based on damage dealt.
     *   **Utility Assist**: Flash assists count as 30 damage weight in the distribution.
-3.  **Impact Adjustment**: Multi-kill bonuses are adjusted to account for the Kill Share system (preventing double counting).
+4.  **BOT Kill Handling**: Kills against BOTs (disconnected players) do not contribute to Rating (Kill Share, Impact, KAST). The WPA gain from killing a BOT is distributed evenly among the entire team.
+5.  **Impact Adjustment**: Multi-kill bonuses are adjusted to account for the Kill Share system (preventing double counting).
 
 ## Components
 

@@ -57,7 +57,14 @@ v5.0 废弃了纯数学函数的衰减模型，转而使用基于专家经验数
 
 ## 3. 数据清洗与统计修正 (Data Cleaning & Fixes)
 
-### 3.1 垃圾时间剔除 (Garbage Time Exclusion)
+### 3.1 BOT 击杀处理 (BOT Kill Handling)
+*   **逻辑**: 击杀 BOT（掉线替补）产生的 WPA 变化不再归属于击杀者个人。
+*   **分配规则**:
+    *   **收益 (Gain)**: 击杀 BOT 导致己方胜率提升的部分，由 **全队均分**。
+    *   **惩罚 (Loss)**: BOT 死亡导致的胜率下降，由 BOT 自身承担（或其所在队伍分摊，具体视实现而定，目前记录在 BOT 身上）。
+*   **目的**: 防止玩家通过“刷 BOT”来人为抬高个人 Rating 和 WPA 数据。
+
+### 3.2 垃圾时间剔除 (Garbage Time Exclusion)
 为了防止换边后的无效击杀/伤害影响 Rating 和 WPA：
 *   **逻辑**: 在 **换边回合** (R12, R24, R27, R30...) 及 **整场比赛最后一回合** 结束后产生的所有 `Kill`, `Death`, `Damage` 事件，均被视为无效数据，不计入统计。
 *   **实现**: 检查 `CurrentRound` 是否为换边回合/终局，且 `EventTick > RoundEndTick`。

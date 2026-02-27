@@ -247,7 +247,8 @@ export class WPAEngine {
         allTs: string[], allCTs: string[],
         kitsLost: boolean = false, 
         damageContributors: Map<string, number> = new Map(),
-        currentTick: number = 0 // NEW
+        currentTick: number = 0,
+        isBot: boolean = false // NEW
     ): WPAUpdate[] {
         this.updateRoundTime(timeElapsed); 
 
@@ -258,6 +259,30 @@ export class WPAEngine {
             if (kitsLost) this.ctKits = Math.max(0, this.ctKits - 1);
         }
         
+        // If BOT, distribute WPA to the winning team (killer's team)
+        if (isBot) {
+             const prevProb = this.currentWinProb;
+             const newProb = this.calculateWinProb();
+             this.currentWinProb = newProb;
+
+             const probDelta = newProb - prevProb; 
+             const totalPoints = probDelta * COEFF.SCALING;
+             
+             const updates: WPAUpdate[] = [];
+             
+             // Determine winner team (gaining probability)
+             const isTGaining = probDelta > 0;
+             const winnerTeam = isTGaining ? allTs : allCTs;
+             
+             // Distribute gain to winner team
+             this.distributeToSide(Math.abs(totalPoints), winnerTeam, updates);
+             
+             // Penalize BOT (victim) directly
+             updates.push({ sid: victimSid, delta: -Math.abs(totalPoints), reason: 'bot_death' });
+             
+             return updates;
+        }
+
         return this.generateUpdates(
             [killerSid], 
             assisters.map(a => ({ sid: a.sid, weight: a.isFlash ? 0.35 : 0.25 })),
