@@ -8,11 +8,9 @@ import { MAPS } from '../constants/maps';
  */
 export const isMyTeamMatch = (match: Match): boolean => {
     // Check 'players' array (which parser puts 'My Team' in)
-    // Also check 'enemyPlayers' just in case of parsing weirdness, though typically parser handles this.
-    const allPlayers = [...match.players, ...match.enemyPlayers];
-    return allPlayers.some(p => {
-        // Match by ID or Name
-        return ROSTER.some(r => r.id === p.playerId || r.name === p.playerId || (p.steamid && r.id === p.steamid)); // Note: ROSTER usually uses short names as IDs, SteamID mapping would be better if available
+    // We want to see if our core roster is present in the 'us' side.
+    return match.players.some(p => {
+        return ROSTER.some(r => r.id === p.playerId || r.name === p.playerId || (p.steamid && r.id === p.steamid));
     });
 };
 
@@ -110,4 +108,73 @@ export const getMapEnName = (rawId: string): string => {
     const cleanId = rawId.toLowerCase().replace(/^de_/, '').trim();
     const mapObj = MAPS.find(m => m.id === cleanId);
     return mapObj ? mapObj.enName : cleanId;
+};
+
+/**
+ * Determines which side a team was on during a specific round.
+ */
+export const getTeamSideInRound = (match: Match, round: any, isUs: boolean): 'CT' | 'T' => {
+    const players = isUs ? match.players : match.enemyPlayers;
+    for (const p of players) {
+        if (round.playerStats[p.playerId]) {
+            return round.playerStats[p.playerId].side;
+        }
+        if (p.steamid && round.playerStats[p.steamid]) {
+            return round.playerStats[p.steamid].side;
+        }
+    }
+    // Fallback logic if stats are missing
+    const startSide = match.startingSide || 'CT';
+    // CS2 uses MR12 (12 rounds per half)
+    const halfMax = 12;
+    const isFirstHalf = round.roundNumber <= halfMax;
+    
+    if (isUs) {
+        return isFirstHalf ? startSide : (startSide === 'CT' ? 'T' : 'CT');
+    } else {
+        return isFirstHalf ? (startSide === 'CT' ? 'T' : 'CT') : startSide;
+    }
+};
+
+/**
+ * Calculates the total score from individual round data.
+ */
+export const calculateScoreFromRounds = (match: Match) => {
+    if (!match.rounds || match.rounds.length === 0) return match.score;
+
+    let usWins = 0;
+    let themWins = 0;
+    let h1_us = 0, h1_them = 0;
+    let h2_us = 0, h2_them = 0;
+    let ot_us = 0, ot_them = 0;
+
+    // CS2 uses MR12
+    const regulationMax = 24;
+    const halfMax = 12;
+
+    match.rounds.forEach(round => {
+        const usSide = getTeamSideInRound(match, round, true);
+        const isUsWinner = round.winnerSide === usSide;
+        
+        if (isUsWinner) usWins++; else themWins++;
+
+        if (round.roundNumber <= halfMax) {
+            if (isUsWinner) h1_us++; else h1_them++;
+        } else if (round.roundNumber <= regulationMax) {
+            if (isUsWinner) h2_us++; else h2_them++;
+        } else {
+            if (isUsWinner) ot_us++; else ot_them++;
+        }
+    });
+
+    return {
+        us: usWins,
+        them: themWins,
+        half1_us: h1_us,
+        half1_them: h1_them,
+        half2_us: h2_us,
+        half2_them: h2_them,
+        ot_us: ot_us > 0 || ot_them > 0 ? ot_us : undefined,
+        ot_them: ot_us > 0 || ot_them > 0 ? ot_them : undefined
+    };
 };

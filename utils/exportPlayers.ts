@@ -12,9 +12,23 @@ export const exportPlayersToJson = async (playerStats: any[]): Promise<'shared' 
         return 'error';
     }
 
+    const formatWpa = (wpa: number) => wpa ? Number(wpa.toFixed(2)) : 0;
+
+    const formattedPlayers = playerStats.map(p => {
+        const pCopy = JSON.parse(JSON.stringify(p));
+        
+        if (pCopy.stats && pCopy.stats.filtered) {
+            pCopy.stats.filtered.wpa = formatWpa(pCopy.stats.filtered.wpaAvg);
+            delete pCopy.stats.filtered.wpaSum;
+            delete pCopy.stats.filtered.wpaAvg;
+        }
+        
+        return pCopy;
+    });
+
     const dataToExport = {
         exportDate: new Date().toISOString(),
-        players: playerStats
+        players: formattedPlayers
     };
 
     const json = JSON.stringify(dataToExport, null, 2);

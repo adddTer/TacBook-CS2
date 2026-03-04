@@ -14,7 +14,9 @@ export const NAME_ALIASES: Record<string, string> = {
     'Ser1EN': 'Ser1EN',
     'ClayDEN': 'Ser1EN', 
     'FuNct1on': 'FuNct1on',
-    'R\u2061\u2061\u2061ain\u2061\u2061\u2061\u2061\u2061': 'Rain' 
+    'R\u2061\u2061\u2061ain\u2061\u2061\u2061\u2061\u2061': 'Rain',
+    '王源不给颗烟': 'R1kaN',
+    'Z-Electronics': 'electronics'
 };
 
 export const WEAPON_SIDE_MAP: Record<string, 'T' | 'CT'> = {

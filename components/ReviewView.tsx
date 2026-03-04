@@ -1,16 +1,20 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Match, MatchSeries, ContentGroup, PlayerMatchStats } from '../types';
+import { Match, MatchSeries, ContentGroup, PlayerMatchStats, Tournament } from '../types';
 import { ROSTER } from '../constants/roster';
 import { resolveName } from '../utils/demo/helpers';
-import { getMapDisplayName, getMapEnName } from '../utils/matchHelpers';
+import { MatchAggregator } from '../utils/analytics/matchAggregator';
+import { getMapDisplayName, getMapEnName, isMyTeamMatch } from '../utils/matchHelpers';
 import { MatchList } from './review/MatchList';
 import { PlayerList } from './review/PlayerList';
 import { MatchDetail } from './review/MatchDetail';
 import { PlayerDetail } from './review/PlayerDetail';
 import { SeriesDetail } from './review/SeriesDetail';
+import { TournamentDetail } from './review/TournamentDetail';
+import { TournamentList } from './review/TournamentList';
 import { LeaderboardTab } from './review/LeaderboardTab';
 import { SeriesCreatorModal } from './SeriesCreatorModal';
+import { TournamentCreatorModal } from './TournamentCreatorModal';
 import { MatchImportModal } from './MatchImportModal';
 import { parseDemoJson } from '../utils/demoParser';
 import { ParseError, ParseErrorModal } from './ParseErrorModal';
@@ -19,36 +23,48 @@ import { shareFile } from '../utils/shareHelper';
 import { LoadingOverlay } from './LoadingOverlay';
 import { ConfirmModal } from './ConfirmModal';
 import { AlertModal } from './AlertModal';
+import { FilterState } from './review/MatchFilterBar';
+import { RosterTimelineView } from './review/RosterTimelineView';
 
 import { exportPlayersToJson } from '../utils/exportPlayers';
 import { calculatePlayerStats } from '../utils/analytics/playerStatsCalculator';
+import { identifyRole } from '../utils/analytics/roleIdentifier';
 
 interface ReviewViewProps {
     allMatches: Match[];
     allSeries: MatchSeries[];
+    allTournaments: Tournament[];
     onSaveMatch: (match: Match, groupId: string) => void;
     onSaveSeries: (series: MatchSeries, groupId: string) => void;
+    onSaveTournament: (tournament: Tournament, groupId: string) => void;
     onDeleteMatch: (match: Match) => void;
     onDeleteSeries: (series: MatchSeries) => void;
+    onDeleteTournament: (tournament: Tournament) => void;
     writableGroups: ContentGroup[];
 }
 
 export const ReviewView: React.FC<ReviewViewProps> = ({
     allMatches,
     allSeries,
+    allTournaments,
     onSaveMatch,
     onSaveSeries,
+    onSaveTournament,
     onDeleteMatch,
     onDeleteSeries,
+    onDeleteTournament,
     writableGroups
 }) => {
-    const [activeTab, setActiveTab] = useState<'matches' | 'players' | 'leaderboard'>('matches');
+    const [activeTab, setActiveTab] = useState<'matches' | 'players' | 'leaderboard' | 'tournaments'>('matches');
+    const [playersSubTab, setPlayersSubTab] = useState<'list' | 'history'>('list');
     const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
     const [selectedSeries, setSelectedSeries] = useState<MatchSeries | null>(null);
+    const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
     
     // Modals
     const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
+    const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [pendingImportFiles, setPendingImportFiles] = useState<FileList | null>(null);
 
@@ -275,16 +291,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     // --- Stats Calculation for Player List ---
     const playerStats = useMemo(() => {
+        const aggregated = MatchAggregator.aggregate(allMatches) as PlayerMatchStats[];
+        const statsMap = new Map(aggregated.map(p => [p.playerId, p]));
+        const steamMap = new Map(aggregated.filter(p => p.steamid).map(p => [p.steamid!, p]));
+
         return ROSTER.map(player => {
-            // Find matches where this player participated
-            const matchesPlayed = allMatches.filter(m => {
-                const allP = [...m.players, ...m.enemyPlayers];
-                return allP.some(p => resolveName(p.playerId) === player.id || resolveName(p.steamid) === player.id);
-            }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-            const totalMatches = matchesPlayed.length;
-
-            if (totalMatches === 0) {
+            const p = statsMap.get(player.id) || steamMap.get(player.id);
+            
+            if (!p) {
                 return {
                     ...player,
                     matches: 0,
@@ -298,70 +312,18 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 };
             }
 
-            // Logic from the snippet
-            const latestMatch = matchesPlayed[0];
-            const latestMatchPlayer = [...latestMatch.players, ...latestMatch.enemyPlayers]
-                .find(p => resolveName(p.playerId) === player.id || resolveName(p.steamid) === player.id);
-                
-            const currentRank = latestMatchPlayer?.rank || '?';
-            const steamid = latestMatchPlayer?.steamid;
-
-            // Accumulators
-            let sums = {
-                k: 0, d: 0, a: 0,
-                weightedRating: 0,
-                totalDamage: 0, 
-                totalHeadshots: 0, // Sum of headshot counts
-                rounds: 0
-            };
-
-            matchesPlayed.forEach(m => {
-                const p = [...m.players, ...m.enemyPlayers].find(p => resolveName(p.playerId) === player.id || resolveName(p.steamid) === player.id)!;
-                
-                // Use actual rounds played if available (Rating 3.0+), else estimate from score
-                const rounds = p.r3_rounds_played || (m.score.us + m.score.them) || 1;
-
-                sums.k += p.kills;
-                sums.d += p.deaths;
-                sums.a += p.assists;
-                
-                // Weighting logic: Value * Rounds for Rating
-                sums.weightedRating += p.rating * rounds;
-                
-                // Weighting logic: Total Damage for ADR
-                if (p.total_damage) {
-                    sums.totalDamage += p.total_damage;
-                } else {
-                    sums.totalDamage += p.adr * rounds;
-                }
-                
-                // Weighting logic: Headshot Count for HS%
-                // If explicit count is missing, estimate from rate
-                const hsCount = (p as any).headshots !== undefined 
-                    ? (p as any).headshots 
-                    : Math.round(p.kills * (p.hsRate / 100));
-                sums.totalHeadshots += hsCount;
-
-                sums.rounds += rounds;
-            });
-
-            const totalRounds = sums.rounds || 1;
-            const totalKills = sums.k || 1;
-
             return {
                 ...player,
-                steamid,
-                matches: totalMatches,
-                currentRank,
-                // Calculate weighted averages
-                avgRating: (sums.weightedRating / totalRounds).toFixed(2),
-                avgAdr: (sums.totalDamage / totalRounds).toFixed(1),
-                avgHs: ((sums.totalHeadshots / totalKills) * 100).toFixed(1), // HS% = Total HS / Total Kills
-                
-                totalK: sums.k,
-                totalD: sums.d,
-                totalA: sums.a,
-                kdRatio: (sums.k / (sums.d || 1)).toFixed(2)
+                steamid: p.steamid,
+                matches: (p as any).matchesPlayed || 0,
+                currentRank: p.rank || '?',
+                avgRating: p.rating.toFixed(2),
+                avgAdr: p.adr.toFixed(1),
+                avgHs: p.hsRate.toFixed(1),
+                totalK: p.kills,
+                totalD: p.deaths,
+                totalA: p.assists,
+                kdRatio: (p.kills / (p.deaths || 1)).toFixed(2)
             };
         });
     }, [allMatches]);
@@ -372,6 +334,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         const resolved = resolveName(id);
         setSelectedMatch(null);
         setSelectedSeries(null);
+        setSelectedTournament(null);
         setSelectedPlayerId(resolved);
     };
 
@@ -484,89 +447,44 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     const selectedPlayerStats = useMemo(() => {
         if (!selectedPlayerId) return null;
-        let profile = playerStats.find(p => p.id === selectedPlayerId || (p.steamid && p.steamid === selectedPlayerId));
         
-        // Handle Non-Roster Players (Guest / Enemy)
-        if (!profile) {
-            const matchesPlayed = allMatches.filter(m => {
-                const allP = [...m.players, ...m.enemyPlayers];
-                return allP.some(p => resolveName(p.playerId) === selectedPlayerId || resolveName(p.steamid) === selectedPlayerId);
-            });
-
-            if (matchesPlayed.length > 0) {
-                let sums = {
-                    k: 0, d: 0, a: 0,
-                    weightedRating: 0,
-                    totalDamage: 0, 
-                    totalHeadshots: 0,
-                    rounds: 0
-                };
-                
-                let steamid = undefined;
-                let currentRank = '?';
-
-                matchesPlayed.forEach(m => {
-                    const p = [...m.players, ...m.enemyPlayers].find(p => resolveName(p.playerId) === selectedPlayerId || resolveName(p.steamid) === selectedPlayerId)!;
-                    
-                    if (p.steamid) steamid = p.steamid;
-                    if (p.rank) currentRank = p.rank;
-
-                    const rounds = p.r3_rounds_played || (m.score.us + m.score.them) || 1;
-
-                    sums.k += p.kills;
-                    sums.d += p.deaths;
-                    sums.a += p.assists;
-                    sums.weightedRating += p.rating * rounds;
-                    
-                    if (p.total_damage) {
-                        sums.totalDamage += p.total_damage;
-                    } else {
-                        sums.totalDamage += p.adr * rounds;
-                    }
-                    
-                    const hsCount = (p as any).headshots !== undefined 
-                        ? (p as any).headshots 
-                        : Math.round(p.kills * (p.hsRate / 100));
-                    sums.totalHeadshots += hsCount;
-
-                    sums.rounds += rounds;
-                });
-                
-                const totalRounds = sums.rounds || 1;
-                const totalKills = sums.k || 1;
-                
-                profile = {
-                    id: selectedPlayerId,
-                    name: selectedPlayerId,
-                    role: '陌生人',
-                    roleType: 'Guest',
-                    steamid,
-                    matches: matchesPlayed.length,
-                    currentRank,
-                    avgRating: (sums.weightedRating / totalRounds).toFixed(2),
-                    avgAdr: (sums.totalDamage / totalRounds).toFixed(1),
-                    avgHs: ((sums.totalHeadshots / totalKills) * 100).toFixed(1),
-                    totalK: sums.k,
-                    totalD: sums.d,
-                    totalA: sums.a,
-                    kdRatio: (sums.k / (sums.d || 1)).toFixed(2)
-                };
-            }
-        }
-
-        if (!profile) return null;
+        // Use Aggregator for consistency
+        const aggregated = MatchAggregator.aggregate(allMatches) as PlayerMatchStats[];
+        const p = aggregated.find(x => resolveName(x.playerId) === selectedPlayerId || resolveName(x.steamid) === selectedPlayerId);
         
+        if (!p) return null;
+
         // Get player history from all matches
         const history = allMatches
-            .filter(m => [...m.players, ...m.enemyPlayers].some(p => resolveName(p.playerId) === selectedPlayerId || resolveName(p.steamid) === selectedPlayerId))
+            .filter(m => [...m.players, ...m.enemyPlayers].some(px => resolveName(px.playerId) === selectedPlayerId || resolveName(px.steamid) === selectedPlayerId))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .map(m => {
-                const stats = [...m.players, ...m.enemyPlayers].find(p => resolveName(p.playerId) === selectedPlayerId || resolveName(p.steamid) === selectedPlayerId)!;
+                const stats = [...m.players, ...m.enemyPlayers].find(px => resolveName(px.playerId) === selectedPlayerId || resolveName(px.steamid) === selectedPlayerId)!;
                 return { match: m, stats };
             });
+
+        const fullStats = calculatePlayerStats(selectedPlayerId, history, 'ALL');
+        const dynamicRole = identifyRole(fullStats.filtered);
+
+        const profile = {
+            id: selectedPlayerId,
+            name: p.playerId, // Use original name from stats
+            role: dynamicRole.name,
+            roleType: ROSTER.find(r => r.id === selectedPlayerId) ? 'Member' : 'Guest',
+            steamid: p.steamid,
+            matches: (p as any).matchesPlayed || 0,
+            currentRank: p.rank || '?',
+            avgRating: p.rating.toFixed(2),
+            avgAdr: p.adr.toFixed(1),
+            avgHs: p.hsRate.toFixed(1),
+            totalK: p.kills,
+            totalD: p.deaths,
+            totalA: p.assists,
+            kdRatio: (p.kills / (p.deaths || 1)).toFixed(2)
+        };
             
         return { profile, history };
-    }, [selectedPlayerId, playerStats, allMatches]);
+    }, [selectedPlayerId, allMatches]);
 
     // --- Views ---
 
@@ -615,6 +533,18 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         );
     }
 
+    if (selectedTournament) {
+        return (
+            <TournamentDetail 
+                tournament={selectedTournament}
+                allMatches={allMatches}
+                onBack={() => setSelectedTournament(null)}
+                onSelectMatch={setSelectedMatch}
+                onSelectPlayer={handlePlayerClick}
+            />
+        );
+    }
+
     if (selectedPlayerId && selectedPlayerStats && selectedPlayerStats.profile) {
         return (
             <PlayerDetail 
@@ -646,6 +576,12 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                         className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'matches' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
                     >
                         赛程
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('tournaments')}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'tournaments' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
+                    >
+                        赛事
                     </button>
                     <button
                         onClick={() => setActiveTab('players')}
@@ -721,6 +657,13 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                     </button>
                     <button 
+                        onClick={() => setIsTournamentModalOpen(true)}
+                        className="w-10 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
+                        title="创建赛事"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                    </button>
+                    <button 
                         onClick={() => setShowDebugger(true)}
                         className="w-10 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
                         title="JSON Debugger"
@@ -744,16 +687,56 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     onBatchDelete={handleBatchDelete}
                     onSearch={setSearchQuery}
                     onFilterChange={setFilters}
+                    searchQuery={searchQuery}
                     availableMaps={availableMaps}
                     availableServers={availableServers}
                 />
             )}
 
-            {activeTab === 'players' && (
-                <PlayerList 
-                    playerStats={playerStats} 
-                    onSelectPlayer={setSelectedPlayerId} 
+            {activeTab === 'tournaments' && (
+                <TournamentList 
+                    tournaments={allTournaments} 
+                    onSelectTournament={setSelectedTournament} 
+                    onDeleteTournament={(t) => {
+                        setConfirmConfig({
+                            isOpen: true,
+                            title: "删除赛事",
+                            message: "确定要删除这个赛事吗？此操作无法撤销。",
+                            onConfirm: () => {
+                                onDeleteTournament(t);
+                                setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                            }
+                        });
+                    }}
                 />
+            )}
+
+            {activeTab === 'players' && (
+                <div className="space-y-6">
+                    <div className="flex items-center gap-2 p-1 bg-neutral-100 dark:bg-neutral-800 rounded-xl w-fit">
+                        <button 
+                            onClick={() => setPlayersSubTab('list')}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${playersSubTab === 'list' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                        >
+                            队员列表
+                        </button>
+                        <button 
+                            onClick={() => setPlayersSubTab('history')}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${playersSubTab === 'history' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                        >
+                            变动记录
+                        </button>
+                    </div>
+
+                    {playersSubTab === 'list' ? (
+                        <PlayerList 
+                            playerStats={playerStats} 
+                            onSelectPlayer={setSelectedPlayerId} 
+                        />
+                    ) : (
+                        <RosterTimelineView />
+                    )}
+                </div>
             )}
 
             {activeTab === 'leaderboard' && (
@@ -775,6 +758,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 availableMatches={allMatches}
                 writableGroups={writableGroups}
                 onSave={onSaveSeries}
+            />
+
+            <TournamentCreatorModal
+                isOpen={isTournamentModalOpen}
+                onClose={() => setIsTournamentModalOpen(false)}
+                availableMatches={allMatches}
+                writableGroups={writableGroups}
+                onSave={onSaveTournament}
             />
             
             <ParseErrorModal 

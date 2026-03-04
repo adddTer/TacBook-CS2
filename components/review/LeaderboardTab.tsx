@@ -3,14 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Match } from '../../types';
 import { ROSTER } from '../../constants/roster';
 import { resolveName } from '../../utils/demo/helpers';
-import { aggregatePlayerStats } from '../../utils/analytics/statsAggregator';
-import { calculateFirepower } from '../../utils/analytics/calculateFirepower';
-import { calculateEntry } from '../../utils/analytics/calculateEntry';
-import { calculateTrade } from '../../utils/analytics/calculateTrade';
-import { calculateOpening } from '../../utils/analytics/calculateOpening';
-import { calculateClutch } from '../../utils/analytics/calculateClutch';
-import { calculateSniper } from '../../utils/analytics/calculateSniper';
-import { calculateUtility } from '../../utils/analytics/calculateUtility';
+import { MatchAggregator } from '../../utils/analytics/matchAggregator';
 import { getScoreStyle, getRatingStyle, getWpaStyle, TIER_CLASSES } from '../../utils/styleConstants';
 
 interface LeaderboardTabProps {
@@ -31,143 +24,42 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
 
     // --- Core Calculation Logic ---
     const leaderboardData = useMemo(() => {
-        let candidateList = ROSTER.map(r => ({ id: r.id, name: r.name, role: r.role.split(' ')[0] }));
+        const aggregated = MatchAggregator.aggregateFull(allMatches);
+        const rosterIds = new Set(ROSTER.map(r => r.id));
 
-        if (includeStrangers) {
-            const rosterIds = new Set(ROSTER.map(r => r.id));
-            const strangerMap = new Map<string, { id: string, name: string, role: string }>();
+        return aggregated.map(player => {
+            const isRoster = rosterIds.has(player.playerId);
+            if (!includeStrangers && !isRoster) return null;
 
-            allMatches.forEach(m => {
-                [...m.players, ...m.enemyPlayers].forEach(p => {
-                    const resolvedId = resolveName(p.playerId);
-                    // Skip if is roster member
-                    if (rosterIds.has(resolvedId)) return;
-                    
-                    if (!strangerMap.has(resolvedId)) {
-                        strangerMap.set(resolvedId, {
-                            id: resolvedId,
-                            name: resolvedId,
-                            role: '路人'
-                        });
-                    }
-                });
-            });
-            candidateList = [...candidateList, ...Array.from(strangerMap.values())];
-        }
-
-        return candidateList.map(player => {
-            const matchesPlayed = allMatches.filter(m => {
-                const allP = [...m.players, ...m.enemyPlayers];
-                return allP.some(p => resolveName(p.playerId) === player.id || resolveName(p.steamid) === player.id);
-            });
-
-            if (matchesPlayed.length === 0) return null;
-
-            // Aggregate Stats
-            const stats = aggregatePlayerStats(player.id, matchesPlayed.map(m => {
-                 const p = [...m.players, ...m.enemyPlayers].find(x => resolveName(x.playerId) === player.id || resolveName(x.steamid) === player.id)!;
-                 return { match: m, stats: p };
-            }), 'ALL');
-            
-            // Derived Averages
-            const safeDiv = (a: number, b: number) => b === 0 ? 0 : a / b;
-            const rounds = stats.roundsPlayed || 1;
-            
-            const adr = safeDiv(stats.damage, rounds);
-            const kpr = safeDiv(stats.kills, rounds);
-            const avgRating = safeDiv(stats.ratingSum, rounds);
-            const wpaAvg = safeDiv(stats.wpaSum, rounds);
-            const kastPct = Math.min(100, (stats.roundsWithKills + stats.assists + stats.survivedRounds + stats.tradedDeaths) / rounds * 100);
-
-            // Ability Scores
-            const scoreFirepower = calculateFirepower(
-                adr, kpr, avgRating,
-                safeDiv(stats.roundsWithKills, rounds) * 100,
-                safeDiv(stats.killsInWins, stats.roundsWon),
-                safeDiv(stats.damageInWins, stats.roundsWon),
-                safeDiv(stats.multiKillRounds, rounds) * 100
-            );
-
-            const scoreEntry = calculateEntry(
-                stats.tradedDeaths,
-                stats.entryDeaths,
-                stats.entryDeathsTraded,
-                stats.deaths,
-                stats.savedByTeammate,
-                stats.assists,
-                stats.supportRounds,
-                rounds
-            );
-
-            const scoreTrade = calculateTrade(
-                stats.tradeKills,
-                stats.kills,
-                stats.damage,
-                stats.teammatesSaved,
-                stats.assists,
-                rounds
-            );
-
-            const scoreOpening = calculateOpening(
-                stats.entryKills,
-                stats.entryDeaths,
-                stats.roundsWonAfterEntry,
-                rounds
-            );
-
-            const scoreClutch = calculateClutch(
-                stats.clutchPoints,
-                stats.w1v1, stats.l1v1,
-                stats.roundsLastAlive,
-                stats.totalTimeAlive,
-                stats.savesInLosses,
-                stats.roundsLost,
-                rounds
-            );
-
-            const scoreSniper = calculateSniper(
-                stats.sniperKills,
-                stats.kills,
-                stats.roundsWithSniperKills,
-                stats.sniperMultiKillRounds,
-                stats.sniperOpeningKills,
-                rounds
-            );
-
-            const scoreUtility = calculateUtility(
-                stats.utilityDamage,
-                stats.flashAssists,
-                stats.utilityKills,
-                stats.flashesThrown,
-                stats.blindDuration,
-                stats.enemiesBlinded,
-                rounds
-            );
-
-            // Check for broken utility data
-            const isUtilityBroken = (stats.flashesThrown > 5 && stats.enemiesBlinded === 0) || (stats.flashAssists > 0 && stats.enemiesBlinded === 0);
+            const rosterInfo = ROSTER.find(r => r.id === player.playerId);
+            const name = rosterInfo ? rosterInfo.name : player.name;
+            const role = player.role.name;
 
             return {
-                id: player.id,
-                name: player.name,
-                role: player.role.split(' ')[0],
-                matches: matchesPlayed.length,
+                id: player.playerId,
+                name: name,
+                role: role,
+                matches: player.matchesPlayed,
                 
-                // Metrics
-                rating: avgRating,
-                adr: adr,
-                wpa: wpaAvg,
-                kast: kastPct,
+                // Metrics (from full.filtered)
+                rating: player.full.filtered.details.rating,
+                adr: player.full.filtered.adr,
+                wpa: player.full.filtered.wpaAvg,
+                kast: player.full.filtered.kast,
+                impact: player.full.filtered.impact,
                 
                 // Scores
-                firepower: scoreFirepower,
-                entry: scoreEntry,
-                opening: scoreOpening,
-                trade: scoreTrade,
-                sniper: scoreSniper,
-                clutch: scoreClutch,
-                utility: scoreUtility,
-                isUtilityBroken
+                firepower: player.full.filtered.scoreFirepower,
+                entry: player.full.filtered.scoreEntry,
+                opening: player.full.filtered.scoreOpening,
+                trade: player.full.filtered.scoreTrade,
+                sniper: player.full.filtered.scoreSniper,
+                clutch: player.full.filtered.scoreClutch,
+                utility: player.full.filtered.scoreUtility,
+                
+                // Check for broken utility data (moved logic to aggregator or keep here)
+                isUtilityBroken: (player.full.filtered.details.totalFlashes > 5 && player.full.filtered.details.totalBlinded === 0) || 
+                                (player.full.filtered.details.totalFlashAssists > 0 && player.full.filtered.details.totalBlinded === 0)
             };
         }).filter(Boolean) as any[];
     }, [allMatches, includeStrangers]);

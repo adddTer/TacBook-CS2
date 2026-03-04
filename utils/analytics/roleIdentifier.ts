@@ -117,7 +117,7 @@ export const identifyRole = (stats: StatsResult['filtered']): RoleDefinition => 
 
     for (const [roleId, profile] of Object.entries(ROLE_PROFILES)) {
         // Skip sniper roles if player is not a sniper
-        if (!isSniper && ROLES.find(r => r.id === roleId)?.category === '狙击手') {
+        if (!isSniper && (roleId === 'awp_god' || roleId === 'hybrid_awper' || roleId === 'awp_anchor')) {
             continue;
         }
         // Skip NON-sniper roles if player IS a dedicated sniper (optional)

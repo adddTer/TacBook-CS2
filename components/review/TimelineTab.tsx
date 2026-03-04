@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Match } from '../../types';
 import { RoundCard } from './RoundCard';
+import { RoundHistory } from './RoundHistory';
 import { getWinReasonText } from './TimelineHelpers';
 import { exportTimelineToTxt } from '../../utils/exportTimeline';
 
@@ -31,6 +32,8 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({ match }) => {
 
     return (
         <div className="space-y-4 pb-8">
+            <RoundHistory match={match} />
+
             <div className="flex justify-end px-1 gap-2 flex-wrap">
                  <button 
                     onClick={() => exportTimelineToTxt(match, showDetails)}

@@ -1,13 +1,13 @@
 import React from 'react';
 import { Match, Side } from '../../types';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { getTeamNames } from '../../utils/matchHelpers';
 
 interface EconomyTabProps {
     match: Match;
 }
 
-// Helper: Calculate Side for Round (Supports OT) - Duplicated from demoParser to avoid circular deps or complex exports
+// Helper: Calculate Side for Round (Supports OT)
 const getRoundSide = (round: number, initialSide: Side): Side => {
     const oppositeSide = initialSide === 'T' ? 'CT' : 'T';
     
@@ -22,8 +22,6 @@ const getRoundSide = (round: number, initialSide: Side): Side => {
     const otSubRound = (otRound - 1) % 6; // 0..5
     
     // Determine the starting side for this OT block
-    // OT1 (Odd): Starts with Opposite Side (Stay on side from end of Reg)
-    // OT2 (Even): Starts with Initial Side
     const otStartSide = (otNumber % 2 !== 0) ? oppositeSide : initialSide;
     
     // Determine side for specific round within OT (Swap after 3 rounds)
@@ -34,37 +32,11 @@ const getRoundSide = (round: number, initialSide: Side): Side => {
     }
 };
 
-const CustomDot = (props: any) => {
-    const { cx, cy, payload, dataKey, teamA, teamB } = props;
-    if (!cx || !cy) return null;
-
-    // Determine if this dot belongs to the winner of the round
-    const isUs = dataKey === teamA;
-    const isThem = dataKey === teamB;
-    const winner = payload.winner; // 'us' or 'them'
-    
-    const isWinner = (isUs && winner === 'us') || (isThem && winner === 'them');
-
-    if (isWinner) {
-        return (
-            <g transform={`translate(${cx - 8}, ${cy - 8})`}>
-                <svg width={16} height={16} viewBox="0 0 24 24" fill={props.stroke} stroke="none">
-                    <path d="M20.2 6.5l-1.1-3.3c-.3-.9-1.2-1.5-2.2-1.5H7.1c-1 0-1.9.6-2.2 1.5L3.8 6.5c-.4 1.2.2 2.5 1.4 2.9l.5.2c.4 2.3 2.1 4.2 4.3 4.9v2.5H7v2h10v-2h-3v-2.5c2.2-.7 3.9-2.6 4.3-4.9l.5-.2c1.2-.4 1.8-1.7 1.4-2.9zM5.4 7.8l.8-2.3c.1-.3.4-.5.7-.5h10.2c.3 0 .6.2.7.5l.8 2.3c.1.4-.1.8-.5.9l-.5.2C16.6 9 16 9.5 16 10.2V11c0 2.2-1.8 4-4 4s-4-1.8-4-4v-.8c0-.7-.6-1.2-1.6-1.3l-.5-.2c-.4-.1-.6-.5-.5-.9z"/>
-                </svg>
-            </g>
-        );
-    }
-
-    return (
-        <circle cx={cx} cy={cy} r={3} stroke={props.stroke} strokeWidth={2} fill="white" />
-    );
-};
-
 export const EconomyTab: React.FC<EconomyTabProps> = ({ match }) => {
     const { teamA, teamB } = getTeamNames(match);
     
     // Prepare data for the chart
-    const rawRoundsData: any[] = [];
+    const data: any[] = [];
     const initialSide = match.startingSide || 'CT'; // Fallback if missing
 
     match.rounds?.forEach((round, index) => {
@@ -79,118 +51,143 @@ export const EconomyTab: React.FC<EconomyTabProps> = ({ match }) => {
             winnerTeam = round.winnerSide === usSide ? 'us' : 'them';
         }
 
-        rawRoundsData.push({
+        data.push({
             round: roundNum,
             [teamA]: equipUs,
             [teamB]: equipThem,
-            winner: winnerTeam
+            winner: winnerTeam,
+            amt: Math.max(equipUs, equipThem) // For domain calculation
         });
     });
 
-    // Process data to insert breaks (nulls)
-    const processedData: any[] = [];
-    rawRoundsData.forEach(d => {
-        processedData.push(d);
-        
-        const r = d.round;
-        let shouldBreak = false;
-        
-        // Break logic: 12, 24, 30, 36...
-        if (r === 12) shouldBreak = true;
-        else if (r === 24) shouldBreak = true;
-        else if (r > 24 && (r - 24) % 6 === 0) shouldBreak = true;
-        
-        if (shouldBreak) {
-            // Insert a null point to break the line
-            processedData.push({ 
-                round: r + 0.5, // Dummy X value
-                [teamA]: null, 
-                [teamB]: null,
-                isBreak: true
-            });
+    // Custom Tooltip
+    const CustomTooltip = ({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            const usVal = payload.find((p: any) => p.name === teamA)?.value || 0;
+            const themVal = payload.find((p: any) => p.name === teamB)?.value || 0;
+            const winner = payload[0].payload.winner;
+            
+            return (
+                <div className="bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 p-3 rounded-lg shadow-xl text-xs">
+                    <p className="font-bold text-neutral-700 dark:text-neutral-200 mb-2">第 {label} 回合</p>
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                            <span className="text-neutral-600 dark:text-neutral-400">{teamA}:</span>
+                            <span className="font-mono font-medium text-neutral-900 dark:text-white">${usVal.toLocaleString()}</span>
+                            {winner === 'us' && <span className="text-yellow-500 text-[10px] ml-1">👑</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                            <span className="text-neutral-600 dark:text-neutral-400">{teamB}:</span>
+                            <span className="font-mono font-medium text-neutral-900 dark:text-white">${themVal.toLocaleString()}</span>
+                            {winner === 'them' && <span className="text-yellow-500 text-[10px] ml-1">👑</span>}
+                        </div>
+                    </div>
+                </div>
+            );
         }
-    });
+        return null;
+    };
 
     return (
         <div className="space-y-6">
             <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-neutral-900 dark:text-white mb-6">经济走势</h3>
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-neutral-900 dark:text-white">经济走势</h3>
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 rounded border border-yellow-500/30">
+                            BETA
+                        </span>
+                    </div>
+                    <div className="flex gap-4 text-xs text-neutral-500">
+                        <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-blue-500/20 border border-blue-500 rounded"></div>
+                            <span>{teamA}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-red-500/20 border border-red-500 rounded"></div>
+                            <span>{teamB}</span>
+                        </div>
+                    </div>
+                </div>
                 
                 <div className="h-[400px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                            data={processedData}
+                        <AreaChart
+                            data={data}
                             margin={{ top: 20, right: 30, left: 20, bottom: 10 }}
                         >
+                            <defs>
+                                <linearGradient id="colorUs" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                </linearGradient>
+                                <linearGradient id="colorThem" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#333" opacity={0.1} vertical={false} />
                             <XAxis 
                                 dataKey="round" 
                                 stroke="#888" 
-                                tick={{ fontSize: 12 }}
+                                tick={{ fontSize: 10 }}
                                 tickLine={false}
                                 axisLine={false}
-                                type="number"
-                                domain={['dataMin', 'dataMax']}
-                                allowDecimals={false}
-                                tickCount={match.rounds?.length ? Math.min(match.rounds.length, 15) : 10}
+                                interval={0} // Show all ticks if possible, or let Recharts handle it
+                                minTickGap={15}
                             />
                             <YAxis 
                                 stroke="#888" 
-                                tick={{ fontSize: 12 }}
+                                tick={{ fontSize: 10 }}
                                 tickLine={false}
                                 axisLine={false}
                                 tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                             />
-                            <Tooltip 
-                                contentStyle={{ 
-                                    backgroundColor: 'rgba(255, 255, 255, 0.9)', 
-                                    borderRadius: '8px', 
-                                    border: 'none', 
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)' 
-                                }}
-                                labelStyle={{ color: '#666', fontWeight: 'bold', marginBottom: '4px' }}
-                                labelFormatter={(label) => Number.isInteger(label) ? `Round ${label}` : ''}
-                                filterNull={true} // Hide tooltip for break points
-                            />
-                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                            <Tooltip content={<CustomTooltip />} />
                             
-                            {/* Reference Lines for Eco/Buy thresholds */}
+                            {/* Threshold Lines */}
+                            <ReferenceLine 
+                                y={22000} 
+                                stroke="#10b981" 
+                                strokeDasharray="3 3" 
+                                opacity={0.4}
+                                label={{ value: "全起线 (~22k)", position: 'insideRight', fill: '#10b981', fontSize: 10 }} 
+                            />
                             <ReferenceLine 
                                 y={10000} 
-                                label={{ value: "半起线", position: 'insideTopLeft', fill: 'orange', fontSize: 12 }} 
-                                stroke="orange" 
+                                stroke="#f59e0b" 
                                 strokeDasharray="3 3" 
-                                opacity={0.5} 
-                            />
-                            <ReferenceLine 
-                                y={20000} 
-                                label={{ value: "全起线", position: 'insideTopLeft', fill: 'green', fontSize: 12 }} 
-                                stroke="green" 
-                                strokeDasharray="3 3" 
-                                opacity={0.5} 
+                                opacity={0.4}
+                                label={{ value: "半起线 (~10k)", position: 'insideRight', fill: '#f59e0b', fontSize: 10 }} 
                             />
 
-                            <Line 
+                            <Area 
                                 type="monotone" 
                                 dataKey={teamA} 
                                 stroke="#3b82f6" 
-                                strokeWidth={3}
-                                dot={(props) => <CustomDot {...props} teamA={teamA} teamB={teamB} />}
-                                activeDot={{ r: 6 }}
+                                strokeWidth={2}
+                                fillOpacity={1} 
+                                fill="url(#colorUs)" 
                                 name={teamA}
-                                connectNulls={false}
+                                animationDuration={1000}
+                                dot={{ r: 3, strokeWidth: 1, fill: '#3b82f6', stroke: '#fff' }}
+                                activeDot={{ r: 5, strokeWidth: 0 }}
                             />
-                            <Line 
+                            <Area 
                                 type="monotone" 
                                 dataKey={teamB} 
                                 stroke="#ef4444" 
-                                strokeWidth={3}
-                                dot={(props) => <CustomDot {...props} teamA={teamA} teamB={teamB} />}
-                                activeDot={{ r: 6 }}
+                                strokeWidth={2}
+                                fillOpacity={1} 
+                                fill="url(#colorThem)" 
                                 name={teamB}
-                                connectNulls={false}
+                                animationDuration={1000}
+                                dot={{ r: 3, strokeWidth: 1, fill: '#ef4444', stroke: '#fff' }}
+                                activeDot={{ r: 5, strokeWidth: 0 }}
                             />
-                        </LineChart>
+                        </AreaChart>
                     </ResponsiveContainer>
                 </div>
             </div>

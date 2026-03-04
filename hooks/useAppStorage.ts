@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useMemo } from 'react';
-import { ContentGroup, Tactic, Utility, Match, MatchSeries } from '../types';
+import { ContentGroup, Tactic, Utility, Match, MatchSeries, Tournament } from '../types';
 import { generateGroupId } from '../utils/idGenerator';
 import { loadGroupsFromDB, saveGroupsToDB } from '../utils/db';
 
@@ -46,7 +46,8 @@ export const useAppStorage = () => {
                 const migratedGroups = loadedGroups.map((g: any) => ({
                     ...g,
                     matches: Array.isArray(g.matches) ? g.matches : [],
-                    series: Array.isArray(g.series) ? g.series : []
+                    series: Array.isArray(g.series) ? g.series : [],
+                    tournaments: Array.isArray(g.tournaments) ? g.tournaments : []
                 }));
                 setGroups(migratedGroups);
             }
@@ -82,6 +83,7 @@ export const useAppStorage = () => {
                     utilities: [],
                     matches: [],
                     series: [],
+                    tournaments: [],
                 };
                 setGroups([defaultGroup]);
                 setActiveGroupIds([defaultId]);
@@ -116,13 +118,14 @@ export const useAppStorage = () => {
     }, [activeGroupIds, groups, isDataLoaded]);
 
     // --- Computed Data ---
-    const { allTactics, allUtilities, allMatches, allSeries } = useMemo(() => {
+    const { allTactics, allUtilities, allMatches, allSeries, allTournaments } = useMemo(() => {
         const activeGroups = groups.filter(g => activeGroupIds.includes(g.metadata.id));
         const tactics = activeGroups.flatMap(g => g.tactics);
         const utilities = activeGroups.flatMap(g => g.utilities);
         const matches = activeGroups.flatMap(g => g.matches || []); 
         const series = activeGroups.flatMap(g => g.series || []);
-        return { allTactics: tactics, allUtilities: utilities, allMatches: matches, allSeries: series };
+        const tournaments = activeGroups.flatMap(g => g.tournaments || []);
+        return { allTactics: tactics, allUtilities: utilities, allMatches: matches, allSeries: series, allTournaments: tournaments };
     }, [groups, activeGroupIds]);
 
     const writableGroups = useMemo(() => {
@@ -234,6 +237,32 @@ export const useAppStorage = () => {
         }));
     };
 
+    const handleSaveTournament = (newTournament: Tournament, targetGroupId: string) => {
+        setGroups(prevGroups => prevGroups.map(group => {
+            if (group.metadata.id === targetGroupId) {
+                if(group.metadata.isReadOnly) return group;
+
+                const tournamentToSave = { ...newTournament, groupId: targetGroupId };
+                let newTournamentList = group.tournaments || [];
+                const existsIndex = newTournamentList.findIndex(t => t.id === tournamentToSave.id);
+                
+                if (existsIndex >= 0) {
+                    newTournamentList = [...newTournamentList];
+                    newTournamentList[existsIndex] = tournamentToSave;
+                } else {
+                    newTournamentList = [tournamentToSave, ...newTournamentList];
+                }
+
+                return { 
+                    ...group, 
+                    tournaments: newTournamentList,
+                    metadata: { ...group.metadata, version: group.metadata.version + 1, lastUpdated: Date.now() } 
+                };
+            }
+            return group;
+        }));
+    };
+
     const deleteTactic = (tactic: Tactic) => {
         setGroups(prevGroups => prevGroups.map(g => {
             if (g.metadata.id === tactic.groupId) {
@@ -286,6 +315,19 @@ export const useAppStorage = () => {
         }));
     };
 
+    const deleteTournament = (tournament: Tournament) => {
+        setGroups(prevGroups => prevGroups.map(g => {
+            if (g.metadata.id === tournament.groupId) {
+                return {
+                    ...g,
+                    tournaments: (g.tournaments || []).filter(t => t.id !== tournament.id),
+                    metadata: { ...g.metadata, lastUpdated: Date.now() }
+                };
+            }
+            return g;
+        }));
+    };
+
     return {
         groups,
         setGroups,
@@ -296,15 +338,18 @@ export const useAppStorage = () => {
         allUtilities,
         allMatches,
         allSeries,
+        allTournaments,
         writableGroups,
         hasWritableGroups,
         handleSaveTactic,
         handleSaveUtility,
         handleSaveMatch,
         handleSaveSeries,
+        handleSaveTournament,
         deleteTactic,
         deleteUtility,
         deleteMatch,
-        deleteSeries
+        deleteSeries,
+        deleteTournament
     };
 };

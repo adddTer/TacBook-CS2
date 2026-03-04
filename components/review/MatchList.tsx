@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Match, MatchSeries } from '../../types';
 import { SourceBadge, getMapDisplayName, getMapEnName } from './ReviewShared';
-import { isMyTeamMatch } from '../../utils/matchHelpers';
+import { isMyTeamMatch, calculateScoreFromRounds } from '../../utils/matchHelpers';
 import { MatchFilterBar, FilterState } from './MatchFilterBar';
 
 interface MatchListProps {
@@ -13,6 +13,7 @@ interface MatchListProps {
     onBatchDelete?: (items: { type: 'match' | 'series', id: string }[]) => void;
     onSearch?: (query: string) => void;
     onFilterChange?: (filters: FilterState) => void;
+    searchQuery?: string;
     availableMaps?: string[];
     availableServers?: string[];
 }
@@ -25,11 +26,13 @@ export const MatchList: React.FC<MatchListProps> = ({
     onBatchDelete,
     onSearch,
     onFilterChange,
+    searchQuery = '',
     availableMaps = [],
     availableServers = []
 }) => {
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isFilterExpanded, setIsFilterExpanded] = useState(false);
 
     const hasNoData = matches.length === 0 && series.length === 0;
     const isFilteredEmpty = hasNoData && (availableMaps.length > 0 || availableServers.length > 0);
@@ -86,14 +89,41 @@ export const MatchList: React.FC<MatchListProps> = ({
 
     return (
         <div className="pb-20">
-             {/* Filter Bar */}
+             {/* Filter Bar Toggle & Content */}
              {onSearch && onFilterChange && (
-                 <MatchFilterBar 
-                     onSearch={onSearch}
-                     onFilterChange={onFilterChange}
-                     availableMaps={availableMaps}
-                     availableServers={availableServers}
-                 />
+                 <div className="mb-4">
+                     <div className="flex items-center justify-between mb-2">
+                         <button 
+                            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+                            className="flex items-center gap-2 text-xs font-black text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors group"
+                         >
+                             <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${isFilterExpanded ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500'}`}>
+                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                             </div>
+                             <span>搜索与筛选</span>
+                             <svg className={`w-3 h-3 transition-transform duration-300 ${isFilterExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                         </button>
+
+                         {!isFilterExpanded && searchQuery && (
+                             <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300">
+                                 <span className="text-[10px] font-bold text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded">
+                                     已应用搜索: {searchQuery}
+                                 </span>
+                             </div>
+                         )}
+                     </div>
+
+                     {isFilterExpanded && (
+                         <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                             <MatchFilterBar 
+                                 onSearch={onSearch}
+                                 onFilterChange={onFilterChange}
+                                 availableMaps={availableMaps}
+                                 availableServers={availableServers}
+                             />
+                         </div>
+                     )}
+                 </div>
              )}
 
              {/* Batch Actions Toolbar */}
@@ -145,9 +175,10 @@ export const MatchList: React.FC<MatchListProps> = ({
                         let winsB = 0;
                         subMatches.forEach((m, idx) => {
                              const ref = s.matches[idx];
-                             let scoreA = m.score.us;
-                             let scoreB = m.score.them;
-                             if (ref.swapSides) { scoreA = m.score.them; scoreB = m.score.us; }
+                             const displayScore = calculateScoreFromRounds(m);
+                             let scoreA = displayScore.us;
+                             let scoreB = displayScore.them;
+                             if (ref.swapSides) { scoreA = displayScore.them; scoreB = displayScore.us; }
                              if (scoreA > scoreB) winsA++; else if (scoreB > scoreA) winsB++;
                         });
 
@@ -213,6 +244,9 @@ export const MatchList: React.FC<MatchListProps> = ({
                     const isWin = match.result === 'WIN';
                     const isTie = match.result === 'TIE';
 
+                    // Use calculated score for robustness
+                    const displayScore = calculateScoreFromRounds(match);
+
                     let barColor = 'bg-neutral-400';
                     if (isMine) {
                         if (isWin) barColor = 'bg-green-500';
@@ -258,11 +292,11 @@ export const MatchList: React.FC<MatchListProps> = ({
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <span className={`text-3xl font-black font-mono tracking-tighter ${isMine && isWin ? 'text-green-600 dark:text-green-400' : 'text-neutral-800 dark:text-neutral-200'}`}>
-                                                {match.score.us}
+                                                {displayScore.us}
                                             </span>
                                             <span className="text-xl text-neutral-400/50 font-light">:</span>
                                             <span className={`text-3xl font-black font-mono tracking-tighter ${isMine && !isWin && !isTie ? 'text-red-600 dark:text-red-400' : 'text-neutral-800 dark:text-neutral-200'}`}>
-                                                {match.score.them}
+                                                {displayScore.them}
                                             </span>
                                         </div>
                                     </div>

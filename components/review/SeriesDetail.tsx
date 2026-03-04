@@ -1,8 +1,14 @@
-import React, { useMemo } from 'react';
-import { Match, MatchSeries, PlayerMatchStats, ClutchRecord } from '../../types';
-import { getMapDisplayName, getMapTheme } from './ReviewShared';
-import { resolveName } from '../../utils/demo/helpers';
-import { ScoreboardTable } from './ScoreboardTable';
+import React, { useMemo, useState } from 'react';
+import { Match, MatchSeries, PlayerMatchStats } from '../../types';
+import { getMapDisplayName, SourceBadge, DataDefinitionsModal } from './ReviewShared';
+import { ScoreboardTab } from './ScoreboardTab';
+import { DuelsTab } from './DuelsTab';
+import { UtilityTab } from './UtilityTab';
+import { ClutchesTab } from './ClutchesTab';
+import { MatchPerformanceTab } from './match_detail/MatchPerformanceTab';
+import { TimelineTab } from './TimelineTab';
+import { isMyTeamMatch, getTeamNames } from '../../utils/matchHelpers';
+import { MatchAggregator } from '../../utils/analytics/matchAggregator';
 
 interface SeriesDetailProps {
     series: MatchSeries;
@@ -11,6 +17,8 @@ interface SeriesDetailProps {
     onSelectMatch: (match: Match) => void;
     onSelectPlayer: (playerId: string) => void;
 }
+
+type SideFilter = 'ALL' | 'CT' | 'T';
 
 export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, onBack, onSelectMatch, onSelectPlayer }) => {
     
@@ -22,311 +30,269 @@ export const SeriesDetail: React.FC<SeriesDetailProps> = ({ series, allMatches, 
         }).filter(Boolean) as { data: Match, swap: boolean }[];
     }, [series, allMatches]);
 
-    // 2. Aggregate Stats
-    const { teamStats, enemyStats, scoreA, scoreB, teamAName, teamBName } = useMemo(() => {
+    // 2. Aggregate Stats to create a "Fake" Match object for the whole series
+    const aggregatedMatch = useMemo(() => {
         let winsA = 0;
         let winsB = 0;
-        let tAName = "My Team";
-        let tBName = "Opponent";
+        let tAName = "Team A";
+        let tBName = "Team B";
         
-        // Try to get team names from the first match
         if (matches.length > 0) {
             const first = matches[0];
-            tAName = first.swap ? (first.data.teamNameThem || 'Opponent') : (first.data.teamNameUs || 'My Team');
-            tBName = first.swap ? (first.data.teamNameUs || 'My Team') : (first.data.teamNameThem || 'Opponent');
+            const { teamA, teamB } = getTeamNames(first.data);
+            tAName = first.swap ? teamB : teamA;
+            tBName = first.swap ? teamA : teamB;
         }
 
-        const teamMap = new Map<string, any>();
-        const enemyMap = new Map<string, any>();
-
-        matches.forEach(({ data, swap }) => {
-            // Score Logic
+        // Prepare matches for aggregation by swapping sides if necessary
+        const normalizedMatches = matches.map(({ data, swap }) => {
             let sUs = data.score.us;
             let sThem = data.score.them;
             if (swap) { sUs = data.score.them; sThem = data.score.us; }
             if (sUs > sThem) winsA++; else if (sThem > sUs) winsB++;
 
-            // Player Aggregation Logic
-            const teamAPlayers = swap ? data.enemyPlayers : data.players;
-            const teamBPlayers = swap ? data.players : data.enemyPlayers;
-
-            const aggregate = (p: PlayerMatchStats, map: Map<string, any>) => {
-                const name = resolveName(p.playerId);
-                if (!map.has(name)) {
-                    map.set(name, {
-                        playerId: p.playerId, // Use original ID/Name
-                        steamid: p.steamid,
-                        matches: 0,
-                        rounds: 0,
-                        kills: 0, deaths: 0, assists: 0, damage: 0,
-                        ratingSum: 0,
-                        headshots: 0,
-                        kastSum: 0,
-                        rank: p.rank,
-                        entry_kills: 0,
-                        wpaSum: 0,
-                        multikills: { k2: 0, k3: 0, k4: 0, k5: 0 },
-                        clutches: { '1v1': { won: 0, lost: 0 }, '1v2': { won: 0, lost: 0 }, '1v3': { won: 0, lost: 0 }, '1v4': { won: 0, lost: 0 }, '1v5': { won: 0, lost: 0 } }
-                    });
-                }
-                
-                const entry = map.get(name);
-                const rounds = data.score.us + data.score.them;
-                
-                entry.matches++;
-                entry.rounds += rounds;
-                entry.kills += p.kills;
-                entry.deaths += p.deaths;
-                entry.assists += p.assists;
-                
-                // Damage
-                entry.damage += (p.total_damage !== undefined ? p.total_damage : (p.adr * rounds));
-                
-                // Headshots
-                const hsCount = (p as any).headshots !== undefined ? (p as any).headshots : Math.round(p.kills * (p.hsRate / 100));
-                entry.headshots += hsCount;
-
-                // Weighted sums
-                entry.ratingSum += (p.rating || 0) * rounds;
-                
-                // WPA, Entry Kills, MultiKills - Force recalculation from rounds if available
-                // Because match-level stats might be missing or aggregated differently
-                if (data.rounds && data.rounds.length > 0) {
-                    const pid = p.steamid || p.playerId;
-                    let matchWpaSum = 0;
-                    let matchEntryKills = 0;
-                    let matchMultiKills = { k2: 0, k3: 0, k4: 0, k5: 0 };
-
-                    data.rounds.forEach(r => {
-                        // Try lookup by SteamID first, then by Name (playerId)
-                        let pr = r.playerStats[pid];
-                        if (!pr && p.playerId) {
-                             pr = r.playerStats[p.playerId];
-                        }
-                        
-                        if (pr) {
-                            // WPA
-                            if (typeof pr.wpa === 'number' && !isNaN(pr.wpa)) {
-                                matchWpaSum += pr.wpa;
-                            }
-                            // Entry Kills
-                            if (pr.isEntryKill) {
-                                matchEntryKills++;
-                            }
-                            // MultiKills
-                            if (pr.kills === 2) matchMultiKills.k2++;
-                            else if (pr.kills === 3) matchMultiKills.k3++;
-                            else if (pr.kills === 4) matchMultiKills.k4++;
-                            else if (pr.kills >= 5) matchMultiKills.k5++;
-                        }
-                    });
-
-                    entry.wpaSum += matchWpaSum;
-                    entry.entry_kills += matchEntryKills;
-                    entry.multikills.k2 += matchMultiKills.k2;
-                    entry.multikills.k3 += matchMultiKills.k3;
-                    entry.multikills.k4 += matchMultiKills.k4;
-                    entry.multikills.k5 += matchMultiKills.k5;
-                } else {
-                    // Fallback to match stats if rounds are missing (unlikely but safe)
-                    const wpa = (typeof p.wpa === 'number' && !isNaN(p.wpa)) ? p.wpa : 0;
-                    // If p.wpa is average, multiply by rounds to get sum. If total, use as is.
-                    // Assuming average based on ScoreboardTab logic.
-                    entry.wpaSum += wpa * rounds;
-                    
-                    if (p.entry_kills !== undefined) entry.entry_kills += p.entry_kills;
-                    
-                    if (p.multikills) {
-                        entry.multikills.k2 += p.multikills.k2 || 0;
-                        entry.multikills.k3 += p.multikills.k3 || 0;
-                        entry.multikills.k4 += p.multikills.k4 || 0;
-                        entry.multikills.k5 += p.multikills.k5 || 0;
-                    }
-                }
-
-                // Clutches
-                if (p.clutches) {
-                    Object.keys(p.clutches).forEach(k => {
-                        const key = k as keyof ClutchRecord;
-                        if (entry.clutches[key] && p.clutches[key]) {
-                            entry.clutches[key].won += p.clutches[key].won;
-                            entry.clutches[key].lost += p.clutches[key].lost;
-                        }
-                    });
-                }
-                
-                // KAST Fix
-                let matchKast = p.kast || 0;
-                if (data.rounds && data.rounds.length > 0) {
-                     const pid = p.steamid || p.playerId;
-                     let kCount = 0;
-                     let validRoundCount = 0;
-                     
-                     data.rounds.forEach(r => {
-                         const pr = r.playerStats[pid];
-                         if (pr) {
-                             if (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0 && pr.kills === 0 && pr.assists === 0) return;
-                             validRoundCount++;
-                             if (pr.kills > 0 || pr.assists > 0 || pr.survived || pr.wasTraded) {
-                                 kCount++;
-                             }
-                         }
-                     });
-                     
-                     if (validRoundCount > 0) {
-                         matchKast = (kCount / validRoundCount) * 100;
-                     }
-                }
-                entry.kastSum += matchKast * rounds;
-
-                if (p.rank && p.rank !== '?') entry.rank = p.rank;
-            };
-
-            teamAPlayers.forEach(p => aggregate(p, teamMap));
-            teamBPlayers.forEach(p => aggregate(p, enemyMap));
+            if (!swap) return data;
+            
+            // Return a swapped version of the match
+            return {
+                ...data,
+                players: data.enemyPlayers,
+                enemyPlayers: data.players,
+                score: {
+                    ...data.score,
+                    us: data.score.them,
+                    them: data.score.us
+                },
+                teamNameUs: data.teamNameThem,
+                teamNameThem: data.teamNameUs
+            } as Match;
         });
 
-        // Finalize Averages
-        const finalize = (map: Map<string, any>) => {
-            return Array.from(map.values()).map(p => {
-                const r = p.rounds || 1;
-                const k = p.kills || 1;
-                return {
-                    ...p,
-                    rating: p.ratingSum / r,
-                    adr: p.damage / r,
-                    kast: p.kastSum / r,
-                    hsRate: (p.headshots / k) * 100,
-                    // Fix: WPA is already summed up as (avg_wpa_per_match * rounds_in_match), so dividing by total rounds gives the weighted average WPA per round
-                    wpa: p.wpaSum / r,
-                    kdDiff: p.kills - p.deaths
-                } as PlayerMatchStats;
-            });
+        // Use MatchAggregator for both teams
+        const teamAPlayers = MatchAggregator.aggregate(normalizedMatches.map(m => ({
+            ...m,
+            enemyPlayers: [] // Only aggregate our players
+        })));
+
+        const teamBPlayers = MatchAggregator.aggregate(normalizedMatches.map(m => ({
+            ...m,
+            players: m.enemyPlayers,
+            enemyPlayers: [] // Only aggregate enemy players
+        })));
+
+        const maxScore = Math.max(winsA, winsB);
+        let format = series.format;
+        if (maxScore === 2) format = 'BO3';
+        else if (maxScore === 3) format = 'BO5';
+        else if (maxScore === 4) format = 'BO7';
+        else if (maxScore === 1 && matches.length === 1) format = 'BO1';
+        else if (matches.length === 2 && winsA === 1 && winsB === 1) format = 'BO2';
+
+        const isMine = matches.some(m => isMyTeamMatch(m.data));
+
+        const fakeMatch: Match = {
+            id: series.id,
+            source: 'Demo',
+            date: series.date,
+            mapId: '系列赛总计',
+            serverName: format,
+            rank: '',
+            result: winsA > winsB ? 'WIN' : winsA < winsB ? 'LOSS' : 'TIE',
+            score: {
+                us: winsA,
+                them: winsB,
+                half1_us: 0, half1_them: 0, half2_us: 0, half2_them: 0
+            },
+            teamNameUs: tAName,
+            teamNameThem: tBName,
+            players: teamAPlayers,
+            enemyPlayers: teamBPlayers,
+            rounds: [] // Timeline not supported for aggregated series
         };
 
+        return { fakeMatch, isMine };
+    }, [matches, series]);
+
+    const [selectedMapId, setSelectedMapId] = useState<string>('all');
+    const [detailTab, setDetailTab] = useState<'overview' | 'performance' | 'duels' | 'utility' | 'clutches' | 'timeline'>('overview');
+    const [sideFilter, setSideFilter] = useState<SideFilter>('ALL');
+    const [showDefinitions, setShowDefinitions] = useState(false);
+
+    const currentMatch = selectedMapId === 'all' 
+        ? aggregatedMatch.fakeMatch 
+        : matches.find(m => m.data.id === selectedMapId)?.data || aggregatedMatch.fakeMatch;
+
+    const isMine = selectedMapId === 'all' ? aggregatedMatch.isMine : isMyTeamMatch(currentMatch);
+    
+    // For specific match, we might need to swap teams if it was swapped in the series
+    const displayMatch = useMemo(() => {
+        if (selectedMapId === 'all') return currentMatch;
+        const ref = matches.find(m => m.data.id === selectedMapId);
+        if (!ref || !ref.swap) return currentMatch;
+
+        // Swap the match data for display
         return {
-            teamStats: finalize(teamMap),
-            enemyStats: finalize(enemyMap),
-            scoreA: winsA,
-            scoreB: winsB,
-            teamAName: tAName,
-            teamBName: tBName
-        };
-    }, [matches]);
+            ...currentMatch,
+            score: {
+                ...currentMatch.score,
+                us: currentMatch.score.them,
+                them: currentMatch.score.us,
+                half1_us: currentMatch.score.half1_them,
+                half1_them: currentMatch.score.half1_us,
+                half2_us: currentMatch.score.half2_them,
+                half2_them: currentMatch.score.half2_us,
+                ot_us: currentMatch.score.ot_them,
+                ot_them: currentMatch.score.ot_us,
+            },
+            teamNameUs: currentMatch.teamNameThem,
+            teamNameThem: currentMatch.teamNameUs,
+            players: currentMatch.enemyPlayers,
+            enemyPlayers: currentMatch.players,
+            result: currentMatch.result === 'WIN' ? 'LOSS' : currentMatch.result === 'LOSS' ? 'WIN' : 'TIE'
+        } as Match;
+    }, [currentMatch, selectedMapId, matches]);
+
+    const { teamA, teamB } = getTeamNames(displayMatch);
 
     return (
-        <div className="fixed inset-0 z-[200] bg-white dark:bg-neutral-950 flex flex-col h-[100dvh] w-screen overflow-hidden animate-in slide-in-from-right duration-300 font-sans">
+        <div className="fixed inset-0 z-[200] bg-white dark:bg-neutral-950 flex flex-col h-[100dvh] w-screen overflow-hidden animate-in slide-in-from-right duration-300">
             {/* Header */}
             <div className="bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800 shadow-sm shrink-0">
                 <div className="flex items-center justify-between px-4 h-[56px]">
-                    <button onClick={onBack} className="flex items-center text-sm font-bold text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors">
-                        <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                        返回列表
+                    <div className="flex items-center gap-2">
+                        <button onClick={onBack} className="flex items-center text-sm font-bold text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors">
+                            <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                            返回
+                        </button>
+                        <button onClick={() => setShowDefinitions(true)} className="text-[10px] font-bold text-blue-500 hover:text-blue-600 flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-lg transition-colors ml-2">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            说明
+                        </button>
+                    </div>
+                    <div className="font-bold text-neutral-900 dark:text-white truncate max-w-[150px]">{series.title}</div>
+                    <div className="w-16"></div>
+                </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4 pb-20 overscroll-contain bg-neutral-50 dark:bg-neutral-950">
+                
+                {/* Map Selector */}
+                <div className="flex gap-2 overflow-x-auto pb-4 mb-2 snap-x">
+                    <button
+                        onClick={() => setSelectedMapId('all')}
+                        className={`shrink-0 snap-center px-4 py-2 rounded-xl text-sm font-bold transition-all border ${selectedMapId === 'all' ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-900 dark:border-white' : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-400 dark:border-neutral-800 dark:hover:bg-neutral-800'}`}
+                    >
+                        全部
                     </button>
-                    <div className="font-bold text-neutral-900 dark:text-white">系列赛详情</div>
-                    <div className="w-10"></div>
+                    {matches.map((m, idx) => (
+                        <button
+                            key={m.data.id}
+                            onClick={() => setSelectedMapId(m.data.id)}
+                            className={`shrink-0 snap-center px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-2 ${selectedMapId === m.data.id ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-900 dark:border-white' : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-400 dark:border-neutral-800 dark:hover:bg-neutral-800'}`}
+                        >
+                            {getMapDisplayName(m.data.mapId)} ({m.swap ? m.data.score.them : m.data.score.us}:{m.swap ? m.data.score.us : m.data.score.them})
+                        </button>
+                    ))}
                 </div>
-            </div>
 
-            <div className="flex-1 overflow-y-auto p-4 bg-neutral-50 dark:bg-neutral-950">
-                {/* Series Overview Card */}
-                <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 dark:from-neutral-900 dark:to-black rounded-3xl p-6 text-white mb-6 relative overflow-hidden shadow-lg border border-neutral-700/50">
-                    <div className="absolute top-0 right-0 p-8 opacity-10">
-                        <svg className="w-48 h-48 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-                    </div>
+                {/* Score Header */}
+                <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl overflow-hidden relative shadow-sm mb-6">
+                    <div className={`absolute left-0 top-0 bottom-0 w-2 ${isMine ? (displayMatch.result === 'WIN' ? 'bg-green-500' : displayMatch.result === 'LOSS' ? 'bg-red-500' : 'bg-yellow-500') : 'bg-neutral-400'}`}></div>
                     
-                    <div className="relative z-10 flex flex-col items-center text-center">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest border border-white/20 rounded-full px-2 py-0.5 bg-white/5">
-                                {series.format}
-                            </span>
-                            <span className="text-[10px] font-bold text-white/40 font-mono">
-                                {series.date.split('T')[0]}
-                            </span>
-                        </div>
-
-                        <h1 className="text-2xl md:text-3xl font-black mb-6 leading-tight">{series.title}</h1>
-                        
-                        <div className="flex items-center gap-6 md:gap-12 w-full max-w-lg justify-center bg-white/5 rounded-2xl p-4 backdrop-blur-sm">
-                            <div className="text-right flex-1">
-                                <div className={`text-5xl font-black tracking-tighter ${scoreA > scoreB ? 'text-green-400' : 'text-white'}`}>{scoreA}</div>
-                                <div className="text-[10px] font-bold text-white/50 uppercase mt-1 truncate">{teamAName}</div>
+                    <div className="p-6 text-center">
+                         {displayMatch.serverName && (
+                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
+                                {displayMatch.serverName}
                             </div>
-                            <div className="text-xl text-white/20 font-light">:</div>
-                            <div className="text-left flex-1">
-                                <div className={`text-5xl font-black tracking-tighter ${scoreB > scoreA ? 'text-red-400' : 'text-white'}`}>{scoreB}</div>
-                                <div className="text-[10px] font-bold text-white/50 uppercase mt-1 truncate">{teamBName}</div>
-                            </div>
-                        </div>
+                         )}
+                         <h2 className="text-3xl font-black text-neutral-900 dark:text-white mb-2">
+                             {selectedMapId === 'all' ? '系列赛总计' : getMapDisplayName(displayMatch.mapId)}
+                         </h2>
+                         <div className="flex justify-center mb-6">
+                             <SourceBadge source={displayMatch.source} />
+                         </div>
+                         
+                         <div className="flex items-center justify-center gap-8 md:gap-16 font-sans tabular-nums">
+                             <div className="text-right">
+                                 <div className={`text-4xl md:text-5xl font-black ${isMine && displayMatch.result === 'WIN' ? 'text-green-600 dark:text-green-500' : 'text-neutral-900 dark:text-white'}`}>
+                                    {displayMatch.score.us}
+                                 </div>
+                                 <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">{teamA}</div>
+                             </div>
+                             <div className="text-2xl text-neutral-300 font-light opacity-50">:</div>
+                             <div className="text-left">
+                                  <div className={`text-4xl md:text-5xl font-black ${isMine && displayMatch.result === 'LOSS' ? 'text-red-600 dark:text-red-500' : 'text-neutral-400'}`}>
+                                     {displayMatch.score.them}
+                                 </div>
+                                 <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">{teamB}</div>
+                             </div>
+                         </div>
+                         
+                         {selectedMapId !== 'all' && (
+                             <div className="mt-6 flex justify-center gap-4 text-xs font-sans tabular-nums font-bold bg-neutral-50 dark:bg-neutral-800 py-2 rounded-lg max-w-[320px] mx-auto text-neutral-500">
+                                 <span>( <span className={displayMatch.startingSide === 'CT' ? 'text-yellow-500' : 'text-blue-500'}>{displayMatch.score.half1_them}</span>-<span className={displayMatch.startingSide === 'CT' ? 'text-blue-500' : 'text-yellow-500'}>{displayMatch.score.half1_us}</span> )</span>
+                                 <span>( <span className={displayMatch.startingSide === 'CT' ? 'text-blue-500' : 'text-yellow-500'}>{displayMatch.score.half2_them}</span>-<span className={displayMatch.startingSide === 'CT' ? 'text-yellow-500' : 'text-blue-500'}>{displayMatch.score.half2_us}</span> )</span>
+                                 {(displayMatch.score.ot_us !== undefined || displayMatch.score.ot_them !== undefined) && (
+                                     <span>( <span className="text-neutral-400">{displayMatch.score.ot_them || 0}</span>-<span className="text-neutral-400">{displayMatch.score.ot_us || 0}</span> )</span>
+                                 )}
+                             </div>
+                         )}
                     </div>
                 </div>
 
-                {/* Match List */}
-                <div className="mb-8">
-                    <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3 px-1 flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 7m0 13V7m0 0L9.553 4.553A1 1 0 009 3.618" /></svg>
-                        比赛列表
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {matches.map(({ data, swap }, idx) => {
-                            const mapName = getMapDisplayName(data.mapId);
-                            const scoreUs = swap ? data.score.them : data.score.us;
-                            const scoreThem = swap ? data.score.us : data.score.them;
-                            const isWin = scoreUs > scoreThem;
-                            const mapTheme = getMapTheme(mapName);
-                            
-                            return (
-                                <div 
-                                    key={data.id} 
-                                    onClick={() => onSelectMatch(data)}
-                                    className={`bg-white dark:bg-neutral-900 border rounded-xl p-3 flex items-center justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98] group bg-gradient-to-br ${mapTheme}`}
+                {/* Tab Navigation */}
+                <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl mb-6 sticky top-0 z-20 shadow-lg shadow-neutral-100/50 dark:shadow-black/20 overflow-x-auto">
+                      {['overview', 'performance', 'timeline', 'duels', 'utility', 'clutches'].map((t) => {
+                          if (t === 'timeline' && selectedMapId === 'all') return null; // Hide timeline for 'all'
+                          return (
+                              <button
+                                key={t}
+                                onClick={() => setDetailTab(t as any)}
+                                className={`flex-1 py-2.5 px-2 rounded-lg text-xs font-bold transition-all capitalize whitespace-nowrap
+                                    ${detailTab === t ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+                              >
+                                  {t === 'overview' ? '战报' : t === 'performance' ? '表现' : t === 'timeline' ? '时间轴' : t === 'duels' ? '对位' : t === 'utility' ? '道具' : '残局'}
+                              </button>
+                          );
+                      })}
+                </div>
+
+                {/* Filters (Overview Only) */}
+                {detailTab === 'overview' && (
+                    <div className="flex justify-end mb-4 animate-in fade-in items-center gap-3">
+                        <div className="flex p-0.5 bg-neutral-100 dark:bg-neutral-800 rounded-lg">
+                            {(['ALL', 'CT', 'T'] as const).map(side => (
+                                <button
+                                    key={side}
+                                    onClick={() => setSideFilter(side)}
+                                    className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${sideFilter === side ? 'bg-white dark:bg-neutral-700 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'}`}
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-white text-sm shadow-sm ${isWin ? 'bg-green-500' : 'bg-red-500'}`}>
-                                            M{idx+1}
-                                        </div>
-                                        <div>
-                                            <div className="font-bold text-sm text-neutral-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{mapName}</div>
-                                            <div className="text-[10px] text-neutral-500 flex items-center gap-1">
-                                                {swap && <span className="px-1 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">换边</span>}
-                                                <span className="font-mono">{data.score.us}:{data.score.them}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="font-mono font-black text-xl tracking-tight">
-                                        <span className={isWin ? 'text-green-600 dark:text-green-400' : 'text-neutral-400'}>{scoreUs}</span>
-                                        <span className="text-neutral-300/50 mx-1">:</span>
-                                        <span className={!isWin ? 'text-red-600 dark:text-red-400' : 'text-neutral-400'}>{scoreThem}</span>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                    {side}
+                                </button>
+                            ))}
+                        </div>
                     </div>
+                )}
+
+                {/* Tab Content */}
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    {detailTab === 'overview' && <ScoreboardTab match={displayMatch} players={displayMatch.players} enemyPlayers={displayMatch.enemyPlayers} onPlayerClick={onSelectPlayer} filter={sideFilter} />}
+                    {detailTab === 'performance' && <MatchPerformanceTab match={displayMatch} history={matches.map(m => {
+                        // We need to provide the history for the players in this series
+                        // matches is an array of { data: Match, swap: boolean }
+                        // We should probably just pass the raw matches or a flattened history
+                        return m.data.players.concat(m.data.enemyPlayers).map(p => ({ match: m.data, stats: p }));
+                    }).flat()} />}
+                    {detailTab === 'timeline' && selectedMapId !== 'all' && <TimelineTab match={displayMatch} />}
+                    {detailTab === 'duels' && <DuelsTab players={displayMatch.players} enemyPlayers={displayMatch.enemyPlayers} />}
+                    {detailTab === 'utility' && <UtilityTab players={displayMatch.players} enemyPlayers={displayMatch.enemyPlayers} teamAName={teamA} teamBName={teamB} />}
+                    {detailTab === 'clutches' && <ClutchesTab players={displayMatch.players} enemyPlayers={displayMatch.enemyPlayers} teamAName={teamA} teamBName={teamB} />}
                 </div>
 
-                {/* Aggregated Stats */}
-                <div>
-                    <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3 px-1 flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                        系列赛综合数据
-                    </h3>
-                    <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
-                        <ScoreboardTable 
-                            players={teamStats} 
-                            title={teamAName} 
-                            isEnemy={false} 
-                            onPlayerClick={onSelectPlayer} 
-                        />
-                        <div className="h-px bg-neutral-100 dark:bg-neutral-800 mx-4"></div>
-                        <ScoreboardTable 
-                            players={enemyStats} 
-                            title={teamBName} 
-                            isEnemy={true} 
-                            onPlayerClick={onSelectPlayer} 
-                        />
-                    </div>
-                </div>
             </div>
+            
+            <DataDefinitionsModal isOpen={showDefinitions} onClose={() => setShowDefinitions(false)} />
         </div>
     );
 };

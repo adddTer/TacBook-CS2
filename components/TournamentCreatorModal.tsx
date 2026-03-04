@@ -1,98 +1,103 @@
-
-import React, { useState } from 'react';
-import { Match, MatchSeries, ContentGroup } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Match, Tournament, ContentGroup, TournamentStage } from '../types';
 import { generateId } from '../utils/idGenerator';
-import { validateSeriesMatch, getMapDisplayName } from '../utils/matchHelpers';
+import { getMapDisplayName } from '../utils/matchHelpers';
 
-interface SeriesCreatorModalProps {
+interface TournamentCreatorModalProps {
     isOpen: boolean;
     onClose: () => void;
     availableMatches: Match[];
-    onSave: (series: MatchSeries, targetGroupId: string) => void;
+    onSave: (tournament: Tournament, targetGroupId: string) => void;
     writableGroups: ContentGroup[];
 }
 
-export const SeriesCreatorModal: React.FC<SeriesCreatorModalProps> = ({
+export const TournamentCreatorModal: React.FC<TournamentCreatorModalProps> = ({
     isOpen, onClose, availableMatches, onSave, writableGroups
 }) => {
     const [title, setTitle] = useState('');
-    const [selectedMatchIds, setSelectedMatchIds] = useState<string[]>([]);
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [selectedMatches, setSelectedMatches] = useState<{ matchId: string, stage: TournamentStage, customStageName?: string }[]>([]);
     const [targetGroupId, setTargetGroupId] = useState(writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
     const [validationError, setValidationError] = useState<string | null>(null);
 
+    // Auto-fill dates based on selected matches
+    useEffect(() => {
+        if (selectedMatches.length > 0) {
+            const dates = selectedMatches
+                .map(sm => availableMatches.find(m => m.id === sm.matchId)?.date)
+                .filter(Boolean)
+                .map(d => new Date(d as string).getTime());
+            
+            if (dates.length > 0) {
+                const minDate = new Date(Math.min(...dates)).toISOString().split('T')[0];
+                const maxDate = new Date(Math.max(...dates)).toISOString().split('T')[0];
+                setStartDate(minDate);
+                setEndDate(maxDate);
+            }
+        }
+    }, [selectedMatches, availableMatches]);
+
     if (!isOpen) return null;
 
-    // Filter out matches that are already in a series? For now, allow re-use.
-    // Sort matches by date desc
     const sortedMatches = [...availableMatches].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const toggleMatch = (matchId: string) => {
         setValidationError(null);
-        setSelectedMatchIds(prev => {
-            if (prev.includes(matchId)) {
-                return prev.filter(id => id !== matchId);
+        setSelectedMatches(prev => {
+            const exists = prev.find(m => m.matchId === matchId);
+            if (exists) {
+                return prev.filter(m => m.matchId !== matchId);
             } else {
-                return [...prev, matchId];
+                return [...prev, { matchId, stage: 'GROUP' }];
             }
         });
     };
 
+    const updateMatchStage = (matchId: string, stage: TournamentStage, customStageName?: string) => {
+        setSelectedMatches(prev => prev.map(m => m.matchId === matchId ? { ...m, stage, customStageName } : m));
+    };
+
     const handleCreate = () => {
         if (!title.trim()) {
-            setValidationError("请输入系列赛标题");
+            setValidationError("请输入赛事标题");
             return;
         }
-        if (selectedMatchIds.length < 1) {
+        if (!startDate) {
+            setValidationError("请输入开始日期");
+            return;
+        }
+        if (selectedMatches.length < 1) {
             setValidationError("请至少选择一场比赛");
             return;
         }
 
-        // Use selection order for the series order
-        const selectedMatches = selectedMatchIds.map(id => availableMatches.find(m => m.id === id)!).filter(Boolean);
-
-        const anchor = selectedMatches[0];
-        const seriesRefs = [{ matchId: anchor.id, swapSides: false }];
-
-        for (let i = 1; i < selectedMatches.length; i++) {
-            const result = validateSeriesMatch(anchor, selectedMatches[i]);
-            if (!result.valid) {
-                setValidationError(`比赛 "${getMapDisplayName(selectedMatches[i].mapId)}" 阵容与第一场不匹配：\n${result.error}`);
-                return;
-            }
-            seriesRefs.push({ matchId: selectedMatches[i].id, swapSides: result.swapSides });
-        }
-
-        // Calculate format based on number of matches
-        let format: MatchSeries['format'] = 'BO1';
-        if (selectedMatches.length === 2) format = 'BO2';
-        else if (selectedMatches.length === 3) format = 'BO3';
-        else if (selectedMatches.length === 5) format = 'BO5';
-        else if (selectedMatches.length === 7) format = 'BO7';
-
-        const newSeries: MatchSeries = {
-            id: generateId('series'),
+        const newTournament: Tournament = {
+            id: generateId('tournament'),
             title: title,
-            format: format,
-            matches: seriesRefs,
-            date: anchor.date, // Series date = date of first match
+            startDate: startDate,
+            endDate: endDate || undefined,
+            matches: selectedMatches,
         };
 
-        onSave(newSeries, targetGroupId);
+        onSave(newTournament, targetGroupId);
         onClose();
         // Reset form
         setTitle('');
-        setSelectedMatchIds([]);
+        setStartDate('');
+        setEndDate('');
+        setSelectedMatches([]);
         setValidationError(null);
     };
 
     return (
         <div className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white dark:bg-neutral-900 w-full max-w-4xl rounded-3xl shadow-2xl border border-neutral-200 dark:border-neutral-800 flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="bg-white dark:bg-neutral-900 w-full max-w-5xl rounded-3xl shadow-2xl border border-neutral-200 dark:border-neutral-800 flex flex-col max-h-[90vh] overflow-hidden">
                 {/* Header */}
                 <div className="px-8 py-6 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center bg-neutral-50/50 dark:bg-neutral-900/50">
                     <div>
-                        <h3 className="font-black text-2xl text-neutral-900 dark:text-white tracking-tight">创建系列赛</h3>
-                        <p className="text-xs text-neutral-500 font-medium mt-1">将多场单局比赛组合为一个完整的系列赛 (BO3/BO5 等)</p>
+                        <h3 className="font-black text-2xl text-neutral-900 dark:text-white tracking-tight">创建赛事</h3>
+                        <p className="text-xs text-neutral-500 font-medium mt-1">将多场比赛组合为一个完整的赛事 (Tournament)</p>
                     </div>
                     <button onClick={onClose} className="p-2 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors">
                         <svg className="w-6 h-6 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -101,19 +106,39 @@ export const SeriesCreatorModal: React.FC<SeriesCreatorModalProps> = ({
 
                 <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
                     {/* Left: Configuration */}
-                    <div className="w-full md:w-80 p-8 border-r border-neutral-100 dark:border-neutral-800 space-y-6 bg-neutral-50/30 dark:bg-neutral-900/30 flex flex-col overflow-y-auto">
+                    <div className="w-full md:w-96 p-8 border-r border-neutral-100 dark:border-neutral-800 space-y-6 bg-neutral-50/30 dark:bg-neutral-900/30 flex flex-col overflow-y-auto">
                         <div>
                             <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-2">1. 基本信息</label>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-neutral-600 dark:text-neutral-400 mb-1.5 pl-1">系列赛标题</label>
+                                    <label className="block text-xs font-bold text-neutral-600 dark:text-neutral-400 mb-1.5 pl-1">赛事名称</label>
                                     <input 
                                         type="text" 
                                         value={title}
                                         onChange={e => setTitle(e.target.value)}
-                                        placeholder="例如: IEM Cologne 决赛"
+                                        placeholder="例如: IEM Cologne 2024"
                                         className="w-full bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                     />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-neutral-600 dark:text-neutral-400 mb-1.5 pl-1">开始日期</label>
+                                        <input 
+                                            type="date" 
+                                            value={startDate}
+                                            onChange={e => setStartDate(e.target.value)}
+                                            className="w-full bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-neutral-600 dark:text-neutral-400 mb-1.5 pl-1">结束日期</label>
+                                        <input 
+                                            type="date" 
+                                            value={endDate}
+                                            onChange={e => setEndDate(e.target.value)}
+                                            className="w-full bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 text-sm font-bold dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                        />
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-neutral-600 dark:text-neutral-400 mb-1.5 pl-1">保存至战术包</label>
@@ -131,38 +156,70 @@ export const SeriesCreatorModal: React.FC<SeriesCreatorModalProps> = ({
                         </div>
 
                         <div className="flex-1 flex flex-col min-h-0">
-                            <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-2">2. 已选场次 ({selectedMatchIds.length})</label>
+                            <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-2">2. 已选场次与阶段 ({selectedMatches.length})</label>
                             <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2">
-                                {selectedMatchIds.length === 0 ? (
+                                {selectedMatches.length === 0 ? (
                                     <div className="py-8 text-center border-2 border-dashed border-neutral-200 dark:border-neutral-800 rounded-2xl">
                                         <p className="text-[10px] font-bold text-neutral-400">尚未选择比赛</p>
                                     </div>
                                 ) : (
-                                    selectedMatchIds.map((id, idx) => {
-                                        const match = availableMatches.find(m => m.id === id);
+                                    selectedMatches.map((sm, idx) => {
+                                        const match = availableMatches.find(m => m.id === sm.matchId);
                                         if (!match) return null;
                                         return (
-                                            <div key={id} className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-lg animate-in slide-in-from-left-2">
-                                                <span className="w-5 h-5 shrink-0 bg-blue-600 text-white text-[10px] font-black rounded-md flex items-center justify-center">
-                                                    {idx + 1}
-                                                </span>
-                                                <span className="text-xs font-bold text-blue-900 dark:text-blue-200 truncate flex-1">
-                                                    {getMapDisplayName(match.mapId)}
-                                                </span>
-                                                <button 
-                                                    onClick={() => toggleMatch(id)}
-                                                    className="p-1 text-blue-400 hover:text-blue-600 transition-colors"
-                                                >
-                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                                </button>
+                                            <div key={sm.matchId} className="flex flex-col gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-xl animate-in slide-in-from-left-2">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-5 h-5 shrink-0 bg-blue-600 text-white text-[10px] font-black rounded-md flex items-center justify-center">
+                                                            {idx + 1}
+                                                        </span>
+                                                        <span className="text-xs font-bold text-blue-900 dark:text-blue-200 truncate">
+                                                            {getMapDisplayName(match.mapId)}
+                                                        </span>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => toggleMatch(sm.matchId)}
+                                                        className="p-1 text-blue-400 hover:text-blue-600 transition-colors"
+                                                    >
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                    </button>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <select 
+                                                        value={sm.stage}
+                                                        onChange={(e) => updateMatchStage(sm.matchId, e.target.value as TournamentStage, sm.customStageName)}
+                                                        className="flex-1 bg-white dark:bg-neutral-950 border border-blue-200 dark:border-blue-800 rounded-lg p-1.5 text-xs font-medium text-blue-900 dark:text-blue-100 outline-none focus:border-blue-500"
+                                                    >
+                                                        <option value="GROUP">小组赛</option>
+                                                        <option value="SWISS">瑞士轮</option>
+                                                        <option value="SWISS_ROUND">瑞士轮 (轮次)</option>
+                                                        <option value="RO32">1/16决赛 (RO32)</option>
+                                                        <option value="RO16">1/8决赛 (RO16)</option>
+                                                        <option value="QUARTER_FINAL">1/4决赛</option>
+                                                        <option value="SEMI_FINAL">半决赛</option>
+                                                        <option value="FINAL">决赛</option>
+                                                        <option value="UPPER_BRACKET">胜者组</option>
+                                                        <option value="LOWER_BRACKET">败者组</option>
+                                                        <option value="OTHER">其他</option>
+                                                    </select>
+                                                    {sm.stage === 'OTHER' && (
+                                                        <input 
+                                                            type="text"
+                                                            value={sm.customStageName || ''}
+                                                            onChange={(e) => updateMatchStage(sm.matchId, 'OTHER', e.target.value)}
+                                                            placeholder="自定义阶段"
+                                                            className="flex-1 bg-white dark:bg-neutral-950 border border-blue-200 dark:border-blue-800 rounded-lg p-1.5 text-xs font-medium text-blue-900 dark:text-blue-100 outline-none focus:border-blue-500"
+                                                        />
+                                                    )}
+                                                </div>
                                             </div>
                                         );
                                     })
                                 )}
                             </div>
-                            {selectedMatchIds.length > 0 && (
+                            {selectedMatches.length > 0 && (
                                 <button 
-                                    onClick={() => setSelectedMatchIds([])}
+                                    onClick={() => setSelectedMatches([])}
                                     className="w-full mt-2 py-2 text-[10px] font-bold text-neutral-400 hover:text-red-500 transition-colors"
                                 >
                                     清空选择
@@ -175,12 +232,12 @@ export const SeriesCreatorModal: React.FC<SeriesCreatorModalProps> = ({
                     <div className="flex-1 p-8 flex flex-col overflow-hidden">
                         <div className="flex justify-between items-end mb-4">
                             <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest">3. 选择比赛</label>
-                            <span className="text-[10px] text-neutral-400 font-medium italic">按顺序点击以确定地图顺序</span>
+                            <span className="text-[10px] text-neutral-400 font-medium italic">点击以添加或移除比赛</span>
                         </div>
                         
                         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
                             {sortedMatches.map(match => {
-                                const selectedIndex = selectedMatchIds.indexOf(match.id);
+                                const selectedIndex = selectedMatches.findIndex(m => m.matchId === match.id);
                                 const isSelected = selectedIndex !== -1;
                                 return (
                                     <div 
@@ -231,8 +288,8 @@ export const SeriesCreatorModal: React.FC<SeriesCreatorModalProps> = ({
                 {/* Footer */}
                 <div className="px-8 py-6 border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 flex justify-between items-center">
                     <div className="text-xs font-bold text-neutral-400">
-                        {selectedMatchIds.length > 0 ? (
-                            <span>已选择 <span className="text-blue-600">{selectedMatchIds.length}</span> 场比赛，将生成 <span className="text-blue-600">BO{selectedMatchIds.length}</span> 系列赛</span>
+                        {selectedMatches.length > 0 ? (
+                            <span>已选择 <span className="text-blue-600">{selectedMatches.length}</span> 场比赛</span>
                         ) : (
                             <span>请选择至少一场比赛</span>
                         )}
@@ -246,14 +303,14 @@ export const SeriesCreatorModal: React.FC<SeriesCreatorModalProps> = ({
                         </button>
                         <button 
                             onClick={handleCreate}
-                            disabled={selectedMatchIds.length === 0}
+                            disabled={selectedMatches.length === 0}
                             className={`px-8 py-3 rounded-2xl text-sm font-black shadow-xl transition-all active:scale-95 ${
-                                selectedMatchIds.length > 0 
+                                selectedMatches.length > 0 
                                 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25' 
                                 : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'
                             }`}
                         >
-                            生成系列赛
+                            创建赛事
                         </button>
                     </div>
                 </div>

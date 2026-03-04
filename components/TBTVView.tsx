@@ -4,6 +4,7 @@ import { MATCH_HISTORY } from '../data/matches';
 import { ROSTER } from '../constants/roster';
 import { MAPS } from '../constants';
 import { Match, PlayerMatchStats, Rank } from '../types';
+import { getTeamNames } from '../utils/matchHelpers';
 
 // Mapping for in-game names to Roster IDs
 const NAME_MAPPING: Record<string, string> = {
@@ -165,12 +166,12 @@ export const TBTVView: React.FC = () => {
       </div>
   );
 
-  const ScoreboardTable = ({ players, isTeam }: { players: PlayerMatchStats[], isTeam: boolean }) => (
+  const ScoreboardTable = ({ players, isTeam, teamName }: { players: PlayerMatchStats[], isTeam: boolean, teamName: string }) => (
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left whitespace-nowrap">
             <thead className={`text-[10px] uppercase font-bold border-b ${isTeam ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 text-blue-500' : 'bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30 text-red-500'}`}>
                 <tr>
-                    <th className="px-3 py-2 sticky left-0 z-10 bg-inherit">{isTeam ? '我方' : '敌方'}</th>
+                    <th className="px-3 py-2 sticky left-0 z-10 bg-inherit">{teamName}</th>
                     <th className="px-1 py-2 text-center">Rank</th>
                     <th className="px-1 py-2 text-center">K</th>
                     <th className="px-1 py-2 text-center">D</th>
@@ -355,6 +356,7 @@ export const TBTVView: React.FC = () => {
       const half1ThemColor = startSide === 'CT' ? tColor : ctColor;
       const half2UsColor = startSide === 'CT' ? tColor : ctColor;
       const half2ThemColor = startSide === 'CT' ? ctColor : tColor;
+      const { teamA, teamB } = getTeamNames(selectedMatch);
 
       return (
           <div className="space-y-6 animate-in slide-in-from-right duration-300">
@@ -386,20 +388,23 @@ export const TBTVView: React.FC = () => {
                                <div className={`text-5xl font-black ${selectedMatch.result === 'LOSS' ? 'text-red-600 dark:text-red-500' : 'text-neutral-400'}`}>
                                    {selectedMatch.score.them}
                                </div>
-                               <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">敌方</div>
+                               <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">{teamB}</div>
                            </div>
                            <div className="text-2xl text-neutral-300 font-light opacity-50">:</div>
                            <div className="text-left">
                                 <div className={`text-5xl font-black ${selectedMatch.result === 'WIN' ? 'text-green-600 dark:text-green-500' : 'text-neutral-900 dark:text-white'}`}>
                                    {selectedMatch.score.us}
                                </div>
-                               <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">我方</div>
+                               <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">{teamA}</div>
                            </div>
                        </div>
                        
-                       <div className="mt-6 flex justify-center gap-4 text-xs font-mono font-bold bg-neutral-50 dark:bg-neutral-800 py-2 rounded-lg max-w-[220px] mx-auto">
+                       <div className="mt-6 flex justify-center gap-4 text-xs font-mono font-bold bg-neutral-50 dark:bg-neutral-800 py-2 rounded-lg max-w-[320px] mx-auto">
                            <span>( <span className={half1ThemColor}>{selectedMatch.score.half1_them}</span>-<span className={half1UsColor}>{selectedMatch.score.half1_us}</span> )</span>
                            <span>( <span className={half2ThemColor}>{selectedMatch.score.half2_them}</span>-<span className={half2UsColor}>{selectedMatch.score.half2_us}</span> )</span>
+                           {(selectedMatch.score.ot_us !== undefined || selectedMatch.score.ot_them !== undefined) && (
+                               <span>( <span className="text-neutral-400">{selectedMatch.score.ot_them || 0}</span>-<span className="text-neutral-400">{selectedMatch.score.ot_us || 0}</span> )</span>
+                           )}
                        </div>
                   </div>
               </div>
@@ -408,9 +413,9 @@ export const TBTVView: React.FC = () => {
               <div>
                   <h3 className="text-sm font-bold text-neutral-500 uppercase tracking-widest mb-3 px-1">记分板</h3>
                   <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden shadow-sm space-y-4 pb-4">
-                       <ScoreboardTable players={selectedMatch.players} isTeam={true} />
+                       <ScoreboardTable players={selectedMatch.players} isTeam={true} teamName={teamA} />
                        <div className="h-px bg-neutral-100 dark:bg-neutral-800 mx-4"></div>
-                       <ScoreboardTable players={selectedMatch.enemyPlayers} isTeam={false} />
+                       <ScoreboardTable players={selectedMatch.enemyPlayers} isTeam={false} teamName={teamB} />
                   </div>
               </div>
           </div>

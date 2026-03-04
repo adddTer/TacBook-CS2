@@ -1,7 +1,8 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { getRatingColorClass } from '../ReviewShared';
 import { RoleDefinition } from '../../../utils/analytics/roleDefinitions';
+import { getRawTenureDays } from '../../../utils/rosterHelpers';
 
 interface PlayerHeroCardProps {
     profile: {
@@ -18,8 +19,21 @@ interface PlayerHeroCardProps {
 }
 
 export const PlayerHeroCard: React.FC<PlayerHeroCardProps> = ({ profile, stats, role }) => {
+    const tenureDays = useMemo(() => getRawTenureDays(profile.id), [profile.id]);
+    
+    // Calculate retention percentage (e.g., 365 days = 100%)
+    const retentionPct = Math.min(100, (tenureDays / 365) * 100);
+
     return (
-        <div className="bg-white dark:bg-neutral-900 rounded-3xl p-1 shadow-sm border border-neutral-200 dark:border-neutral-800">
+        <div className="bg-white dark:bg-neutral-900 rounded-3xl p-1 shadow-sm border border-neutral-200 dark:border-neutral-800 relative overflow-hidden">
+            {/* Retention Bar (Top) */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-neutral-100 dark:bg-neutral-800 z-20">
+                <div 
+                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000 ease-out"
+                    style={{ width: `${retentionPct}%` }}
+                />
+            </div>
+
             <div className="bg-gradient-to-br from-neutral-50 via-white to-neutral-100 dark:from-neutral-800 dark:via-neutral-900 dark:to-black rounded-[20px] p-6 relative overflow-hidden">
                 {/* Background Deco */}
                 <div className="absolute top-0 right-0 p-10 opacity-5 dark:opacity-10 pointer-events-none">

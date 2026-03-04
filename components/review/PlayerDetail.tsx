@@ -115,12 +115,57 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
         });
     };
 
+    const handleDownloadData = () => {
+        const formatWpa = (wpa: number) => wpa ? Number(wpa.toFixed(2)) : 0;
+
+        const filteredStatsCopy = { ...filtered } as any;
+        filteredStatsCopy.wpa = formatWpa(filtered.wpaAvg);
+        delete filteredStatsCopy.wpaSum;
+        delete filteredStatsCopy.wpaAvg;
+
+        const dataToExport = {
+            exportDate: new Date().toISOString(),
+            player: {
+                id: profile.id,
+                name: profile.name
+            },
+            overallStats: overall,
+            filteredStats: filteredStatsCopy,
+            matches: history.map(h => {
+                const wpaVal = h.stats.wpa || 0;
+                return {
+                    matchId: h.match.id,
+                    date: h.match.date,
+                    map: h.match.mapId,
+                    score: `${h.match.score.us}:${h.match.score.them}`,
+                    result: h.match.result,
+                    rating: h.stats.rating,
+                    wpa: formatWpa(wpaVal)
+                };
+            })
+        };
+
+        const json = JSON.stringify(dataToExport, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const filename = `player_stats_${profile.name}_${new Date().toISOString().split('T')[0]}.json`;
+        
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="space-y-6 animate-in slide-in-from-right duration-300 pb-20 font-sans">
             
             <PlayerDetailHeader 
                 onBack={onBack}
                 onOpenReport={() => setIsReportOpen(true)}
+                onDownloadData={handleDownloadData}
                 analysis={analysis}
                 sideFilter={sideFilter}
                 onSetFilter={setSideFilter}

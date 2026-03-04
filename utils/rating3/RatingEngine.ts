@@ -28,6 +28,8 @@ export class RatingEngine {
     // FIX: Accumulative Roster Cache to handle empty Round 1 inputs
     private knownRoundTs = new Set<string>();
     private knownRoundCTs = new Set<string>();
+    
+    private lastRoundProcessed = 0; // Track round transitions for inventory resets
 
     public setRoundResult(result: { winner: 'T' | 'CT', reason: number, endTick: number }) {
         this.wpaEngine.setRoundResult(result);
@@ -117,6 +119,19 @@ export class RatingEngine {
             this.knownRoundCTs.clear();
         }
 
+        // --- NEW: Detect Round Transition for Hard Inventory Reset (Fixes R13 Economy Inflation) ---
+        if (currentRound > this.lastRoundProcessed) {
+            const isGameStart = currentRound === 1;
+            const isHalftime = currentRound === 13; // MR12 Halftime
+            const isOtSwitch = currentRound > 24 && (currentRound - 25) % 3 === 0; // MR3 OT Switch (R25, R28, R31...)
+
+            if (isGameStart || isHalftime || isOtSwitch) {
+                // console.log(`[RatingEngine] Hard Reset Inventory for Round ${currentRound} (Side Switch/Start)`);
+                this.inventory.reset();
+            }
+            this.lastRoundProcessed = currentRound;
+        }
+
         // Accumulate players into known sets
         roundTs.forEach(id => this.knownRoundTs.add(id));
         roundCTs.forEach(id => this.knownRoundCTs.add(id));
@@ -148,21 +163,21 @@ export class RatingEngine {
             if (type === 'round_start') {
                  // FIX: Initialize with current tick to avoid 0-based time panic if freeze_end is missing
                  this.roundStartTick = tick;
-
-                 // FIX: Reset Inventory on Side Switches (R1, R13, OT Start/Switch)
-                 // Moved from round_freeze_end to round_start to avoid clearing items purchased during freeze time.
-                 const isGameStart = currentRound === 1;
-                 const isHalftime = currentRound === 13;
-                 const isOtSwitch = currentRound >= 25 && (currentRound - 25) % 3 === 0;
-
-                 if (isGameStart || isHalftime || isOtSwitch) {
-                     // console.log(`[RatingEngine] Side Switch Detected at Round ${currentRound} Start. Resetting Inventory.`);
-                     this.inventory.reset();
-                 }
             }
 
             if (type === 'round_freeze_end') {
                 this.roundStartTick = tick;
+
+                // --- Sanitize Pistol Rounds (R1, R13, OT Start) ---
+                // Ensure no illegal items (like primary weapons) exist in pistol rounds
+                // This fixes bugs where high-value items persist incorrectly
+                const isGameStart = currentRound === 1;
+                const isHalftime = currentRound === 13;
+                const isOtSwitch = currentRound > 24 && (currentRound - 25) % 3 === 0;
+
+                if (isGameStart || isHalftime || isOtSwitch) {
+                    this.inventory.sanitizePistolRound();
+                }
 
                 // --- Fallback: Force Populate Roster if Empty (Round 1 Fix) ---
                 if (this.knownRoundTs.size === 0 && this.knownRoundCTs.size === 0) {
@@ -551,13 +566,19 @@ export class RatingEngine {
                 
                 playerStats.rating = parseFloat(finalRating.toFixed(2));
                 
-                // New WPA Field
-                playerStats.wpa = parseFloat(ratingData.sumWPA.toFixed(2));
+                // New WPA Field (Per-round average)
+                const avgWPA = ratingData.sumWPA / ratingData.rounds;
+                playerStats.wpa = parseFloat(avgWPA.toFixed(2));
                 playerStats.we = playerStats.wpa;
+                
+                // Accumulators for Tournament Aggregation
+                playerStats.r3_wpa_accum = ratingData.sumWPA;
+                playerStats.r3_rounds_played = ratingData.rounds;
                 
             } else {
                 playerStats.rating = 0.00;
                 playerStats.wpa = 0.00;
+                playerStats.r3_wpa_accum = 0;
             }
         });
     }

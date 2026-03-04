@@ -5,9 +5,11 @@ import { PlayerMatchStats } from '../../types';
 interface UtilityTabProps {
     players: PlayerMatchStats[];
     enemyPlayers: PlayerMatchStats[];
+    teamAName?: string;
+    teamBName?: string;
 }
 
-export const UtilityTab: React.FC<UtilityTabProps> = ({ players, enemyPlayers }) => {
+export const UtilityTab: React.FC<UtilityTabProps> = ({ players, enemyPlayers, teamAName = "我方", teamBName = "敌方" }) => {
     // Combine for max calculations
     const allPlayers = [...players, ...enemyPlayers];
     const maxDamage = Math.max(...allPlayers.map(p => p.utility.heDamage + p.utility.molotovDamage), 1);
@@ -132,8 +134,8 @@ export const UtilityTab: React.FC<UtilityTabProps> = ({ players, enemyPlayers })
                 </div>
             )}
             
-            {renderTeamList("我方道具数据", players)}
-            {renderTeamList("敌方道具数据", enemyPlayers)}
+            {renderTeamList(`${teamAName} 道具数据`, players)}
+            {renderTeamList(`${teamBName} 道具数据`, enemyPlayers)}
         </div>
     );
 };

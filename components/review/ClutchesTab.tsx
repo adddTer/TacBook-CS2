@@ -5,9 +5,11 @@ import { PlayerMatchStats } from '../../types';
 interface ClutchesTabProps {
     players: PlayerMatchStats[];
     enemyPlayers: PlayerMatchStats[];
+    teamAName?: string;
+    teamBName?: string;
 }
 
-export const ClutchesTab: React.FC<ClutchesTabProps> = ({ players, enemyPlayers }) => {
+export const ClutchesTab: React.FC<ClutchesTabProps> = ({ players, enemyPlayers, teamAName = "我方", teamBName = "敌方" }) => {
     
     const renderClutchSection = (teamName: string, teamPlayers: PlayerMatchStats[]) => {
         // Filter players who actually had clutch attempts
@@ -48,7 +50,7 @@ export const ClutchesTab: React.FC<ClutchesTabProps> = ({ players, enemyPlayers 
 
                                     return (
                                         <div key={idx} className={`px-2 py-1 rounded-lg border text-xs font-bold font-sans tabular-nums flex items-center gap-1.5 ${styleClass}`}>
-                                            <span className="opacity-50">R{attempt.round}:</span>
+                                            <span className="opacity-50">{attempt.mapName ? `${attempt.mapName} ` : ''}R{attempt.round}:</span>
                                             <span>1v{attempt.opponentCount} {label}</span>
                                         </div>
                                     );
@@ -63,8 +65,8 @@ export const ClutchesTab: React.FC<ClutchesTabProps> = ({ players, enemyPlayers 
 
     return (
         <div className="space-y-6">
-            {renderClutchSection("我方关键时刻", players)}
-            {renderClutchSection("敌方关键时刻", enemyPlayers)}
+            {renderClutchSection(`${teamAName} 关键时刻`, players)}
+            {renderClutchSection(`${teamBName} 关键时刻`, enemyPlayers)}
         </div>
     );
 };

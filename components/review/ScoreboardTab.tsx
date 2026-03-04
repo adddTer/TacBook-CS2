@@ -2,6 +2,7 @@ import React from 'react';
 import { Match, PlayerMatchStats } from '../../types';
 import { ScoreboardTable } from './ScoreboardTable';
 import { useAggregatedStats } from '../../hooks/useAggregatedStats';
+import { getTeamNames } from '../../utils/matchHelpers';
 
 type SideFilter = 'ALL' | 'CT' | 'T';
 
@@ -22,13 +23,14 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
 }) => {
     const aggregatedPlayers = useAggregatedStats(match, players, filter);
     const aggregatedEnemies = useAggregatedStats(match, enemyPlayers, filter);
+    const { teamA, teamB } = getTeamNames(match);
 
     return (
         <div className="space-y-6">
             <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
                 <ScoreboardTable 
                     players={aggregatedPlayers} 
-                    title="我方" 
+                    title={teamA} 
                     isEnemy={false} 
                     filter={filter} 
                     onPlayerClick={onPlayerClick} 
@@ -36,7 +38,7 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
                 <div className="h-px bg-neutral-100 dark:bg-neutral-800 mx-4"></div>
                 <ScoreboardTable 
                     players={aggregatedEnemies} 
-                    title="敌方" 
+                    title={teamB} 
                     isEnemy={true} 
                     filter={filter} 
                     onPlayerClick={onPlayerClick} 

@@ -106,6 +106,7 @@ export interface ContentGroup {
   utilities: Utility[];
   matches: Match[]; // Added Match support
   series?: MatchSeries[]; // Added Series support
+  tournaments?: Tournament[]; // Added Tournament support
 }
 
 export interface FilterState {
@@ -164,6 +165,7 @@ export interface ClutchAttempt {
     result: 'won' | 'lost' | 'saved';
     kills: number; // Kills made during the clutch attempt
     side: Side;
+    mapName?: string;
 }
 
 export interface UtilityStats {
@@ -284,6 +286,7 @@ export interface PlayerMatchStats {
     utility_count?: number; // General counter
     flash_assists?: number;
     entry_kills: number;
+    entry_deaths: number; // New: Track entry deaths
     kast: number; // Percentage
     multikills: MultiKillBreakdown;
     
@@ -293,6 +296,11 @@ export interface PlayerMatchStats {
     r3_econ_accum?: number; // Economy weighted score
     r3_rounds_played?: number;
     ratingHistory?: number[]; // Array of ratings per round
+
+    // Tournament Stats
+    matchesPlayed?: number;
+    isMvp?: boolean;
+    isEvp?: boolean;
 
     // Advanced Stats
     duels: DuelRecord;
@@ -308,6 +316,8 @@ export interface MatchScore {
     half1_them: number;
     half2_us: number;
     half2_them: number;
+    ot_us?: number;
+    ot_them?: number;
 }
 
 export interface Match {
@@ -340,9 +350,28 @@ export interface SeriesMatchRef {
 export interface MatchSeries {
     id: string;
     title: string; // e.g. "IEM Cologne Final vs G2"
-    format: 'BO1' | 'BO3' | 'BO5' | 'BO7';
+    format: 'BO1' | 'BO2' | 'BO3' | 'BO5' | 'BO7';
     matches: SeriesMatchRef[];
     date: string;
+    groupId?: string;
+}
+
+// --- Tournament Support ---
+
+export type TournamentStage = 'GROUP' | 'SWISS' | 'RO32' | 'RO16' | 'QUARTER_FINAL' | 'SEMI_FINAL' | 'FINAL' | 'UPPER_BRACKET' | 'LOWER_BRACKET' | 'SWISS_ROUND' | 'OTHER';
+
+export interface TournamentMatchRef {
+    matchId: string;
+    stage: TournamentStage;
+    customStageName?: string; // e.g., "Swiss Round 1 High"
+}
+
+export interface Tournament {
+    id: string;
+    title: string;
+    startDate: string;
+    endDate?: string;
+    matches: TournamentMatchRef[];
     groupId?: string;
 }
 

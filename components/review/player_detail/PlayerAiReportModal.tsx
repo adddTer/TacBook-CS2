@@ -35,7 +35,7 @@ export const PlayerAiReportModal: React.FC<PlayerAiReportModalProps> = ({
                     </div>
                     <div>
                         <h3 className="font-black text-lg text-neutral-900 dark:text-white leading-none">AI 表现评估</h3>
-                        <p className="text-xs text-neutral-500 font-mono mt-0.5">TARGET: {profileId}</p>
+                        <p className="text-xs text-neutral-500 font-mono mt-0.5">分析对象: {profileId}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -123,7 +123,7 @@ export const PlayerAiReportModal: React.FC<PlayerAiReportModalProps> = ({
                         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-3xl p-8 border border-blue-100 dark:border-blue-900/30">
                             <div className="flex items-center gap-3 mb-4">
                                 <div className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full uppercase tracking-wider">
-                                    Role: {role}
+                                    角色: {role}
                                 </div>
                                 <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 uppercase tracking-widest">职责评估</h4>
                             </div>
@@ -149,8 +149,8 @@ export const PlayerAiReportModal: React.FC<PlayerAiReportModalProps> = ({
                                 开始分析
                             </button>
                             <div className="mt-6 flex items-center gap-2 text-xs font-mono text-neutral-400">
-                                <span>MODEL: {currentModel}</span>
-                                <button onClick={onOpenConfig} className="hover:text-blue-500 underline">Change</button>
+                                <span>模型: {currentModel}</span>
+                                <button onClick={onOpenConfig} className="hover:text-blue-500 underline">修改配置</button>
                             </div>
                         </div>
                     )}

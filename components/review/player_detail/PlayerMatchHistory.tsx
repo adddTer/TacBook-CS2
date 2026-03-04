@@ -47,7 +47,9 @@ export const PlayerMatchHistory: React.FC<PlayerMatchHistoryProps> = ({ history,
                                 <div>
                                     <div className="flex items-center gap-2">
                                         <span className="font-black text-sm text-neutral-900 dark:text-white">{mapName}</span>
-                                        <span className={`text-xs font-mono font-bold ${winColor}`}>{scoreLeft}:{scoreRight}</span>
+                                        <span className={`text-xs font-mono font-bold ${winColor}`}>
+                                            {resultForPlayer === 'WIN' ? '胜' : resultForPlayer === 'LOSS' ? '负' : '平'} {scoreLeft}:{scoreRight}
+                                        </span>
                                     </div>
                                     <div className="text-[10px] text-neutral-400 font-mono mt-0.5 truncate max-w-[120px]">{match.serverName || match.date.split('T')[0]}</div>
                                 </div>

@@ -9,7 +9,7 @@ import { ClutchesTab } from './ClutchesTab';
 import { TimelineTab } from './TimelineTab';
 import { EconomyTab } from './EconomyTab';
 import { MatchPerformanceTab } from './match_detail/MatchPerformanceTab';
-import { isMyTeamMatch, getTeamNames } from '../../utils/matchHelpers';
+import { isMyTeamMatch, getTeamNames, calculateScoreFromRounds } from '../../utils/matchHelpers';
 import { useAggregatedStats } from '../../hooks/useAggregatedStats';
 
 interface MatchDetailProps {
@@ -25,7 +25,7 @@ type SideFilter = 'ALL' | 'CT' | 'T';
 // --- MAIN CONTAINER ---
 
 export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlayerClick, onDelete, onShare }) => {
-    const [detailTab, setDetailTab] = useState<'overview' | 'performance' | 'duels' | 'utility' | 'clutches' | 'timeline' | 'economy'>('overview');
+    const [detailTab, setDetailTab] = useState<'overview' | 'performance' | 'duels' | 'utility' | 'clutches' | 'timeline'>('overview');
     const [sideFilter, setSideFilter] = useState<SideFilter>('ALL');
     const [showDefinitions, setShowDefinitions] = useState(false);
 
@@ -41,6 +41,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
     const isMine = isMyTeamMatch(match);
     const { teamA, teamB } = getTeamNames(match);
 
+    // Calculate score from rounds to handle overtime correctly if parser missed it
+    const displayScore = React.useMemo(() => calculateScoreFromRounds(match), [match]);
+
     // Stats for Export
     const aggregatedPlayers = useAggregatedStats(match, match.players, sideFilter);
     const aggregatedEnemies = useAggregatedStats(match, match.enemyPlayers, sideFilter);
@@ -50,7 +53,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
         const rows: string[] = [headers.join(',')];
 
         const processPlayer = (p: PlayerMatchStats, teamName: string) => {
-            const name = p.name || p.playerId;
+            const name = (p as any).name || p.playerId;
             const kdDiff = p.kills - p.deaths;
             const clutches = p.clutches || { '1v1': { won: 0 }, '1v2': { won: 0 }, '1v3': { won: 0 }, '1v4': { won: 0 }, '1v5': { won: 0 } };
             
@@ -74,8 +77,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
             ].join(',');
         };
 
-        aggregatedPlayers.forEach(p => rows.push(processPlayer(p, 'My Team')));
-        aggregatedEnemies.forEach(p => rows.push(processPlayer(p, 'Enemy Team')));
+        aggregatedPlayers.forEach(p => rows.push(processPlayer(p, teamA)));
+        aggregatedEnemies.forEach(p => rows.push(processPlayer(p, teamB)));
 
         const csvContent = "\uFEFF" + rows.join('\n'); // Add BOM for Excel
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -143,36 +146,39 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                          <div className="flex items-center justify-center gap-8 md:gap-16 font-sans tabular-nums">
                              <div className="text-right">
                                  <div className={`text-4xl md:text-5xl font-black ${isMine && match.result === 'WIN' ? 'text-green-600 dark:text-green-500' : 'text-neutral-900 dark:text-white'}`}>
-                                    {match.score.us}
+                                    {displayScore.us}
                                  </div>
                                  <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">{teamA}</div>
                              </div>
                              <div className="text-2xl text-neutral-300 font-light opacity-50">:</div>
                              <div className="text-left">
                                   <div className={`text-4xl md:text-5xl font-black ${isMine && match.result === 'LOSS' ? 'text-red-600 dark:text-red-500' : 'text-neutral-400'}`}>
-                                     {match.score.them}
+                                     {displayScore.them}
                                  </div>
                                  <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">{teamB}</div>
                              </div>
                          </div>
                          
-                         <div className="mt-6 flex justify-center gap-4 text-xs font-sans tabular-nums font-bold bg-neutral-50 dark:bg-neutral-800 py-2 rounded-lg max-w-[240px] mx-auto text-neutral-500">
-                             <span>( <span className={half1ThemColor}>{match.score.half1_them}</span>-<span className={half1UsColor}>{match.score.half1_us}</span> )</span>
-                             <span>( <span className={half2ThemColor}>{match.score.half2_them}</span>-<span className={half2UsColor}>{match.score.half2_us}</span> )</span>
+                         <div className="mt-6 flex justify-center gap-4 text-xs font-sans tabular-nums font-bold bg-neutral-50 dark:bg-neutral-800 py-2 rounded-lg max-w-[320px] mx-auto text-neutral-500">
+                             <span>( <span className={half1ThemColor}>{displayScore.half1_them}</span>-<span className={half1UsColor}>{displayScore.half1_us}</span> )</span>
+                             <span>( <span className={half2ThemColor}>{displayScore.half2_them}</span>-<span className={half2UsColor}>{displayScore.half2_us}</span> )</span>
+                             {(displayScore.ot_us !== undefined || displayScore.ot_them !== undefined) && (
+                                 <span>( <span className="text-neutral-400">OT:</span> <span className="text-neutral-600 dark:text-neutral-300">{displayScore.ot_them || 0}</span>-<span className="text-neutral-600 dark:text-neutral-300">{displayScore.ot_us || 0}</span> )</span>
+                             )}
                          </div>
                     </div>
                 </div>
 
                 {/* Tab Navigation */}
                 <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl mb-6 sticky top-0 z-20 shadow-lg shadow-neutral-100/50 dark:shadow-black/20 overflow-x-auto">
-                      {['overview', 'performance', 'timeline', 'duels', 'utility', 'clutches', 'economy'].map((t) => (
+                      {['overview', 'performance', 'timeline', 'duels', 'utility', 'clutches'].map((t) => (
                           <button
                             key={t}
                             onClick={() => setDetailTab(t as any)}
                             className={`flex-1 py-2.5 px-2 rounded-lg text-xs font-bold transition-all capitalize whitespace-nowrap
                                 ${detailTab === t ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
                           >
-                              {t === 'overview' ? '战报' : t === 'performance' ? '表现' : t === 'timeline' ? '时间轴' : t === 'duels' ? '对位' : t === 'utility' ? '道具' : t === 'clutches' ? '残局' : '经济'}
+                              {t === 'overview' ? '战报' : t === 'performance' ? '表现' : t === 'timeline' ? '时间轴' : t === 'duels' ? '对位' : t === 'utility' ? '道具' : '残局'}
                           </button>
                       ))}
                 </div>
@@ -209,9 +215,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                     {detailTab === 'performance' && <MatchPerformanceTab match={match} />}
                     {detailTab === 'timeline' && <TimelineTab match={match} />}
                     {detailTab === 'duels' && <DuelsTab players={match.players} enemyPlayers={match.enemyPlayers} />}
-                    {detailTab === 'utility' && <UtilityTab players={match.players} enemyPlayers={match.enemyPlayers} />}
-                    {detailTab === 'clutches' && <ClutchesTab players={match.players} enemyPlayers={match.enemyPlayers} />}
-                    {detailTab === 'economy' && <EconomyTab match={match} />}
+                    {detailTab === 'utility' && <UtilityTab players={match.players} enemyPlayers={match.enemyPlayers} teamAName={teamA} teamBName={teamB} />}
+                    {detailTab === 'clutches' && <ClutchesTab players={match.players} enemyPlayers={match.enemyPlayers} teamAName={teamA} teamBName={teamB} />}
                 </div>
 
             </div>

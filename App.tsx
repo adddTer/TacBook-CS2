@@ -18,7 +18,6 @@ import { SettingsModal } from './components/SettingsModal';
 import { GroupManagerModal } from './components/GroupManagerModal'; 
 import { ConfirmModal } from './components/ConfirmModal';
 import { AiConfigModal } from './components/AiConfigModal';
-import { RosterHistoryModal } from './components/RosterHistoryModal';
 import { useTactics } from './hooks/useTactics';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useAppStorage } from './hooks/useAppStorage'; 
@@ -36,9 +35,9 @@ const App: React.FC = () => {
   // --- Data Management Hook ---
   const { 
       groups, setGroups, activeGroupIds, setActiveGroupIds, isDataLoaded,
-      allTactics, allUtilities, allMatches, allSeries, writableGroups, hasWritableGroups,
-      handleSaveTactic, handleSaveUtility, handleSaveMatch, handleSaveSeries,
-      deleteTactic, deleteUtility, deleteMatch, deleteSeries
+      allTactics, allUtilities, allMatches, allSeries, allTournaments, writableGroups, hasWritableGroups,
+      handleSaveTactic, handleSaveUtility, handleSaveMatch, handleSaveSeries, handleSaveTournament,
+      deleteTactic, deleteUtility, deleteMatch, deleteSeries, deleteTournament
   } = useAppStorage();
 
   // --- UI Modal States ---
@@ -46,7 +45,6 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isGroupManagerOpen, setIsGroupManagerOpen] = useState(false); 
   const [isAiConfigOpen, setIsAiConfigOpen] = useState(false); // Global AI Config
-  const [isRosterHistoryOpen, setIsRosterHistoryOpen] = useState(false);
   const [activeEditor, setActiveEditor] = useState<'tactic' | 'utility' | null>(null);
   const [editingTactic, setEditingTactic] = useState<Tactic | undefined>(undefined);
   const [editingUtility, setEditingUtility] = useState<Utility | undefined>(undefined);
@@ -332,10 +330,13 @@ const App: React.FC = () => {
                     <ReviewView 
                         allMatches={allMatches}
                         allSeries={allSeries}
+                        allTournaments={allTournaments}
                         onSaveMatch={handleSaveMatch}
                         onSaveSeries={handleSaveSeries}
+                        onSaveTournament={handleSaveTournament}
                         onDeleteMatch={deleteMatch}
                         onDeleteSeries={deleteSeries}
+                        onDeleteTournament={deleteTournament}
                         writableGroups={writableGroups}
                     />
                 </div>
@@ -400,7 +401,6 @@ const App: React.FC = () => {
         onUtilityViewModeChange={handleUtilityViewModeChange}
         onOpenGroupManager={() => { setIsSettingsOpen(false); setIsGroupManagerOpen(true); }}
         onOpenAiConfig={() => { setIsSettingsOpen(false); setIsAiConfigOpen(true); }}
-        onOpenRosterHistory={() => { setIsSettingsOpen(false); setIsRosterHistoryOpen(true); }}
       />
       <GroupManagerModal 
         isOpen={isGroupManagerOpen}
@@ -414,7 +414,6 @@ const App: React.FC = () => {
       {isAiConfigOpen && (
           <AiConfigModal onClose={() => setIsAiConfigOpen(false)} onSave={() => setIsAiConfigOpen(false)} />
       )}
-      <RosterHistoryModal isOpen={isRosterHistoryOpen} onClose={() => setIsRosterHistoryOpen(false)} />
       <ConfirmModal 
         isOpen={confirmConfig.isOpen}
         title={confirmConfig.title}

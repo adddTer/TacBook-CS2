@@ -133,7 +133,8 @@ export const parseDemoJson = (data: DemoData): Match => {
             }
 
             if (e.event_name === 'bomb_defused') {
-                tempDefuser = normalizeSteamId(e.userid || e.user_steamid);
+                const anyE = e as any;
+                tempDefuser = normalizeSteamId(anyE.userid || anyE.user_steamid);
                 tempDefuseTick = e.tick; // NEW
             }
             
@@ -142,22 +143,23 @@ export const parseDemoJson = (data: DemoData): Match => {
             }
             
             if (e.event_name === 'round_end') {
+                const anyE = e as any;
                 let winner: 'T' | 'CT' | null = null;
                 
                 // 1. Try standard winner field
-                if (e.winner == 2 || String(e.winner) === '2') winner = 'T';
-                else if (e.winner == 3 || String(e.winner) === '3') winner = 'CT';
+                if (anyE.winner == 2 || String(anyE.winner) === '2') winner = 'T';
+                else if (anyE.winner == 3 || String(anyE.winner) === '3') winner = 'CT';
                 
                 // 2. Fallback text check
-                if (!winner && e.winner) {
-                     const w = String(e.winner).toLowerCase();
+                if (!winner && anyE.winner) {
+                     const w = String(anyE.winner).toLowerCase();
                      if (w === 't' || w.includes('terrorist')) winner = 'T';
                      if (w === 'ct' || w.includes('counter')) winner = 'CT';
                 }
 
                 // 3. PRIORITY OVERRIDE: Reason-based determination
-                if (e.reason !== undefined) {
-                     const r = Number(e.reason);
+                if (anyE.reason !== undefined) {
+                     const r = Number(anyE.reason);
                      if (r === 1 || r === 12) winner = 'T';
                      if (r === 7) winner = 'CT';
                      if (!winner) {
@@ -166,7 +168,7 @@ export const parseDemoJson = (data: DemoData): Match => {
                 }
 
                 if (winner) {
-                    const reason = Number(e.reason);
+                    const reason = Number(anyE.reason);
                     const endTick = e.tick;
                     
                     // --- WARMUP CHECK REPLICATION ---
@@ -295,11 +297,13 @@ export const parseDemoJson = (data: DemoData): Match => {
     let currentRound = 1;
     let scores = { T: 0, CT: 0 };
     let s1 = 0, s2 = 0, s3 = 0, s4 = 0;
+    let otUs = 0, otThem = 0;
 
     let aliveTs = new Set<string>();
     let aliveCTs = new Set<string>();
     let roundTs = new Set<string>(); // New: Track all T players
     let roundCTs = new Set<string>(); // New: Track all CT players
+    let firstKillHappened = false;
 
     let roundClutchAttempts = new Map<string, { opponents: number, kills: number }>();
     
@@ -341,6 +345,7 @@ export const parseDemoJson = (data: DemoData): Match => {
         aliveCTs.clear();
         roundTs.clear();
         roundCTs.clear();
+        firstKillHappened = false;
 
         roundClutchAttempts.clear();
         healthTracker.reset(); 
@@ -444,6 +449,21 @@ export const parseDemoJson = (data: DemoData): Match => {
         activeSteamIds.forEach(sid => {
             const ratingCtx = ratingEngine.getCurrentRoundContext(sid);
             const tempStats = getRoundPlayerStats(sid);
+            const p = statsMap.get(sid);
+
+            // Multikill tracking
+            const roundKills = ratingCtx?.kills || 0;
+            if (p && roundKills >= 2) {
+                if (roundKills === 2) p.multikills.k2++;
+                else if (roundKills === 3) p.multikills.k3++;
+                else if (roundKills === 4) p.multikills.k4++;
+                else if (roundKills >= 5) p.multikills.k5++;
+            }
+
+            if (p && ratingCtx) {
+                if (ratingCtx.isEntryKill) p.entry_kills = (p.entry_kills || 0) + 1;
+                if (ratingCtx.isEntryDeath) p.entry_deaths = (p.entry_deaths || 0) + 1;
+            }
             
             let pSide: 'T' | 'CT' = 'CT';
             if (playerSideMap.has(sid)) pSide = playerSideMap.get(sid)!;
@@ -524,9 +544,18 @@ export const parseDemoJson = (data: DemoData): Match => {
         scores[winner]++;
         statsMap.forEach(p => p.r3_rounds_played = (p.r3_rounds_played || 0) + 1);
 
-        const isFirstHalf = currentRound <= 12;
-        if (winner === currentRosterSide) { if (isFirstHalf) s1++; else s3++; } 
-        else { if (isFirstHalf) s2++; else s4++; }
+        // CS2 strictly uses MR12 (12 rounds per half, 24 rounds regulation)
+        const halfMax = 12;
+        const regulationMax = 24;
+
+        if (currentRound <= halfMax) {
+            if (winner === currentRosterSide) s1++; else s2++;
+        } else if (currentRound <= regulationMax) {
+            if (winner === currentRosterSide) s3++; else s4++;
+        } else {
+            // OT rounds
+            if (winner === currentRosterSide) otUs++; else otThem++;
+        }
 
         roundClutchAttempts.forEach((data, sid) => {
             const isTeammate = teammateSteamIds.has(sid);
@@ -543,7 +572,14 @@ export const parseDemoJson = (data: DemoData): Match => {
             if (p) {
                  const key = `1v${Math.min(data.opponents, 5)}` as keyof typeof p.clutches;
                  if (p.clutches[key]) { if (won) p.clutches[key].won++; else p.clutches[key].lost++; }
-                 p.clutchHistory.push({ round: currentRound, opponentCount: data.opponents, result: won ? 'won' : (isSave ? 'saved' : 'lost'), kills: data.kills, side: playerSide });
+                 p.clutchHistory.push({ 
+                     round: currentRound, 
+                     opponentCount: data.opponents, 
+                     result: won ? 'won' : (isSave ? 'saved' : 'lost'), 
+                     kills: data.kills, 
+                     side: playerSide,
+                     mapName: meta.map_name || 'Unknown'
+                 });
             }
         });
 
@@ -626,6 +662,7 @@ export const parseDemoJson = (data: DemoData): Match => {
             currentRound = 1;
             scores = { T: 0, CT: 0 };
             s1 = 0; s2 = 0; s3 = 0; s4 = 0;
+            otUs = 0; otThem = 0;
             statsMap.forEach(p => {
                 p.kills = 0; p.deaths = 0; p.assists = 0;
                 p.total_damage = 0; (p as any).headshots = 0;
@@ -986,6 +1023,15 @@ export const parseDemoJson = (data: DemoData): Match => {
 
             if (pAtt && att !== vic && att !== "BOT") {
                 pAtt.kills++;
+                if (rAtt) rAtt.kills++;
+
+                // Entry Kill/Death Tracking
+                if (!firstKillHappened && vic !== "BOT") {
+                    pAtt.entry_kills++;
+                    if (pVic) pVic.entry_deaths++;
+                    firstKillHappened = true;
+                }
+
                 if (e.headshot) {
                     (pAtt as any).headshots++;
                     if (rAtt) rAtt.headshots = (rAtt.headshots || 0) + 1;
@@ -1186,8 +1232,8 @@ export const parseDemoJson = (data: DemoData): Match => {
     ourPlayers.sort((a,b) => b.rating - a.rating);
     enemyPlayers.sort((a,b) => b.rating - a.rating);
 
-    const finalScoreUs = s1 + s3;
-    const finalScoreThem = s2 + s4;
+    const finalScoreUs = s1 + s3 + otUs;
+    const finalScoreThem = s2 + s4 + otThem;
     
     return {
         id: generateId('demo'),
@@ -1202,7 +1248,9 @@ export const parseDemoJson = (data: DemoData): Match => {
             us: finalScoreUs, 
             them: finalScoreThem, 
             half1_us: s1, half1_them: s2, 
-            half2_us: s3, half2_them: s4 
+            half2_us: s3, half2_them: s4,
+            ot_us: otUs > 0 || otThem > 0 ? otUs : undefined,
+            ot_them: otUs > 0 || otThem > 0 ? otThem : undefined
         }, 
         players: ourPlayers,
         enemyPlayers: enemyPlayers,

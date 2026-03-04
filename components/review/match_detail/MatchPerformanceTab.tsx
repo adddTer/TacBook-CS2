@@ -7,12 +7,15 @@ import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Responsi
 import { resolveName } from '../../../utils/demo/helpers';
 import { getRatingColorClass } from '../ReviewShared';
 import { getScoreStyle, getWpaStyle } from '../../../utils/styleConstants';
+import { getTeamNames } from '../../../utils/matchHelpers';
 
 interface MatchPerformanceTabProps {
     match: Match;
+    history?: { match: Match, stats: PlayerMatchStats }[];
 }
 
-export const MatchPerformanceTab: React.FC<MatchPerformanceTabProps> = ({ match }) => {
+export const MatchPerformanceTab: React.FC<MatchPerformanceTabProps> = ({ match, history }) => {
+    const { teamA, teamB } = getTeamNames(match);
     // 1. Get all players in the match
     const allPlayers = useMemo(() => [...match.players, ...match.enemyPlayers], [match]);
 
@@ -29,17 +32,25 @@ export const MatchPerformanceTab: React.FC<MatchPerformanceTabProps> = ({ match 
     // 3. Calculate Stats for both players
     const stats1 = useMemo(() => {
         if (!player1Id) return null;
+        if (history) {
+            const pHistory = history.filter(h => h.stats.playerId === player1Id);
+            if (pHistory.length > 0) return calculatePlayerStats(player1Id, pHistory, 'ALL');
+        }
         const pStats = allPlayers.find(p => p.playerId === player1Id);
         if (!pStats) return null;
         return calculatePlayerStats(player1Id, [{ match, stats: pStats }], 'ALL');
-    }, [player1Id, match, allPlayers]);
+    }, [player1Id, match, allPlayers, history]);
 
     const stats2 = useMemo(() => {
         if (!player2Id) return null;
+        if (history) {
+            const pHistory = history.filter(h => h.stats.playerId === player2Id);
+            if (pHistory.length > 0) return calculatePlayerStats(player2Id, pHistory, 'ALL');
+        }
         const pStats = allPlayers.find(p => p.playerId === player2Id);
         if (!pStats) return null;
         return calculatePlayerStats(player2Id, [{ match, stats: pStats }], 'ALL');
-    }, [player2Id, match, allPlayers]);
+    }, [player2Id, match, allPlayers, history]);
 
     // 4. Identify Roles
     const role1 = stats1 ? identifyRole(stats1.filtered) : null;
@@ -78,12 +89,12 @@ export const MatchPerformanceTab: React.FC<MatchPerformanceTabProps> = ({ match 
                     onChange={(e) => onChange(e.target.value)}
                     className="w-full appearance-none bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl px-4 py-2.5 text-sm font-bold text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer hover:border-neutral-300 dark:hover:border-neutral-600"
                 >
-                    <optgroup label="我方队伍">
+                    <optgroup label={teamA}>
                         {match.players.map(p => (
                             <option key={p.playerId} value={p.playerId}>{resolveName(p.playerId)}</option>
                         ))}
                     </optgroup>
-                    <optgroup label="敌方队伍">
+                    <optgroup label={teamB}>
                         {match.enemyPlayers.map(p => (
                             <option key={p.playerId} value={p.playerId}>{resolveName(p.playerId)}</option>
                         ))}

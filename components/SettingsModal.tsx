@@ -13,7 +13,6 @@ interface SettingsModalProps {
   onUtilityViewModeChange: (mode: 'detail' | 'accordion') => void;
   onOpenGroupManager?: () => void;
   onOpenAiConfig?: () => void;
-  onOpenRosterHistory?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -26,8 +25,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   utilityViewMode,
   onUtilityViewModeChange,
   onOpenGroupManager,
-  onOpenAiConfig,
-  onOpenRosterHistory
+  onOpenAiConfig
 }) => {
   const [defaultAuthor, setDefaultAuthor] = useState('');
 
@@ -97,13 +95,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                     <svg className="w-5 h-5 mb-0.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                     API 设置
-                </button>
-                <button 
-                    onClick={() => { if(onOpenRosterHistory) onOpenRosterHistory(); }}
-                    className="col-span-2 py-3 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-xl text-xs font-bold text-neutral-700 dark:text-neutral-300 transition-colors flex flex-col items-center justify-center gap-1"
-                >
-                    <svg className="w-5 h-5 mb-0.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-                    阵容调整记录
                 </button>
             </div>
         </div>

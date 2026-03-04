@@ -43,6 +43,13 @@ export interface AggregatedStats {
     utilityKills: number; 
     flashesThrown: number;
     
+    // --- Clutch / Survival ---
+    clutchPoints: number;
+    w1v1: number;
+    l1v1: number;
+    roundsLastAlive: number;
+    totalTimeAlive: number;
+
     // --- Discipline ---
     kastRounds: number;
     survivedRounds: number;

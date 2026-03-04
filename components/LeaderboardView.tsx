@@ -54,53 +54,76 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
             };
 
             matchesPlayed.forEach(m => {
-                if (!m.rounds) return;
-
                 const pMatch = [...m.players, ...m.enemyPlayers].find(p => resolveName(p.playerId) === player.id || resolveName(p.steamid) === player.id);
                 if (!pMatch) return;
                 
                 const pid = pMatch.steamid || pMatch.playerId;
                 
                 // Filter ghost rounds
-                const validRounds = m.rounds.filter(r => {
+                const validRounds = m.rounds ? m.rounds.filter(r => {
                     const allS = Object.values(r.playerStats) as PlayerRoundStats[];
                     return !allS.every(s => s.rating === 0 && s.damage === 0);
-                });
+                }) : [];
 
-                validRounds.forEach(r => {
-                    const pr = r.playerStats[pid];
-                    if (!pr) return;
-                    if (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0 && pr.kills === 0) return;
+                if (validRounds.length > 0) {
+                    validRounds.forEach(r => {
+                        const pr = r.playerStats[pid];
+                        if (!pr) return;
+                        if (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0 && pr.kills === 0) return;
 
-                    sums.rounds++;
-                    sums.kills += pr.kills;
-                    sums.deaths += pr.deaths;
-                    sums.assists += pr.assists;
-                    sums.damage += pr.damage;
-                    sums.ratingSum += pr.rating;
-                    sums.impactSum += pr.impact;
+                        sums.rounds++;
+                        sums.kills += pr.kills;
+                        sums.deaths += pr.deaths;
+                        sums.assists += pr.assists;
+                        sums.damage += pr.damage;
+                        sums.ratingSum += pr.rating;
+                        sums.impactSum += pr.impact;
+                        
+                        if (typeof pr.wpa === 'number' && !isNaN(pr.wpa)) {
+                            sums.wpaSum += pr.wpa;
+                        }
+
+                        if (pr.kills > 0 || pr.assists > 0 || pr.survived || pr.wasTraded) {
+                            sums.kastRounds++;
+                        }
+
+                        if (pr.isEntryKill || pr.isEntryDeath) {
+                            sums.entryAttempts++;
+                            if (pr.isEntryKill) sums.entrySuccess++;
+                        }
+
+                        if (pr.kills >= 3) sums.multiKills++;
+
+                        if (pr.utility) {
+                            sums.utilityDamage += (pr.utility.heDamage || 0) + (pr.utility.molotovDamage || 0);
+                        } else {
+                            sums.utilityDamage += pr.utilityDamage || 0;
+                        }
+                    });
+                } else {
+                    // Fallback to match-level stats if per-round data is missing
+                    const matchRounds = pMatch.r3_rounds_played || (m.score.us + m.score.them) || 24;
+                    sums.rounds += matchRounds;
+                    sums.kills += pMatch.kills;
+                    sums.deaths += pMatch.deaths;
+                    sums.assists += pMatch.assists;
+                    sums.damage += (pMatch.total_damage || (pMatch.adr * matchRounds));
+                    sums.ratingSum += (pMatch.rating * matchRounds);
+                    sums.impactSum += ((pMatch.r3_impact_accum || (pMatch.rating * matchRounds)));
                     
-                    if (typeof pr.wpa === 'number' && !isNaN(pr.wpa)) {
-                        sums.wpaSum += pr.wpa;
+                    const matchWpaSum = pMatch.r3_wpa_accum !== undefined ? pMatch.r3_wpa_accum : pMatch.wpa;
+                    sums.wpaSum += matchWpaSum;
+                    
+                    // Entry/Multi/Utility fallbacks
+                    sums.entryAttempts += (pMatch.entry_kills || 0); // Rough estimate
+                    sums.entrySuccess += (pMatch.entry_kills || 0);
+                    if (pMatch.multikills) {
+                        sums.multiKills += (pMatch.multikills.k3 || 0) + (pMatch.multikills.k4 || 0) + (pMatch.multikills.k5 || 0);
                     }
-
-                    if (pr.kills > 0 || pr.assists > 0 || pr.survived || pr.wasTraded) {
-                        sums.kastRounds++;
+                    if (pMatch.utility) {
+                        sums.utilityDamage += (pMatch.utility.heDamage || 0) + (pMatch.utility.molotovDamage || 0);
                     }
-
-                    if (pr.isEntryKill || pr.isEntryDeath) {
-                        sums.entryAttempts++;
-                        if (pr.isEntryKill) sums.entrySuccess++;
-                    }
-
-                    if (pr.kills >= 3) sums.multiKills++;
-
-                    if (pr.utility) {
-                        sums.utilityDamage += (pr.utility.heDamage || 0) + (pr.utility.molotovDamage || 0);
-                    } else {
-                        sums.utilityDamage += pr.utilityDamage || 0;
-                    }
-                });
+                }
 
                 if (pMatch.clutches) {
                     sums.clutchWins += pMatch.clutches['1v1'].won + pMatch.clutches['1v2'].won + pMatch.clutches['1v3'].won + pMatch.clutches['1v4'].won + pMatch.clutches['1v5'].won;
@@ -121,9 +144,8 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                 
                 // Calculated Metrics
                 rating: rating,
-                wpa: sums.wpaSum / matchesPlayed.length,
+                wpa: sums.wpaSum / totalRounds,
                 adr: sums.damage / totalRounds,
-                kast: (sums.kastRounds / totalRounds) * 100,
                 kd: sums.kills / totalDeaths,
                 impact: sums.impactSum / totalRounds,
                 
@@ -342,16 +364,15 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                         <thead>
                             <tr className="bg-neutral-50 dark:bg-neutral-950/50 text-[11px] uppercase font-bold text-neutral-500 dark:text-neutral-400 border-b border-neutral-200 dark:border-neutral-800">
                                 <th className="px-4 py-3 sticky left-0 z-10 bg-inherit">Player</th>
-                                <SortHeader field="rating" label="Rating" icon={Activity} />
+                                <SortHeader field="rating" label="RTG" icon={Activity} />
                                 <SortHeader field="adr" label="ADR" icon={Target} />
                                 <SortHeader field="impact" label="Impact" icon={Zap} />
-                                <SortHeader field="kast" label="KAST" icon={Shield} />
                                 <SortHeader field="kd" label="K/D" icon={Crosshair} />
                                 <SortHeader field="entry" label="Entry" icon={Flame} />
                                 <SortHeader field="utility" label="Util Dmg" />
                                 <SortHeader field="clutch" label="Clutches" />
                                 <SortHeader field="wpa" label="WPA" />
-                                <SortHeader field="matches" label="Maps" />
+                                <SortHeader field="matches" label="地图数" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800 font-sans tabular-nums">
@@ -389,10 +410,6 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                                     </td>
 
                                     <td className="px-4 py-3">
-                                        <div className="font-bold text-neutral-600 dark:text-neutral-400">{p.kast.toFixed(1)}%</div>
-                                    </td>
-
-                                    <td className="px-4 py-3">
                                         <span className={`font-bold ${p.kd >= 1.1 ? 'text-green-500' : p.kd < 0.9 ? 'text-red-500' : 'text-neutral-500'}`}>
                                             {p.kd.toFixed(2)}
                                         </span>
@@ -415,7 +432,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
 
                                     <td className="px-4 py-3">
                                         <span className={`font-bold ${p.wpa > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                            {p.wpa > 0 ? '+' : ''}{p.wpa.toFixed(2)}
+                                            {p.wpa > 0 ? '+' : ''}{p.wpa.toFixed(2)}%
                                         </span>
                                     </td>
 

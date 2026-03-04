@@ -99,6 +99,8 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
     // Sort players by WPA descending (default)
     const sortedPlayers = [...players].sort((a, b) => (b.wpa || 0) - (a.wpa || 0));
 
+    const showMatches = players.some(p => p.matchesPlayed !== undefined);
+
     return (
         <div className="overflow-x-auto pb-4" onClick={closePopup}> 
             <table className="w-full text-sm text-left whitespace-nowrap min-w-[800px] border-collapse font-sans">
@@ -107,10 +109,10 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                         <th className="px-3 py-3 sticky left-0 z-10 bg-inherit w-36">
                             {title} {filter !== 'ALL' ? `(${filter})` : ''}
                         </th>
+                        {showMatches && <th className="px-2 py-3 text-center w-12">地图数</th>}
                         <th className="px-2 py-3 text-center w-20">K / D / A</th>
                         <th className="px-2 py-3 text-center w-12">+/-</th>
                         <th className="px-2 py-3 text-center w-12" title="平均每回合伤害">ADR</th>
-                        <th className="px-2 py-3 text-center w-12" title="KAST% (Kill, Assist, Survive, Traded) - 回合贡献率">KAST%</th>
                         <th className="px-2 py-3 text-center w-12" title="Rating 4.0">RTG</th>
                         <th className="px-2 py-3 text-center w-14" title="Win Probability Added Avg per Round (Total Points)">WPA</th>
                         <th className="px-2 py-3 text-center w-12" title="首杀 (Entry Kills)">首杀</th>
@@ -152,7 +154,14 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                                 <td className={`px-3 py-3 font-bold sticky left-0 z-10 bg-white dark:bg-neutral-900 border-r border-transparent group-hover:border-neutral-100 dark:group-hover:border-neutral-800 truncate flex items-center gap-2 ${isRosterMember ? 'text-blue-600 dark:text-blue-400 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10' : 'text-neutral-800 dark:text-neutral-200 group-hover:bg-neutral-50 dark:group-hover:bg-neutral-800/30'}`}>
                                     {isRosterMember && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
                                     {displayName}
+                                    {p.isMvp && <span className="ml-1 px-1.5 py-0.5 bg-yellow-500 text-white text-[9px] font-black rounded uppercase tracking-wider">MVP</span>}
+                                    {p.isEvp && !p.isMvp && <span className="ml-1 px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-[9px] font-black rounded uppercase tracking-wider">EVP</span>}
                                 </td>
+                                {showMatches && (
+                                    <td className="px-2 py-3 text-center font-sans tabular-nums text-xs font-bold text-neutral-500">
+                                        {p.matchesPlayed}
+                                    </td>
+                                )}
                                 <td className="px-2 py-3 text-center font-sans tabular-nums text-xs">
                                     <span className="text-neutral-900 dark:text-white font-bold">{p.kills}</span>
                                     <span className="text-neutral-300 mx-0.5">/</span>
@@ -165,9 +174,6 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                                 </td>
                                 <td className="px-2 py-3 text-center font-sans tabular-nums text-xs text-neutral-600 dark:text-neutral-400">
                                     {p.adr.toFixed(0)}
-                                </td>
-                                <td className="px-2 py-3 text-center font-sans tabular-nums text-xs text-neutral-500">
-                                    {p.kast ? p.kast.toFixed(0) : 0}%
                                 </td>
                                 <td className="px-2 py-3 text-center">
                                     <div className={`font-black text-center font-sans tabular-nums text-sm ${ratingColor}`}>
