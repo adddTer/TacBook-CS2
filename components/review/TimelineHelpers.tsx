@@ -131,15 +131,27 @@ interface IconProps {
 
 export const Icons = {
     Kill: ({ className }: IconProps) => <svg className={className || "w-3.5 h-3.5"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>,
-    Skull: ({ className }: IconProps) => <svg className={className || "w-3.5 h-3.5"} fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 00-2 2h10a2 2 0 002-2v-5a2 2 0 00-2-2V7a5 5 0 00-5-5zm0 2a3 3 0 013 3v2H7V7a3 3 0 013-3zm0 8a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm-4-1h2v2H6v-2zm8 0h2v2h-2v-2z" /></svg>, 
-    Headshot: ({ className }: IconProps) => <svg className={className || "w-3 h-3 text-red-500"} fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2-5.5l2-2 2 2 1.5-1.5L13.5 11l2-2-1.5-1.5-2 2-2-2-1.5 1.5 2 2-2 2z"/></svg>,
-    Assist: ({ className }: IconProps) => <svg className={className || "w-3 h-3 text-neutral-400"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
-    Flash: ({ className }: IconProps) => <svg className={className || "w-3 h-3 text-neutral-400"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>,
-    Blind: ({ className }: IconProps) => <svg className={className || "w-3 h-3 text-neutral-400"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268-2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>,
-    Wallbang: ({ className }: IconProps) => <svg className={className || "w-3 h-3 text-neutral-400"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>,
-    Smoke: ({ className }: IconProps) => <svg className={className || "w-3 h-3 text-neutral-400"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>,
-    Bomb: ({ className }: IconProps) => <svg className={className || "w-3.5 h-3.5 text-white"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    Defuse: ({ className }: IconProps) => <svg className={className || "w-3.5 h-3.5 text-white"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0 0L3 3m5.758 5.758a3 3 0 104.243-4.243 3 3 0 00-4.243 4.243z" /></svg>,
-    Explode: ({ className }: IconProps) => <svg className={className || "w-3.5 h-3.5 text-white"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" /></svg>,
+    Skull: ({ className }: IconProps) => (
+        <svg className={className || "w-3.5 h-3.5"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 10L9.01 10M15 10L15.01 10M12 2C7.03 2 3 6.03 3 11C3 13.56 4.07 15.87 5.79 17.5L5 22H19L18.21 17.5C19.93 15.87 21 13.56 21 11C21 6.03 16.97 2 12 2Z" />
+        </svg>
+    ),
+    Bomb: ({ className }: IconProps) => (
+        <svg className={className || "w-3.5 h-3.5"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <circle cx="12" cy="12" r="10" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+        </svg>
+    ),
+    Defuse: ({ className }: IconProps) => (
+        <svg className={className || "w-3.5 h-3.5"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 10l-6 6M20 4l-6 6M10 14l-6-6M20 20l-6-6M10 10l4 4" />
+        </svg>
+    ),
+    Explode: ({ className }: IconProps) => (
+        <svg className={className || "w-3.5 h-3.5"} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <circle cx="11" cy="13" r="7" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.5 8.5c.5-1.5 1.5-2.5 3-2.5M18.5 6l1.5-1.5M18.5 6l-1.5-1.5" />
+        </svg>
+    ),
     Flag: ({ className }: IconProps) => <svg className={className || "w-3.5 h-3.5 text-white"} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-8a2 2 0 012-2h10a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9h6v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2zm0 0V3m0 6h.01" /></svg>
 };
