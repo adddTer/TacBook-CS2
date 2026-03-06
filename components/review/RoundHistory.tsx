@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { Match, MatchRound, Side } from '../../types';
+import { Match, MatchRound } from '../../types';
 import { Icons } from './TimelineHelpers';
-import { getTeamSideInRound } from '../../utils/matchHelpers';
+import { getTeamSideInRound, getTeamNames } from '../../utils/matchHelpers';
 
 interface RoundHistoryProps {
     match: Match;
@@ -12,32 +12,53 @@ export const RoundHistory: React.FC<RoundHistoryProps> = ({ match }) => {
     if (!match.rounds || match.rounds.length === 0) return null;
 
     const rounds = [...match.rounds].sort((a, b) => a.roundNumber - b.roundNumber);
-    const maxRound = Math.max(...rounds.map(r => r.roundNumber));
+    const { teamA, teamB } = getTeamNames(match);
     
-    // Determine if it's MR12 or MR15
-    // Most CS2 matches are MR12 (24 rounds max in regulation)
-    const regulationMax = 24;
+    // Regulation: 1-24
+    const regulationRounds = rounds.filter(r => r.roundNumber <= 24);
     
-    const mainRounds = rounds.filter(r => r.roundNumber <= regulationMax);
-    const otRounds = rounds.filter(r => r.roundNumber > regulationMax);
+    // Overtime: 25-30, 31-36, etc.
+    const otBlocks: MatchRound[][] = [];
+    let currentOTBlock: MatchRound[] = [];
+    
+    rounds.filter(r => r.roundNumber > 24).forEach((round, index) => {
+        currentOTBlock.push(round);
+        // Every 6 rounds is a new OT block
+        if (currentOTBlock.length === 6) {
+            otBlocks.push(currentOTBlock);
+            currentOTBlock = [];
+        }
+    });
+    // Push remaining rounds if any
+    if (currentOTBlock.length > 0) {
+        otBlocks.push(currentOTBlock);
+    }
 
-    const renderHistoryBlock = (title: string, blockRounds: MatchRound[], isOT: boolean = false) => {
+    const renderHistoryBlock = (title: string, blockRounds: MatchRound[], isOT: boolean = false, otIndex?: number) => {
         if (blockRounds.length === 0) return null;
 
+        const displayTitle = isOT 
+            ? (otBlocks.length > 1 ? `加时赛 ${otIndex! + 1}` : '加时赛')
+            : '回合历史';
+
         return (
-            <div className="mb-6">
+            <div key={displayTitle} className="mb-6">
                 <h3 className="text-xs font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mb-3 px-1">
-                    {title === 'Round history' ? '回合历史' : '加时赛'}
+                    {displayTitle}
                 </h3>
                 <div className="bg-neutral-100/50 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden">
                     <div className="flex">
-                        {/* Team Logos/Names Column */}
-                        <div className="w-12 shrink-0 border-r border-neutral-200 dark:border-neutral-800 flex flex-col">
-                            <div className="h-10 flex items-center justify-center border-b border-neutral-200 dark:border-neutral-800">
-                                <span className="text-xs font-black text-neutral-500 uppercase">我</span>
+                        {/* Team Names Column */}
+                        <div className="w-16 shrink-0 border-r border-neutral-200 dark:border-neutral-800 flex flex-col bg-neutral-50/50 dark:bg-neutral-900/50">
+                            <div className="h-10 flex items-center px-2 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-100/30 dark:bg-neutral-800/20">
+                                <span className="text-[9px] font-black text-neutral-400 dark:text-neutral-500 uppercase truncate tracking-tighter" title={teamA}>
+                                    {teamA}
+                                </span>
                             </div>
-                            <div className="h-10 flex items-center justify-center">
-                                <span className="text-xs font-black text-neutral-500 uppercase">敌</span>
+                            <div className="h-10 flex items-center px-2 bg-neutral-100/30 dark:bg-neutral-800/20">
+                                <span className="text-[9px] font-black text-neutral-400 dark:text-neutral-500 uppercase truncate tracking-tighter" title={teamB}>
+                                    {teamB}
+                                </span>
                             </div>
                         </div>
 
@@ -45,7 +66,11 @@ export const RoundHistory: React.FC<RoundHistoryProps> = ({ match }) => {
                         <div className="flex-1 overflow-x-auto scrollbar-hide">
                             <div className="flex min-w-max">
                                 {blockRounds.map((round) => {
+                                    // Half-time split at round 12 (for regulation)
                                     const isHalfEnd = !isOT && (round.roundNumber === 12);
+                                    // OT split at round 3 (each OT half is 3 rounds)
+                                    const isOTHalfEnd = isOT && ((round.roundNumber - 24) % 6 === 3);
+                                    
                                     const winnerSide = round.winnerSide;
                                     const usSide = getTeamSideInRound(match, round, true);
                                     const usWon = winnerSide === usSide;
@@ -66,7 +91,14 @@ export const RoundHistory: React.FC<RoundHistoryProps> = ({ match }) => {
                                     };
 
                                     return (
-                                        <div key={round.roundNumber} className={`flex flex-col w-10 shrink-0 ${isHalfEnd ? 'border-r-2 border-neutral-300 dark:border-neutral-700' : 'border-r border-neutral-200 dark:border-neutral-800'}`}>
+                                        <div 
+                                            key={round.roundNumber} 
+                                            className={`flex flex-col w-10 shrink-0 
+                                                ${(isHalfEnd || isOTHalfEnd) 
+                                                    ? 'border-r-4 border-neutral-300 dark:border-neutral-700' 
+                                                    : 'border-r border-neutral-200 dark:border-neutral-800'
+                                                }`}
+                                        >
                                             {/* Row 1: Team A (Us) */}
                                             <div className="h-10 flex items-center justify-center border-b border-neutral-200 dark:border-neutral-800 relative group">
                                                 {renderIcons(true)}
@@ -91,8 +123,12 @@ export const RoundHistory: React.FC<RoundHistoryProps> = ({ match }) => {
 
     return (
         <div className="px-1">
-            {renderHistoryBlock('Round history', mainRounds)}
-            {renderHistoryBlock('Overtime', otRounds, true)}
+            {renderHistoryBlock('Round history', regulationRounds)}
+            {otBlocks.map((block, idx) => (
+                <React.Fragment key={`ot-block-${idx}`}>
+                    {renderHistoryBlock('Overtime', block, true, idx)}
+                </React.Fragment>
+            ))}
         </div>
     );
 };

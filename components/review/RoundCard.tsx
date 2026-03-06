@@ -48,6 +48,8 @@ export const RoundCard: React.FC<RoundCardProps> = ({ round, isExpanded, onToggl
 
     // Summary data
     const killCount = sortedEvents.filter(e => e.type === 'kill').length;
+    const damageEvents = sortedEvents.filter(e => e.type === 'damage');
+    const totalDamage = damageEvents.reduce((acc, curr) => acc + (curr.damage || 0), 0);
 
     // Stats array preparation
     const statsArray = Object.entries(round.playerStats).map(([sid, stats]) => {
@@ -97,22 +99,28 @@ export const RoundCard: React.FC<RoundCardProps> = ({ round, isExpanded, onToggl
                                 {getWinReasonText(round.winReason)}
                             </span>
                         </div>
-                        <div className="text-[10px] text-neutral-500 dark:text-neutral-400 flex items-center gap-3 font-sans tabular-nums">
-                            <span className="flex items-center gap-1" title="回合时长">
+                        <div className="text-[10px] text-neutral-500 dark:text-neutral-400 flex items-center gap-3 font-sans tabular-nums font-medium">
+                            <span className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800/50 px-1.5 py-0.5 rounded" title="回合时长">
                                 <svg className="w-3 h-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                 {formatTime(round.duration, 'elapsed')}
                             </span>
-                            <span className="flex items-center gap-1" title="总击杀">
-                                <Icons.Kill />
+                            <span className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800/50 px-1.5 py-0.5 rounded" title="总击杀">
+                                <Icons.Kill className="w-3 h-3" />
                                 {killCount} 击杀
+                            </span>
+                            <span className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800/50 px-1.5 py-0.5 rounded" title="总伤害">
+                                <svg className="w-3 h-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                {totalDamage} 伤害
                             </span>
                             
                             {/* Objective Status Icons */}
                             {plantEvent && (
-                                <span className={`flex items-center gap-1 font-bold ${
-                                    defuseEvent ? 'text-green-500' : explodeEvent ? 'text-amber-500' : 'text-red-500'
+                                <span className={`flex items-center gap-1 font-bold px-1.5 py-0.5 rounded border ${
+                                    defuseEvent ? 'text-green-500 border-green-500/20 bg-green-500/5' : 
+                                    explodeEvent ? 'text-amber-500 border-amber-500/20 bg-amber-500/5' : 
+                                    'text-red-500 border-red-500/20 bg-red-500/5'
                                 }`}>
-                                    <Icons.Bomb />
+                                    <Icons.Bomb className="w-3 h-3" />
                                     {defuseEvent ? '已拆除' : explodeEvent ? '已爆炸' : '已安放'}
                                 </span>
                             )}
