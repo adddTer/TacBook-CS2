@@ -63,6 +63,23 @@ const App: React.FC = () => {
 
   // --- Effects ---
   
+  // URL Hash Routing
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (['tactics', 'utilities', 'weapons', 'economy', 'events'].includes(hash)) {
+        setViewMode(hash as any);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    handleHashChange(); // Initialize on load
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    window.location.hash = viewMode;
+  }, [viewMode]);
+  
   // Load Preferences
   useEffect(() => {
     const savedUtilMode = localStorage.getItem('tacbook_utility_view_mode') as 'detail' | 'accordion';

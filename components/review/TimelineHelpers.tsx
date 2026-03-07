@@ -20,23 +20,23 @@ import {
 
 export const WIN_REASON_CN_MAP: Record<string, string> = {
     // Number keys (converted to string)
-    '1': 'T歼灭/C4爆炸',   
-    '7': 'C4拆除',        
-    '8': 'T全灭',         
-    '9': 'CT全灭',        
-    '10': 'C4爆炸',       
+    '1': 'T 歼灭/C4爆炸',   
+    '7': 'C4 拆除',        
+    '8': 'T 全灭',         
+    '9': 'CT 全灭',        
+    '10': 'C4 爆炸',       
     '12': '时间耗尽',      
-    '17': 'T投降',
-    '18': 'CT投降',
+    '17': 'T 投降',
+    '18': 'CT 投降',
     // String keys (common parser outputs)
-    'target_bombed': 'C4爆炸',
-    'bomb_defused': 'C4拆除',
-    't_killed': 'T全灭',
-    'ct_killed': 'CT全灭',
+    'target_bombed': 'C4 爆炸',
+    'bomb_defused': 'C4 拆除',
+    't_killed': 'T 全灭',
+    'ct_killed': 'CT 全灭',
     'target_saved': '时间耗尽',
-    'terrorists_surrender': 'T投降',
-    'ct_surrender': 'CT投降',
-    'bomb_exploded': 'C4爆炸',
+    'terrorists_surrender': 'T 投降',
+    'ct_surrender': 'CT 投降',
+    'bomb_exploded': 'C4 爆炸',
     'time_ran_out': '时间耗尽'
 };
 

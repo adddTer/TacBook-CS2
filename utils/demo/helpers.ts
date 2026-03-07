@@ -3,7 +3,19 @@ import { ROSTER } from "../../constants/roster";
 
 export const normalizeSteamId = (id: string | number | null | undefined): string => {
     if (id === null || id === undefined || id === 0 || id === "0" || id === "BOT") return "BOT";
-    return String(id).trim();
+    const str = String(id).trim();
+    
+    // Handle SteamID3 format like [U:1:12345678]
+    if (str.startsWith('[U:')) {
+        const parts = str.split(':');
+        if (parts.length >= 3) {
+            const accountId = parseInt(parts[2].replace(']', ''), 10);
+            const base = BigInt('76561197960265728');
+            return (base + BigInt(accountId)).toString();
+        }
+    }
+    
+    return str;
 };
 
 export const NAME_ALIASES: Record<string, string> = {

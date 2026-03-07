@@ -92,7 +92,7 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
     }
     
     // Fallback: 5-man stack logic
-    if (rosterSteamIds.size === 0 && activeSteamIds.size === 10) {
+    if (rosterSteamIds.size === 0) {
         const numTeamGroups = new Map<string, Set<string>>();
         const steamIdLooseEqual = (a?: string, b?: string) => {
             if (!a || !b) return false;

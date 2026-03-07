@@ -96,8 +96,8 @@ export class WPAEngine {
         if (this.isExplodedState) return 1.0; // T Win (T Prob 1.0)
         
         // Standard Elimination Checks
+        if (this.ctAlive === 0) return 1.0; // CT all dead -> T Win (regardless of plant status)
         if (!this.isPlanted && this.tAlive === 0) return 0.0; // T eliminated before plant -> CT Win
-        if (this.isPlanted && this.ctAlive === 0) return 1.0; // CT eliminated after plant -> T Win
         
         // FAILSAFE: If C4 time runs out and not defused, T Wins.
         if (this.isPlanted && this.roundTime <= 0.1 && !this.isDefusedState) {
@@ -226,14 +226,43 @@ export class WPAEngine {
     // --- Event Handlers ---
 
     public handleDamage(
-        attackerSid: string, victimSid: string, attackerSide: 'T' | 'CT', 
+        attackerSid: string, victimSid: string, attackerSide: 'T' | 'CT', victimSide: 'T' | 'CT',
         damage: number, timeElapsed: number,
         allTs: string[], allCTs: string[]
     ): WPAUpdate[] {
         this.updateRoundTime(timeElapsed); 
-        // ... (Rest is same)
-        if (attackerSide === 'T') this.ctHealth = Math.max(0, this.ctHealth - damage);
-        else this.tHealth = Math.max(0, this.tHealth - damage);
+        
+        // Always update victim's health
+        if (victimSide === 'T') this.tHealth = Math.max(0, this.tHealth - damage);
+        else this.ctHealth = Math.max(0, this.ctHealth - damage);
+        
+        const isFriendlyFire = attackerSide === victimSide;
+        
+        if (isFriendlyFire) {
+            const prevProb = this.currentWinProb;
+            const newProb = this.calculateWinProb();
+            this.currentWinProb = newProb;
+            
+            const probDelta = newProb - prevProb;
+            const totalPoints = probDelta * COEFF.SCALING;
+            
+            const updates: WPAUpdate[] = [];
+            if (Math.abs(totalPoints) < 0.001) return [];
+            
+            // If T damages T, T win prob decreases (probDelta < 0), totalPoints < 0.
+            // If CT damages CT, T win prob increases (probDelta > 0), totalPoints > 0.
+            const killerTeamLoss = attackerSide === 'T' ? totalPoints : -totalPoints; // Should be negative
+            const opposingTeamGain = -killerTeamLoss; // Should be positive
+            
+            // Penalize the attacker
+            updates.push({ sid: attackerSid, delta: killerTeamLoss, reason: 'friendly_damage' });
+            
+            // Reward the opposing team
+            const opposingTeam = attackerSide === 'T' ? allCTs : allTs;
+            this.distributeToSide(opposingTeamGain, opposingTeam, updates);
+            
+            return updates;
+        }
 
         return this.generateUpdates(
             [attackerSid], [], victimSid, allTs, allCTs, 'damage'
@@ -241,7 +270,7 @@ export class WPAEngine {
     }
 
     public handleKill(
-        killerSid: string, victimSid: string, victimSide: 'T' | 'CT',
+        killerSid: string, victimSid: string, victimSide: 'T' | 'CT', attackerSide: 'T' | 'CT',
         assisters: { sid: string, isFlash?: boolean }[], 
         timeElapsed: number,
         allTs: string[], allCTs: string[],
@@ -281,6 +310,34 @@ export class WPAEngine {
              updates.push({ sid: victimSid, delta: -Math.abs(totalPoints), reason: 'bot_death' });
              
              return updates;
+        }
+        
+        const isFriendlyKill = attackerSide === victimSide;
+        
+        if (isFriendlyKill) {
+            const prevProb = this.currentWinProb;
+            const newProb = this.calculateWinProb();
+            this.currentWinProb = newProb;
+            
+            const probDelta = newProb - prevProb;
+            const totalPoints = probDelta * COEFF.SCALING;
+            
+            const updates: WPAUpdate[] = [];
+            if (Math.abs(totalPoints) < 0.001) return [];
+            
+            // If T kills T, T win prob decreases (probDelta < 0), totalPoints < 0.
+            // If CT kills CT, T win prob increases (probDelta > 0), totalPoints > 0.
+            const killerTeamLoss = attackerSide === 'T' ? totalPoints : -totalPoints; // Should be negative
+            const opposingTeamGain = -killerTeamLoss; // Should be positive
+            
+            // Penalize the killer
+            updates.push({ sid: killerSid, delta: killerTeamLoss, reason: 'friendly_kill' });
+            
+            // Reward the opposing team
+            const opposingTeam = attackerSide === 'T' ? allCTs : allTs;
+            this.distributeToSide(opposingTeamGain, opposingTeam, updates);
+            
+            return updates;
         }
 
         return this.generateUpdates(
@@ -446,10 +503,24 @@ export class WPAEngine {
         // --- Kill Logic ---
         if (killContext && reason === 'kill') {
              const impactMagnitude = Math.abs(totalPoints);
-             const penaltyTotal = -impactMagnitude;
              
-             let killerFixedShare = impactMagnitude * 0.5;
-             let weightedPool = impactMagnitude * 0.5;
+             // Determine if the killer's team actually gained probability.
+             // If T kills CT, probDelta > 0 (T gains).
+             // If CT kills T, probDelta < 0 (T loses, CT gains).
+             // We assume the killer is on the team that gained probability, 
+             // but to be safe, we check if the killer is T or CT and compare with probDelta.
+             const isKillerT = allTs.includes(killContext.killerSid);
+             const killerTeamGained = isKillerT ? probDelta > 0 : probDelta < 0;
+             
+             // If for some reason the killer's team LOST probability (e.g., weird edge case), 
+             // we should penalize the killer. Otherwise, reward them.
+             const killerMultiplier = killerTeamGained ? 1 : -1;
+             
+             const killerGainTotal = impactMagnitude * killerMultiplier;
+             const penaltyTotal = -killerGainTotal;
+             
+             let killerFixedShare = killerGainTotal * 0.5;
+             let weightedPool = killerGainTotal * 0.5;
              
              // DEFUSER BONUS (35%)
              // Rule: If Scenario 1 (Defuse Win) AND Kill is within 5s of Defuse, Defuser gets 35%.
@@ -473,7 +544,7 @@ export class WPAEngine {
              }
 
              if (applyDefuserBonus && defuserSid) {
-                 const defuserBonus = impactMagnitude * 0.35;
+                 const defuserBonus = killerGainTotal * 0.35;
                  
                  // If Killer IS Defuser, they get this bonus + their normal share
                  // If Killer is NOT Defuser, Defuser gets this bonus separate.
@@ -482,8 +553,8 @@ export class WPAEngine {
 
                  // Reduce the pool for standard distribution
                  // Remaining: 65%
-                 killerFixedShare = impactMagnitude * 0.325; // 0.65 * 0.5
-                 weightedPool = impactMagnitude * 0.325;     // 0.65 * 0.5
+                 killerFixedShare = killerGainTotal * 0.325; // 0.65 * 0.5
+                 weightedPool = killerGainTotal * 0.325;     // 0.65 * 0.5
              }
 
              const weights = new Map<string, number>();

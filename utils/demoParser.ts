@@ -349,6 +349,7 @@ export const parseDemoJson = (data: DemoData): Match => {
 
         roundClutchAttempts.clear();
         healthTracker.reset(); 
+        ratingEngine.resetRoundState();
         currentRoundPlayerStats.clear();
         currentRoundEvents = [];
         
@@ -609,52 +610,10 @@ export const parseDemoJson = (data: DemoData): Match => {
             latestFreezeEndTick = tick;
         }
 
-        // Side Map Updates
-        if (type === 'player_team') {
-            const sid = normalizeSteamId(e.user_steamid || e.player || e.userid); 
-            const tm = e.team || e.team_num; 
-            
-            // WPA FIX: Sync round rosters immediately when team changes
-            roundTs.delete(sid);
-            roundCTs.delete(sid);
-
-            if (tm == 2) { 
-                playerSideMap.set(sid, 'T');
-                roundTs.add(sid);
-            }
-            else if (tm == 3) { 
-                playerSideMap.set(sid, 'CT');
-                roundCTs.add(sid);
-            }
-        }
-        if (type === 'player_spawn') {
-            const sid = normalizeSteamId(e.user_steamid || e.userid);
-            const tm = e.team_num || e.team;
-            
-            // WPA FIX: Sync round rosters immediately on spawn
-            if (tm == 2) { 
-                playerSideMap.set(sid, 'T');
-                roundCTs.delete(sid);
-                roundTs.add(sid);
-            }
-            else if (tm == 3) { 
-                playerSideMap.set(sid, 'CT');
-                roundTs.delete(sid);
-                roundCTs.add(sid);
-            }
-        }
-        if (e.user_steamid) {
-            const sid = normalizeSteamId(e.user_steamid);
-            const tm = e.user_team_num || e.team_num;
-            if (tm == 2) playerSideMap.set(sid, 'T');
-            else if (tm == 3) playerSideMap.set(sid, 'CT');
-        }
-        if (e.attacker_steamid) {
-            const sid = normalizeSteamId(e.attacker_steamid);
-            const tm = e.attacker_team_num;
-            if (tm == 2) playerSideMap.set(sid, 'T');
-            else if (tm == 3) playerSideMap.set(sid, 'CT');
-        }
+        // --- REMOVED: Event-based playerSideMap updates ---
+        // CS2 demos often have buggy team_num fields (especially after halftime).
+        // Relying on these fields corrupts playerSideMap and causes friendly fire false positives.
+        // We now strictly rely on resetRoundState() which uses the robust roster logic.
 
         if (type === 'round_announce_match_start') {
             matchStarted = true;
@@ -979,7 +938,7 @@ export const parseDemoJson = (data: DemoData): Match => {
             const getTimelineInfo = (sid: string) => {
                 if (sid === "BOT" || sid === "0") return { steamid: sid, name: "BOT", side: 'CT' as Side };
                 const isTM = teammateSteamIds.has(sid);
-                const currentRosterSide = (currentRound <= 12) ? initialRosterSide : (initialRosterSide === 'T' ? 'CT' : 'T');
+                const currentRosterSide = getRoundSide(currentRound, initialRosterSide);
                 const s = isTM ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
                 const n = steamIdToName.get(sid) || "Unknown";
                 return { steamid: sid, name: n, side: s };
@@ -1099,7 +1058,7 @@ export const parseDemoJson = (data: DemoData): Match => {
                  const getTimelineInfo = (sid: string) => {
                     if (sid === "BOT" || sid === "0") return { steamid: sid, name: "World", side: 'CT' as Side };
                     const isTM = teammateSteamIds.has(sid);
-                    const currentRosterSide = (currentRound <= 12) ? initialRosterSide : (initialRosterSide === 'T' ? 'CT' : 'T');
+                    const currentRosterSide = getRoundSide(currentRound, initialRosterSide);
                     const s = isTM ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
                     const n = steamIdToName.get(sid) || "Unknown";
                     return { steamid: sid, name: n, side: s };

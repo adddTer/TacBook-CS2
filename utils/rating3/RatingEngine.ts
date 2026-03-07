@@ -100,6 +100,21 @@ export class RatingEngine {
         this.wpaEngine.handleDefuseStart(sid, hasKit);
     }
 
+    public resetRoundState() {
+        this.roundStats.clear();
+        this.recentDeaths = [];
+        this.damageGraph.clear();
+        this.health.reset();
+        this.firstKillHappened = false;
+        this.knownRoundTs.clear();
+        this.knownRoundCTs.clear();
+        
+        // FIX: Ensure WPA Engine is reset even if round_start is missing
+        this.wpaEngine.startNewRound();
+        // Initialize with default economy. If round_start occurs, it will be overwritten with actual values.
+        this.wpaEngine.initializeRound(4000, 4000); 
+    }
+
     public handleEvent(
         event: any, 
         currentRound: number, 
@@ -112,12 +127,6 @@ export class RatingEngine {
         const type = event.event_name;
         const tick = event.tick || 0;
         const TICK_RATE = 64; 
-
-        // --- FIX: Sync internal roster cache ---
-        if (type === 'round_announce_match_start' || type === 'round_start') {
-            this.knownRoundTs.clear();
-            this.knownRoundCTs.clear();
-        }
 
         // --- NEW: Detect Round Transition for Hard Inventory Reset (Fixes R13 Economy Inflation) ---
         if (currentRound > this.lastRoundProcessed) {
@@ -263,32 +272,50 @@ export class RatingEngine {
             const vic = this.resolvePlayerId(rawVic, allRoundPlayers);
             
             const rawDmg = parseInt(event.dmg_health || 0);
+
+            // Determine Sides for Friendly Fire Check
+            let attSide: 'T' | 'CT' | undefined;
+            if (this.knownRoundTs.has(att)) attSide = 'T';
+            else if (this.knownRoundCTs.has(att)) attSide = 'CT';
             
+            let vicSide: 'T' | 'CT' | undefined;
+            if (this.knownRoundTs.has(vic)) vicSide = 'T';
+            else if (this.knownRoundCTs.has(vic)) vicSide = 'CT';
+
+            const isFriendlyFire = attSide && vicSide && attSide === vicSide;
+            
+            // ALWAYS record damage for health tracking (to keep health state accurate)
             const actualDmg = this.health.recordDamage(vic, rawDmg);
 
-            if (att !== "BOT" && vic !== "BOT" && att !== vic && att !== "0") {
-                const stats = this.getRoundStats(att);
-                stats.damage += actualDmg;
+            if (!isFriendlyFire) {
+                // Only count non-friendly fire damage for ADR/Stats
+                if (att !== "BOT" && vic !== "BOT" && att !== vic && att !== "0") {
+                    const stats = this.getRoundStats(att);
+                    stats.damage += actualDmg;
 
-                if (!this.damageGraph.has(att)) this.damageGraph.set(att, new Map());
-                const vMap = this.damageGraph.get(att)!;
-                vMap.set(vic, (vMap.get(vic) || 0) + actualDmg);
-                
-                // WPA for Damage
-                // Robust Side Detection
-                let attSide: 'T' | 'CT' | undefined;
-                if (this.knownRoundTs.has(att)) attSide = 'T';
-                else if (this.knownRoundCTs.has(att)) attSide = 'CT';
-                // Fallback to event data
-                if (!attSide && event.attacker_team_num == 2) attSide = 'T';
-                if (!attSide && event.attacker_team_num == 3) attSide = 'CT';
-
-                if (attSide) {
-                    const wpaUpdates = this.wpaEngine.handleDamage(
-                        att, vic, attSide, actualDmg, timeElapsed,
-                        tPlayers, ctPlayers
-                    );
-                    this.wpaEngine.commitUpdates(wpaUpdates);
+                    if (!this.damageGraph.has(att)) this.damageGraph.set(att, new Map());
+                    const vMap = this.damageGraph.get(att)!;
+                    vMap.set(vic, (vMap.get(vic) || 0) + actualDmg);
+                    
+                    // WPA for Damage
+                    if (attSide) {
+                        const wpaUpdates = this.wpaEngine.handleDamage(
+                            att, vic, attSide, vicSide || 'T', actualDmg, timeElapsed,
+                            tPlayers, ctPlayers
+                        );
+                        this.wpaEngine.commitUpdates(wpaUpdates);
+                    }
+                }
+            } else {
+                // If friendly fire, we still need to handle WPA penalty
+                if (att !== "BOT" && vic !== "BOT" && att !== vic && att !== "0") {
+                    if (attSide && vicSide) {
+                        const wpaUpdates = this.wpaEngine.handleDamage(
+                            att, vic, attSide, vicSide, actualDmg, timeElapsed,
+                            tPlayers, ctPlayers
+                        );
+                        this.wpaEngine.commitUpdates(wpaUpdates);
+                    }
                 }
             }
         }
@@ -378,6 +405,15 @@ export class RatingEngine {
                 }
             }
             
+            // Determine Attacker Side
+            let attackerSide: 'T' | 'CT' | undefined;
+            if (aliveTs.has(att)) attackerSide = 'T';
+            else if (aliveCTs.has(att)) attackerSide = 'CT';
+            else if (this.knownRoundTs.has(att)) attackerSide = 'T';
+            else if (this.knownRoundCTs.has(att)) attackerSide = 'CT';
+            
+            const isFriendlyKill = attackerSide && victimSide && attackerSide === victimSide;
+            
             if (victimSide) {
                 const assisters = [];
                 if (ast && ast !== "BOT" && ast !== "0") {
@@ -395,21 +431,23 @@ export class RatingEngine {
                 
                 const isBot = vic === 'BOT' || vic === '0' || vic.startsWith('BOT');
 
-                const updates = this.wpaEngine.handleKill(
-                    att, vic, victimSide, assisters, timeElapsed,
-                    tPlayers, ctPlayers,
-                    hasKit, // Pass kit loss info to WPA
-                    damageContributors, // NEW Argument
-                    tick, // Pass current tick for 5s window check
-                    isBot // NEW
-                );
-                this.wpaEngine.commitUpdates(updates);
+                if (attackerSide) {
+                    const updates = this.wpaEngine.handleKill(
+                        att, vic, victimSide, attackerSide, assisters, timeElapsed,
+                        tPlayers, ctPlayers,
+                        hasKit, // Pass kit loss info to WPA
+                        damageContributors, // NEW Argument
+                        tick, // Pass current tick for 5s window check
+                        isBot // NEW
+                    );
+                    this.wpaEngine.commitUpdates(updates);
+                }
             } else {
                 // Warn only if we really couldn't figure it out
                 // console.warn("[RatingEngine] Could not determine victim side for WPA:", vic);
             }
 
-            if (att !== "BOT" && att !== vic && att !== "0") {
+            if (att !== "BOT" && att !== vic && att !== "0" && !isFriendlyKill) {
                 const attStats = this.getRoundStats(att);
                 attStats.kills++;
 
