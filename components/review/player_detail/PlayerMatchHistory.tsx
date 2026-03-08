@@ -33,8 +33,7 @@ export const PlayerMatchHistory: React.FC<PlayerMatchHistoryProps> = ({ history,
                     
                     const winColor = resultForPlayer === 'WIN' ? 'text-green-600 dark:text-green-500' : resultForPlayer === 'LOSS' ? 'text-red-500' : 'text-yellow-500';
                     
-                    const roundsPlayed = (match.score.us + match.score.them) || 1;
-                    const wpaVal = stats.wpa ? (stats.wpa / roundsPlayed) : 0;
+                    const wpaVal = stats.wpa || 0;
 
                     return (
                         <div 

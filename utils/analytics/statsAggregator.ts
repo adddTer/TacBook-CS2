@@ -109,7 +109,8 @@ export const aggregatePlayerStats = (
         const matchPlayer = [...match.players, ...match.enemyPlayers].find(p => 
             p.playerId === profileId || 
             p.steamid === profileId ||
-            resolveName(p.playerId) === profileId
+            resolveName(p.playerId) === profileId ||
+            resolveName(p.steamid) === profileId
         );
         
         if (!matchPlayer) return;

@@ -19,6 +19,7 @@ export interface StatsResult {
     filtered: {
         adr: number;
         kdr: number;
+        kpr: number;
         dpr: number;
         kast: number;
         impact: number;
@@ -127,7 +128,8 @@ export const calculatePlayerStats = (
             const pMatch = [...match.players, ...match.enemyPlayers].find(p => 
                 p.playerId === profileId || 
                 p.steamid === profileId ||
-                resolveName(p.playerId) === profileId
+                resolveName(p.playerId) === profileId ||
+                resolveName(p.steamid) === profileId
             );
             if(!pMatch) return;
             const pid = pMatch.steamid || pMatch.playerId;
@@ -154,7 +156,8 @@ export const calculatePlayerStats = (
         const pMatch = [...match.players, ...match.enemyPlayers].find(p => 
             p.playerId === profileId || 
             p.steamid === profileId ||
-            resolveName(p.playerId) === profileId
+            resolveName(p.playerId) === profileId ||
+            resolveName(p.steamid) === profileId
         );
         if(!pMatch) return;
         const pid = pMatch.steamid || pMatch.playerId;
@@ -309,6 +312,7 @@ export const calculatePlayerStats = (
         filtered: {
             adr: adr,
             kdr: safeDiv(stats.kills, stats.deaths),
+            kpr: kpr,
             dpr: safeDiv(stats.deaths, rounds),
             kast: kastVal,
             impact: safeDiv(impactSum, rounds),

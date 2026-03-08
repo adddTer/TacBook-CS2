@@ -143,6 +143,7 @@ export interface PlayerProfile {
     name: string;
     role: string;
     roleType: string;
+    steamids?: string[];
 }
 
 export type Rank = string; // Flexible rank string (e.g., 'B+', 'S', 'A')

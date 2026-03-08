@@ -62,6 +62,9 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     const [selectedSeries, setSelectedSeries] = useState<MatchSeries | null>(null);
     const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
     
+    // Navigation History
+    const [historyStack, setHistoryStack] = useState<string[]>([]);
+
     // Modals
     const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
     const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false);
@@ -153,6 +156,50 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         if (oppWins > myWins) return 'loss';
         return 'tie';
     };
+
+    // --- Effects ---
+
+    // Sync state with URL hash
+    React.useEffect(() => {
+        const handleHash = () => {
+            const hash = window.location.hash.replace('#', '');
+            if (hash.startsWith('match/')) {
+                const id = hash.split('/')[1];
+                const match = allMatches.find(m => m.id === id);
+                if (match) {
+                    setSelectedMatch(match);
+                    setSelectedPlayerId(null);
+                    setSelectedSeries(null);
+                    setSelectedTournament(null);
+                }
+            } else if (hash.startsWith('player/')) {
+                const id = hash.split('/')[1];
+                setSelectedPlayerId(id);
+                setSelectedMatch(null);
+                setSelectedSeries(null);
+                setSelectedTournament(null);
+            } else if (hash === 'weapons' || hash === 'economy' || hash === 'events' || hash === 'tactics' || hash === 'utilities') {
+                // If we are back to a main tab, clear selections
+                setSelectedMatch(null);
+                setSelectedPlayerId(null);
+                setSelectedSeries(null);
+                setSelectedTournament(null);
+            }
+        };
+
+        window.addEventListener('hashchange', handleHash);
+        handleHash();
+        return () => window.removeEventListener('hashchange', handleHash);
+    }, [allMatches]);
+
+    // Update hash when selection changes
+    React.useEffect(() => {
+        if (selectedMatch) {
+            window.location.hash = `match/${selectedMatch.id}`;
+        } else if (selectedPlayerId) {
+            window.location.hash = `player/${selectedPlayerId}`;
+        }
+    }, [selectedMatch, selectedPlayerId]);
 
     // --- Filtering Logic ---
     const { filteredMatches, filteredSeries, availableMaps, availableServers } = useMemo(() => {
@@ -330,12 +377,116 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     // --- Handlers ---
     
+    const pushCurrentStateToHistory = () => {
+        if (selectedMatch) setHistoryStack(prev => [...prev, `match:${selectedMatch.id}`]);
+        else if (selectedSeries) setHistoryStack(prev => [...prev, `series:${selectedSeries.id}`]);
+        else if (selectedTournament) setHistoryStack(prev => [...prev, `tournament:${selectedTournament.id}`]);
+        else if (selectedPlayerId) setHistoryStack(prev => [...prev, `player:${selectedPlayerId}`]);
+        else setHistoryStack(prev => [...prev, `tab:${activeTab}`]);
+    };
+
     const handlePlayerClick = (id: string) => {
         const resolved = resolveName(id);
+        pushCurrentStateToHistory();
         setSelectedMatch(null);
         setSelectedSeries(null);
         setSelectedTournament(null);
         setSelectedPlayerId(resolved);
+    };
+
+    const handleMatchClick = (match: Match) => {
+        pushCurrentStateToHistory();
+        setSelectedPlayerId(null);
+        setSelectedSeries(null);
+        setSelectedTournament(null);
+        setSelectedMatch(match);
+    };
+
+    const handleSeriesClick = (series: MatchSeries) => {
+        pushCurrentStateToHistory();
+        setSelectedPlayerId(null);
+        setSelectedMatch(null);
+        setSelectedTournament(null);
+        setSelectedSeries(series);
+    };
+
+    const handleTournamentClick = (tournament: Tournament) => {
+        pushCurrentStateToHistory();
+        setSelectedPlayerId(null);
+        setSelectedMatch(null);
+        setSelectedSeries(null);
+        setSelectedTournament(tournament);
+    };
+
+    const handleTabChange = (tab: 'matches' | 'players' | 'leaderboard' | 'tournaments') => {
+        setActiveTab(tab);
+        setSelectedMatch(null);
+        setSelectedSeries(null);
+        setSelectedTournament(null);
+        setSelectedPlayerId(null);
+        setHistoryStack([]);
+    };
+
+    const handleBack = () => {
+        if (historyStack.length === 0) {
+            // Fallback: Return to main interface
+            setSelectedMatch(null);
+            setSelectedSeries(null);
+            setSelectedTournament(null);
+            setSelectedPlayerId(null);
+            window.location.hash = 'weapons';
+            return;
+        }
+        
+        const last = historyStack[historyStack.length - 1];
+        setHistoryStack(prev => prev.slice(0, -1));
+        
+        if (!last) {
+            // Fallback: Return to main interface
+            setSelectedMatch(null);
+            setSelectedSeries(null);
+            setSelectedTournament(null);
+            setSelectedPlayerId(null);
+            window.location.hash = 'weapons';
+            return;
+        }
+
+        const [type, id] = last.split(':');
+        
+        // Reset all selection states first
+        setSelectedMatch(null);
+        setSelectedSeries(null);
+        setSelectedTournament(null);
+        setSelectedPlayerId(null);
+        
+        // Apply state from history
+        let found = false;
+        if (type === 'match') {
+            const m = allMatches.find(m => m.id === id);
+            if (m) { setSelectedMatch(m); found = true; }
+        }
+        else if (type === 'series') {
+            const s = allSeries.find(s => s.id === id);
+            if (s) { setSelectedSeries(s); found = true; }
+        }
+        else if (type === 'tournament') {
+            const t = allTournaments.find(t => t.id === id);
+            if (t) { setSelectedTournament(t); found = true; }
+        }
+        else if (type === 'player') {
+            setSelectedPlayerId(id);
+            found = true;
+        }
+        else if (type === 'tab') {
+            setActiveTab(id as any);
+            found = true;
+        }
+
+        // Fallback if item not found
+        if (!found) {
+            setHistoryStack([]);
+            window.location.hash = 'weapons';
+        }
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -493,7 +644,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             <>
                 <MatchDetail 
                     match={selectedMatch}
-                    onBack={() => setSelectedMatch(null)}
+                    onBack={handleBack}
                     onPlayerClick={handlePlayerClick}
                     onDelete={(m) => {
                         setConfirmConfig({
@@ -526,8 +677,8 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             <SeriesDetail 
                 series={selectedSeries}
                 allMatches={allMatches}
-                onBack={() => setSelectedSeries(null)}
-                onSelectMatch={setSelectedMatch}
+                onBack={handleBack}
+                onSelectMatch={handleMatchClick}
                 onSelectPlayer={handlePlayerClick}
             />
         );
@@ -538,8 +689,8 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             <TournamentDetail 
                 tournament={selectedTournament}
                 allMatches={allMatches}
-                onBack={() => setSelectedTournament(null)}
-                onSelectMatch={setSelectedMatch}
+                onBack={handleBack}
+                onSelectMatch={handleMatchClick}
                 onSelectPlayer={handlePlayerClick}
             />
         );
@@ -550,11 +701,8 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             <PlayerDetail 
                 profile={selectedPlayerStats.profile}
                 history={selectedPlayerStats.history}
-                onBack={() => setSelectedPlayerId(null)}
-                onMatchClick={(m) => {
-                    setSelectedPlayerId(null);
-                    setSelectedMatch(m);
-                }}
+                onBack={handleBack}
+                onMatchClick={handleMatchClick}
             />
         );
     }
@@ -572,25 +720,25 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             <div className="flex gap-2 sticky top-[56px] z-30 bg-neutral-50/95 dark:bg-neutral-950/95 backdrop-blur-md py-3 -mx-4 px-4 border-b border-neutral-200 dark:border-neutral-800">
                 <div className="flex flex-1 p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl">
                     <button
-                        onClick={() => setActiveTab('matches')}
+                        onClick={() => handleTabChange('matches')}
                         className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'matches' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
                     >
                         赛程
                     </button>
                     <button
-                        onClick={() => setActiveTab('tournaments')}
+                        onClick={() => handleTabChange('tournaments')}
                         className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'tournaments' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
                     >
                         赛事
                     </button>
                     <button
-                        onClick={() => setActiveTab('players')}
+                        onClick={() => handleTabChange('players')}
                         className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'players' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
                     >
                         队员
                     </button>
                     <button
-                        onClick={() => setActiveTab('leaderboard')}
+                        onClick={() => handleTabChange('leaderboard')}
                         className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'leaderboard' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
                     >
                         排行榜
@@ -654,21 +802,18 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                         className="w-10 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
                         title="创建系列赛"
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                        </svg>
                     </button>
                     <button 
                         onClick={() => setIsTournamentModalOpen(true)}
                         className="w-10 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
                         title="创建赛事"
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
-                    </button>
-                    <button 
-                        onClick={() => setShowDebugger(true)}
-                        className="w-10 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
-                        title="JSON Debugger"
-                    >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 21h8M12 17v4M7 4h10M17 4v8a5 5 0 01-10 0V4M3 9h4M17 9h4" />
+                        </svg>
                     </button>
                     <label className="w-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/20 cursor-pointer">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
@@ -682,8 +827,8 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 <MatchList 
                     matches={filteredMatches} 
                     series={filteredSeries}
-                    onSelectMatch={setSelectedMatch} 
-                    onSelectSeries={setSelectedSeries}
+                    onSelectMatch={handleMatchClick} 
+                    onSelectSeries={handleSeriesClick}
                     onBatchDelete={handleBatchDelete}
                     onSearch={setSearchQuery}
                     onFilterChange={setFilters}
@@ -696,7 +841,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             {activeTab === 'tournaments' && (
                 <TournamentList 
                     tournaments={allTournaments} 
-                    onSelectTournament={setSelectedTournament} 
+                    onSelectTournament={handleTournamentClick} 
                     onDeleteTournament={(t) => {
                         setConfirmConfig({
                             isOpen: true,
@@ -731,7 +876,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     {playersSubTab === 'list' ? (
                         <PlayerList 
                             playerStats={playerStats} 
-                            onSelectPlayer={setSelectedPlayerId} 
+                            onSelectPlayer={handlePlayerClick} 
                         />
                     ) : (
                         <RosterTimelineView />

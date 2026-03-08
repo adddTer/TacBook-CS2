@@ -6,7 +6,7 @@ import { identifyRole } from '../../../utils/analytics/roleIdentifier';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend } from 'recharts';
 import { resolveName } from '../../../utils/demo/helpers';
 import { getRatingColorClass } from '../ReviewShared';
-import { getScoreStyle, getWpaStyle } from '../../../utils/styleConstants';
+import { getScoreStyle, getWpaStyle, getStatStyle, getRatingStyle } from '../../../utils/styleConstants';
 import { getTeamNames } from '../../../utils/matchHelpers';
 
 interface MatchPerformanceTabProps {
@@ -113,7 +113,6 @@ export const MatchPerformanceTab: React.FC<MatchPerformanceTabProps> = ({ match,
     const renderStatCard = (stats: StatsResult | null, role: any, isPrimary: boolean) => {
         if (!stats) return null;
         const { filtered } = stats;
-        const borderColor = isPrimary ? 'border-blue-500' : 'border-red-500';
         const textColor = isPrimary ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400';
         const bgGradient = isPrimary 
             ? 'from-blue-50/50 to-transparent dark:from-blue-900/10' 
@@ -127,7 +126,7 @@ export const MatchPerformanceTab: React.FC<MatchPerformanceTabProps> = ({ match,
                     <div className="flex justify-between items-start mb-6">
                         <div>
                             <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">Rating</div>
-                            <div className={`text-5xl font-black tracking-tighter ${getRatingColorClass(stats.overall.rating)}`}>
+                            <div className={`text-5xl font-black tracking-tighter ${getRatingStyle(stats.overall.rating)}`}>
                                 {stats.overall.rating.toFixed(2)}
                             </div>
                         </div>
@@ -142,19 +141,19 @@ export const MatchPerformanceTab: React.FC<MatchPerformanceTabProps> = ({ match,
                     <div className="grid grid-cols-2 gap-3 mt-auto">
                         <div className="bg-white/60 dark:bg-neutral-800/60 p-3 rounded-xl border border-neutral-100 dark:border-neutral-700/50 backdrop-blur-sm">
                             <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">ADR</div>
-                            <div className={`text-lg font-mono font-black ${getScoreStyle(filtered.adr, 'text')}`}>{filtered.adr.toFixed(1)}</div>
+                            <div className={`text-lg font-mono font-black ${getStatStyle('ADR', filtered.adr, 'text')}`}>{filtered.adr.toFixed(1)}</div>
                         </div>
                         <div className="bg-white/60 dark:bg-neutral-800/60 p-3 rounded-xl border border-neutral-100 dark:border-neutral-700/50 backdrop-blur-sm">
                             <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">KAST%</div>
-                            <div className={`text-lg font-mono font-black ${getScoreStyle(filtered.kast, 'text')}`}>{filtered.kast.toFixed(1)}%</div>
+                            <div className={`text-lg font-mono font-black ${getStatStyle('KAST', filtered.kast, 'text')}`}>{filtered.kast.toFixed(1)}%</div>
                         </div>
                         <div className="bg-white/60 dark:bg-neutral-800/60 p-3 rounded-xl border border-neutral-100 dark:border-neutral-700/50 backdrop-blur-sm">
                             <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">K/D</div>
-                            <div className={`text-lg font-mono font-black ${getScoreStyle(filtered.kdr * 50, 'text')}`}>{filtered.kdr.toFixed(2)}</div>
+                            <div className={`text-lg font-mono font-black ${getStatStyle('KDR', filtered.kdr, 'text')}`}>{filtered.kdr.toFixed(2)}</div>
                         </div>
                         <div className="bg-white/60 dark:bg-neutral-800/60 p-3 rounded-xl border border-neutral-100 dark:border-neutral-700/50 backdrop-blur-sm">
                             <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">WPA</div>
-                            <div className={`text-lg font-mono font-black ${getWpaStyle(filtered.wpaSum)}`}>
+                            <div className={`text-lg font-mono font-black ${getWpaStyle(filtered.wpaAvg)}`}>
                                 {filtered.wpaAvg > 0 ? '+' : ''}{filtered.wpaAvg.toFixed(2)}%
                             </div>
                         </div>
@@ -164,7 +163,7 @@ export const MatchPerformanceTab: React.FC<MatchPerformanceTabProps> = ({ match,
                         </div>
                         <div className="bg-white/60 dark:bg-neutral-800/60 p-3 rounded-xl border border-neutral-100 dark:border-neutral-700/50 backdrop-blur-sm">
                             <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">多杀回合</div>
-                            <div className={`text-lg font-mono font-black ${getScoreStyle(filtered.multiKillRate, 'text')}`}>{filtered.multiKillRate.toFixed(1)}%</div>
+                            <div className={`text-lg font-mono font-black ${getStatStyle('MULTI_KILL', filtered.multiKillRate, 'text')}`}>{filtered.multiKillRate.toFixed(1)}%</div>
                         </div>
                     </div>
                 </div>

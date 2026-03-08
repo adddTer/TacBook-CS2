@@ -10,7 +10,12 @@ export const isMyTeamMatch = (match: Match): boolean => {
     // Check 'players' array (which parser puts 'My Team' in)
     // We want to see if our core roster is present in the 'us' side.
     return match.players.some(p => {
-        return ROSTER.some(r => r.id === p.playerId || r.name === p.playerId || (p.steamid && r.id === p.steamid));
+        return ROSTER.some(r => 
+            r.id === p.playerId || 
+            r.name === p.playerId || 
+            (p.steamid && r.id === p.steamid) ||
+            (p.steamid && r.steamids?.includes(p.steamid))
+        );
     });
 };
 

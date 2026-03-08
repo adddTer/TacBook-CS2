@@ -41,7 +41,11 @@ export const resolveName = (rawName: string | null | undefined): string => {
     if (typeof rawName !== 'string') return String(rawName);
     const clean = rawName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     if (NAME_ALIASES[clean]) return NAME_ALIASES[clean];
-    const rosterMatch = ROSTER.find(r => r.id.toLowerCase() === clean.toLowerCase() || r.name.toLowerCase() === clean.toLowerCase());
+    const rosterMatch = ROSTER.find(r => 
+        r.id.toLowerCase() === clean.toLowerCase() || 
+        r.name.toLowerCase() === clean.toLowerCase() ||
+        (r.steamids && r.steamids.includes(clean))
+    );
     if (rosterMatch) return rosterMatch.id;
     return clean;
 };

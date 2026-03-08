@@ -21,8 +21,11 @@ export const ScoreboardTab: React.FC<ScoreboardTabProps> = ({
     onPlayerClick, 
     filter 
 }) => {
-    const aggregatedPlayers = useAggregatedStats(match, players, filter);
-    const aggregatedEnemies = useAggregatedStats(match, enemyPlayers, filter);
+    const allPlayers = [...players, ...enemyPlayers];
+    const aggregatedAll = useAggregatedStats(match, allPlayers, filter);
+    
+    const aggregatedPlayers = aggregatedAll.slice(0, players.length);
+    const aggregatedEnemies = aggregatedAll.slice(players.length);
     const { teamA, teamB } = getTeamNames(match);
 
     return (

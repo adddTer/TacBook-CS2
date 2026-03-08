@@ -5,6 +5,7 @@ import { ROSTER } from '../../constants/roster';
 import { resolveName } from '../../utils/demo/helpers';
 import { MatchAggregator } from '../../utils/analytics/matchAggregator';
 import { getScoreStyle, getRatingStyle, getWpaStyle, TIER_CLASSES } from '../../utils/styleConstants';
+import { GLOBAL_STATS } from '../../utils/analytics/globalThresholds';
 
 interface LeaderboardTabProps {
     allMatches: Match[];
@@ -299,10 +300,10 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
             </div>
             
             <div className="mt-6 flex justify-center gap-6 text-[10px] text-neutral-400">
-                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.OUTSTANDING.bar}`}></span> 杰出 (80+)</div>
-                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.EXCELLENT.bar}`}></span> 优秀 (60-79)</div>
-                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.ORDINARY.bar}`}></span> 普通 (40-59)</div>
-                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.POOR.bar}`}></span> 需提升 (&lt;40)</div>
+                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.OUTSTANDING.bar}`}></span> 杰出 ({GLOBAL_STATS.SCORE.thresholds[0]}+)</div>
+                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.EXCELLENT.bar}`}></span> 优秀 ({GLOBAL_STATS.SCORE.thresholds[1]}-{GLOBAL_STATS.SCORE.thresholds[0]-1})</div>
+                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.ORDINARY.bar}`}></span> 普通 ({GLOBAL_STATS.SCORE.thresholds[2]}-{GLOBAL_STATS.SCORE.thresholds[1]-1})</div>
+                <div className="flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_CLASSES.POOR.bar}`}></span> 需提升 (&lt;{GLOBAL_STATS.SCORE.thresholds[2]})</div>
             </div>
         </div>
     );

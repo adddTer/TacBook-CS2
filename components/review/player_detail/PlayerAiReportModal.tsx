@@ -10,6 +10,7 @@ interface PlayerAiReportModalProps {
     isAnalyzing: boolean;
     error: string | null;
     profileId: string;
+    profileName: string;
     role: string;
     sideFilter: string;
     currentModel: string;
@@ -20,7 +21,7 @@ interface PlayerAiReportModalProps {
 
 export const PlayerAiReportModal: React.FC<PlayerAiReportModalProps> = ({
     isOpen, onClose, analysis, isAnalyzing, error,
-    profileId, role, sideFilter, currentModel,
+    profileId, profileName, role, sideFilter, currentModel,
     onRunAnalysis, onRegenerate, onOpenConfig
 }) => {
     if (!isOpen) return null;
@@ -35,7 +36,7 @@ export const PlayerAiReportModal: React.FC<PlayerAiReportModalProps> = ({
                     </div>
                     <div>
                         <h3 className="font-black text-lg text-neutral-900 dark:text-white leading-none">AI 表现评估</h3>
-                        <p className="text-xs text-neutral-500 font-mono mt-0.5">分析对象: {profileId}</p>
+                        <p className="text-xs text-neutral-500 font-mono mt-0.5">分析对象: {profileName}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">

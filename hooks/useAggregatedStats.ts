@@ -8,12 +8,11 @@ const safeDiv = (a: number, b: number) => b === 0 ? 0 : a / b;
 export const useAggregatedStats = (match: Match, targetPlayers: PlayerMatchStats[], filter: SideFilter) => useMemo(() => {
     if (!match.rounds || match.rounds.length === 0) return targetPlayers;
 
-    // 1. Pre-filter "Ghost Rounds": Rounds where NO ONE did anything (e.g. match paused/warmup glitch)
+    // 1. Pre-filter "Ghost Rounds"
     const validRounds = match.rounds.filter(round => {
         const allStats = Object.values(round.playerStats) as PlayerRoundStats[];
         if (allStats.length === 0) return false;
         
-        // Check if EVERY player in this round has 0 impact
         const isGhost = allStats.every(s => 
             s.rating === 0 && 
             s.kills === 0 && 
@@ -24,7 +23,8 @@ export const useAggregatedStats = (match: Match, targetPlayers: PlayerMatchStats
         return !isGhost;
     });
 
-    return targetPlayers.map(p => {
+    // 2. Map over targetPlayers and calculate stats
+    const result = targetPlayers.map(p => {
         const id = p.steamid || p.playerId;
         
         let roundsPlayed = 0;
@@ -49,22 +49,12 @@ export const useAggregatedStats = (match: Match, targetPlayers: PlayerMatchStats
                 else accClutches[k].lost++;
             });
         }
-
-        // 2. Iterate Rounds
+        
         validRounds.forEach(round => {
             const pRound = round.playerStats[id];
             if (!pRound) return;
-
             if (filter !== 'ALL' && pRound.side !== filter) return;
-
-            // 3. Individual "Did Not Play" Check
-            if (pRound.rating === 0 && 
-                pRound.kills === 0 && 
-                pRound.deaths === 0 && 
-                pRound.assists === 0 && 
-                pRound.damage === 0) {
-                return; 
-            }
+            if (pRound.rating === 0 && pRound.kills === 0 && pRound.deaths === 0 && pRound.assists === 0 && pRound.damage === 0) return;
 
             roundsPlayed++;
             acc.kills += pRound.kills;
@@ -74,11 +64,8 @@ export const useAggregatedStats = (match: Match, targetPlayers: PlayerMatchStats
             acc.ratingSum += pRound.rating;
             acc.headshots += pRound.headshots;
             
-            // Safe WPA accumulation (handle undefined or NaN)
             const wpa = pRound.wpa;
-            if (typeof wpa === 'number' && !isNaN(wpa)) {
-                acc.wpaSum += wpa;
-            }
+            if (typeof wpa === 'number' && !isNaN(wpa)) acc.wpaSum += wpa;
             
             if (pRound.utility) {
                 acc.heDamage += pRound.utility.heDamage || 0;
@@ -88,32 +75,17 @@ export const useAggregatedStats = (match: Match, targetPlayers: PlayerMatchStats
             }
 
             if (pRound.isEntryKill) acc.entryKills++;
-
             if (pRound.kills === 2) acc.k2++;
             else if (pRound.kills === 3) acc.k3++;
             else if (pRound.kills === 4) acc.k4++;
             else if (pRound.kills >= 5) acc.k5++;
 
-            if (pRound.kills > 0 || pRound.assists > 0 || pRound.survived || pRound.wasTraded) {
-                acc.kastCount++;
-            }
+            if (pRound.kills > 0 || pRound.assists > 0 || pRound.survived || pRound.wasTraded) acc.kastCount++;
         });
 
-        if (roundsPlayed === 0) {
-            return {
-                ...p,
-                kills: 0, deaths: 0, assists: 0, adr: 0, rating: 0, kast: 0,
-                entry_kills: 0, multikills: { k2: 0, k3: 0, k4: 0, k5: 0 },
-                hsRate: 0, wpa: 0,
-                utility: { ...p.utility, heDamage: 0, molotovDamage: 0 },
-                clutches: accClutches
-            };
-        }
+        if (roundsPlayed === 0) return p;
 
-        // Corrected Rating Calculation: Average Round Rating (Mapping applied in RatingEngine)
         const calculatedRating = safeDiv(acc.ratingSum, roundsPlayed);
-        
-        // Average WPA calculation
         const avgWpa = acc.wpaSum / roundsPlayed;
 
         return {
@@ -128,8 +100,39 @@ export const useAggregatedStats = (match: Match, targetPlayers: PlayerMatchStats
             multikills: { k2: acc.k2, k3: acc.k3, k4: acc.k4, k5: acc.k5 },
             hsRate: acc.kills > 0 ? parseFloat(((acc.headshots / acc.kills) * 100).toFixed(1)) : 0,
             utility: { ...p.utility, heDamage: acc.heDamage, molotovDamage: acc.fireDamage },
-            wpa: parseFloat(avgWpa.toFixed(2)), // Avg WPA
+            wpa: parseFloat(avgWpa.toFixed(2)),
             clutches: accClutches
         };
     });
+
+    // 3. Assign MVP and EVP
+    const sorted = [...result].sort((a, b) => b.rating - a.rating);
+    if (sorted.length > 0) {
+        const usWon = match.score.us > match.score.them;
+        const themWon = match.score.them > match.score.us;
+        const isTie = match.score.us === match.score.them;
+
+        let mvpPlayer = null;
+        if (isTie) {
+            mvpPlayer = sorted[0];
+        } else {
+            const winningTeamIds = new Set(
+                (usWon ? match.players : match.enemyPlayers).map(p => p.playerId)
+            );
+            mvpPlayer = sorted.find(p => winningTeamIds.has(p.playerId));
+            if (!mvpPlayer) mvpPlayer = sorted[0];
+        }
+
+        if (mvpPlayer) {
+            mvpPlayer.isMvp = true;
+        }
+
+        for (let i = 0; i < Math.min(6, sorted.length); i++) {
+            if (sorted[i] !== mvpPlayer && sorted[i].rating >= 1.1) {
+                sorted[i].isEvp = true;
+            }
+        }
+    }
+
+    return result;
 }, [match.rounds, targetPlayers, filter]);

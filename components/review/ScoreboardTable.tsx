@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { PlayerMatchStats, ClutchRecord, MultiKillBreakdown } from '../../types';
 import { ROSTER } from '../../constants/roster';
 import { getRatingColorClass } from './ReviewShared';
+import { resolveName } from '../../utils/demo/helpers';
 
 interface DataPopupCellProps {
     value: number | string;
@@ -96,8 +97,8 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
         return '';
     };
 
-    // Sort players by WPA descending (default)
-    const sortedPlayers = [...players].sort((a, b) => (b.wpa || 0) - (a.wpa || 0));
+    // Sort players by Rating descending
+    const sortedPlayers = [...players].sort((a, b) => b.rating - a.rating);
 
     const showMatches = players.some(p => p.matchesPlayed !== undefined);
 
@@ -124,7 +125,7 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                     {sortedPlayers.map((p, idx) => {
                         const kdDiff = p.kills - p.deaths;
                         // Resolve roster ID if possible, otherwise use playerId (which is name) or steamid
-                        const rosterId = ROSTER.find(r => r.id === p.playerId || r.name === p.playerId)?.id || p.playerId;
+                        const rosterId = resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
                         const isRosterMember = ROSTER.some(r => r.id === rosterId);
                         const ratingColor = getRatingColorClass(p.rating, 'text');
                         
@@ -155,7 +156,6 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                                     {isRosterMember && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
                                     {displayName}
                                     {p.isMvp && <span className="ml-1 px-1.5 py-0.5 bg-yellow-500 text-white text-[9px] font-black rounded uppercase tracking-wider">MVP</span>}
-                                    {p.isEvp && !p.isMvp && <span className="ml-1 px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-[9px] font-black rounded uppercase tracking-wider">EVP</span>}
                                 </td>
                                 {showMatches && (
                                     <td className="px-2 py-3 text-center font-sans tabular-nums text-xs font-bold text-neutral-500">

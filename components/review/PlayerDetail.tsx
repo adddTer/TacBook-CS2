@@ -200,6 +200,7 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
                 isAnalyzing={isAnalyzing}
                 error={analysisError}
                 profileId={profile.id}
+                profileName={profile.name}
                 role={profile.role}
                 sideFilter={sideFilter}
                 currentModel={getSelectedModel()}

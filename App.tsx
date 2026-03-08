@@ -69,6 +69,14 @@ const App: React.FC = () => {
       const hash = window.location.hash.replace('#', '');
       if (['tactics', 'utilities', 'weapons', 'economy', 'events'].includes(hash)) {
         setViewMode(hash as any);
+      } else if (hash.startsWith('match/') || hash.startsWith('player/')) {
+        setViewMode('weapons');
+      } else if (hash === 'settings') {
+        setIsSettingsOpen(true);
+      } else if (hash === 'groups') {
+        setIsGroupManagerOpen(true);
+      } else if (hash === 'ai-config') {
+        setIsAiConfigOpen(true);
       }
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -77,8 +85,26 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    window.location.hash = viewMode;
-  }, [viewMode]);
+    // Only update hash for main view modes to avoid closing modals on back button if we want to keep it simple
+    // But usually, we want the hash to reflect the state.
+    const hash = window.location.hash.replace('#', '');
+    if (!isSettingsOpen && !isGroupManagerOpen && !isAiConfigOpen && !hash.startsWith('match/') && !hash.startsWith('player/')) {
+        window.location.hash = viewMode;
+    }
+  }, [viewMode, isSettingsOpen, isGroupManagerOpen, isAiConfigOpen]);
+
+  // Update hash when modals open/close
+  useEffect(() => {
+    if (isSettingsOpen) window.location.hash = 'settings';
+    else if (isGroupManagerOpen) window.location.hash = 'groups';
+    else if (isAiConfigOpen) window.location.hash = 'ai-config';
+    else if (window.location.hash === '#settings' || window.location.hash === '#groups' || window.location.hash === '#ai-config') {
+        const hash = window.location.hash.replace('#', '');
+        if (!hash.startsWith('match/') && !hash.startsWith('player/')) {
+            window.location.hash = viewMode;
+        }
+    }
+  }, [isSettingsOpen, isGroupManagerOpen, isAiConfigOpen]);
   
   // Load Preferences
   useEffect(() => {

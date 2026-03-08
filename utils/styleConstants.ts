@@ -1,4 +1,6 @@
 
+import { GLOBAL_STATS, getEvaluationTier, TIER_STYLES, EvaluationTier } from './analytics/globalThresholds';
+
 /**
  * Centralized style definitions for data visualization.
  * Handles the 4-tier color system including the "Flowing Pink" effect.
@@ -8,51 +10,34 @@ export const TIER_CLASSES = {
     OUTSTANDING: {
         text: 'text-flow-pink font-black drop-shadow-sm',
         bg: 'bg-flow-pink text-white border-fuchsia-400 shadow-md shadow-fuchsia-500/30',
-        fill: '#c026d3', // fuchsia-600 (Static fallback for SVG fill)
+        fill: TIER_STYLES.OUTSTANDING.hex,
         bar: 'bg-flow-pink'
     },
     EXCELLENT: {
-        text: 'text-green-600 dark:text-green-400 font-bold',
+        text: TIER_STYLES.EXCELLENT.color + ' font-bold',
         bg: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800',
-        fill: '#22c55e', // green-500
+        fill: TIER_STYLES.EXCELLENT.hex,
         bar: 'bg-green-500'
     },
     ORDINARY: {
-        text: 'text-neutral-900 dark:text-white font-medium',
+        text: TIER_STYLES.ORDINARY.color + ' font-medium',
         bg: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700',
-        fill: '#a3a3a3', // neutral-400
-        bar: 'bg-neutral-400'
+        fill: TIER_STYLES.ORDINARY.hex,
+        bar: 'bg-yellow-500'
     },
     POOR: {
-        text: 'text-red-500 dark:text-red-400',
+        text: TIER_STYLES.POOR.color,
         bg: 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 border-red-100 dark:border-red-800',
-        fill: '#ef4444', // red-500
+        fill: TIER_STYLES.POOR.hex,
         bar: 'bg-red-500'
     }
 };
 
-type Tier = 'OUTSTANDING' | 'EXCELLENT' | 'ORDINARY' | 'POOR';
-
 /**
  * Generic function to determine tier based on thresholds.
- * @param value The value to check
- * @param thresholds [Outstanding_Min, Excellent_Min, Ordinary_Min]
- * @param reverse If true, lower is better (e.g. Deaths per Round)
  */
-export const getTier = (value: number, thresholds: [number, number, number], reverse: boolean = false): Tier => {
-    const [t1, t2, t3] = thresholds;
-    
-    if (!reverse) {
-        if (value >= t1) return 'OUTSTANDING';
-        if (value >= t2) return 'EXCELLENT';
-        if (value >= t3) return 'ORDINARY';
-        return 'POOR';
-    } else {
-        if (value <= t1) return 'OUTSTANDING';
-        if (value <= t2) return 'EXCELLENT';
-        if (value <= t3) return 'ORDINARY';
-        return 'POOR';
-    }
+export const getTier = (value: number, thresholds: [number, number, number], reverse: boolean = false): EvaluationTier => {
+    return getEvaluationTier(value, thresholds, reverse);
 };
 
 /**
@@ -67,27 +52,37 @@ export const getValueStyleClass = (value: number, thresholds: [number, number, n
  * Specific helper for 0-100 Scores
  */
 export const getScoreStyle = (score: number, type: 'text' | 'bg' | 'bar' = 'text') => {
-    return getValueStyleClass(score, [80, 60, 40], type);
+    return getValueStyleClass(score, GLOBAL_STATS.SCORE.thresholds, type);
 };
 
 /**
  * Specific helper for Rating 4.0
  */
 export const getRatingStyle = (rating: number, type: 'text' | 'bg' = 'text') => {
-    return getValueStyleClass(rating, [1.45, 1.15, 0.95], type);
+    return getValueStyleClass(rating, GLOBAL_STATS.RATING.thresholds, type);
 };
 
 /**
  * Specific helper for WPA
  */
 export const getWpaStyle = (wpa: number) => {
-    return getValueStyleClass(wpa, [4.0, 0, -1.0], 'text'); // >4.0 is Outstanding, >0 is Excellent, >-1 is Avg
+    return getValueStyleClass(wpa, GLOBAL_STATS.WPA.thresholds, 'text');
+};
+
+/**
+ * Generic helper for any stat defined in GLOBAL_STATS
+ */
+export const getStatStyle = (statKey: string, value: number, type: 'text' | 'bg' | 'bar' = 'text') => {
+    const stat = GLOBAL_STATS[statKey] || GLOBAL_STATS.SCORE;
+    return getValueStyleClass(value, stat.thresholds, type, stat.reverse);
 };
 
 /**
  * Get hex color for SVG charts
  */
 export const getScoreHex = (score: number): string => {
-    const tier = getTier(score, [80, 60, 40]);
+    const tier = getTier(score, GLOBAL_STATS.SCORE.thresholds);
     return TIER_CLASSES[tier].fill;
 };
+
+

@@ -3,6 +3,7 @@ import { calculatePlayerStats, StatsResult } from './playerStatsCalculator';
 import { resolveName } from '../demo/helpers';
 import { identifyRole } from './roleIdentifier';
 import { RoleDefinition } from './roleDefinitions';
+import { GLOBAL_STATS } from './globalThresholds';
 
 export interface AggregatedPlayer {
     playerId: string;
@@ -32,7 +33,9 @@ export class MatchAggregator {
                 const matchRounds = (match.score.us + match.score.them) || 24;
                 const currentRounds = p.r3_rounds_played || matchRounds;
                 
-                const existing = statsMap.get(p.playerId);
+                const resolvedId = resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
+                const key = resolvedId;
+                const existing = statsMap.get(key);
                 if (existing) {
                     existing.kills += p.kills;
                     existing.deaths += p.deaths;
@@ -115,6 +118,7 @@ export class MatchAggregator {
                 } else {
                     // Deep copy to avoid mutating original match data
                     const copy = JSON.parse(JSON.stringify(p));
+                    copy.playerId = resolvedId;
                     copy.matchesPlayed = 1;
                     const initialRounds = copy.r3_rounds_played || matchRounds;
                     copy.r3_rounds_played = initialRounds;
@@ -134,7 +138,7 @@ export class MatchAggregator {
                     copy.entry_deaths = p.entry_deaths || 0;
                     if (!copy.multikills) copy.multikills = { k2: 0, k3: 0, k4: 0, k5: 0 };
 
-                    statsMap.set(p.playerId, copy);
+                    statsMap.set(key, copy);
                 }
             });
         });
@@ -172,10 +176,24 @@ export class MatchAggregator {
 
         // Assign MVP and EVP
         if (aggregated.length > 0) {
-            aggregated[0].isMvp = true;
-            for (let i = 1; i < Math.min(6, aggregated.length); i++) {
-                if (aggregated[i].rating >= 1.15) {
-                    aggregated[i].isEvp = true;
+            // MVP: Highest Rating, prefer winner (if available)
+            // We can infer the winner from the match score if it's a single match aggregation,
+            // but MatchAggregator.aggregate takes multiple matches.
+            // If we are aggregating multiple matches, "MVP" is less meaningful.
+            // Assuming this is called per-match, we can use the match object.
+            
+            // Actually, the current aggregate function signature is `aggregate(matches: Match[])`.
+            // If we want to assign MVP per match, we should probably do it in `MatchDetail` or similar,
+            // but the user asked for it in `MatchAggregator`.
+            
+            // Let's stick to Rating sorting for MVP.
+            const sorted = [...aggregated].sort((a, b) => b.rating - a.rating);
+            
+            sorted[0].isMvp = true;
+            
+            for (let i = 1; i < Math.min(6, sorted.length); i++) {
+                if (sorted[i].rating >= GLOBAL_STATS.RATING.thresholds[1]) {
+                    sorted[i].isEvp = true;
                 }
             }
         }
@@ -195,7 +213,7 @@ export class MatchAggregator {
         matches.forEach(match => {
             const allPlayers = [...match.players, ...match.enemyPlayers];
             allPlayers.forEach(p => {
-                const resolvedId = resolveName(p.playerId);
+                const resolvedId = resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
                 const history = playerHistoryMap.get(resolvedId) || [];
                 history.push({ match, stats: p });
                 playerHistoryMap.set(resolvedId, history);
@@ -207,7 +225,10 @@ export class MatchAggregator {
 
         // 2. Calculate full stats for each player
         const basicStats = this.aggregate(matches);
-        const basicStatsMap = new Map(basicStats.map(p => [resolveName(p.playerId), p]));
+        const basicStatsMap = new Map(basicStats.map(p => {
+            const resolvedId = resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
+            return [resolvedId, p];
+        }));
 
         return Array.from(playerHistoryMap.entries()).map(([id, history]) => {
             const full = calculatePlayerStats(id, history, 'ALL');

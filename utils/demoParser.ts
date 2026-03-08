@@ -728,6 +728,10 @@ export const parseDemoJson = (data: DemoData): Match => {
                 processRoundEnd();
                 resetRoundState();
                 pendingRoundEnd = null;
+            } else if (currentRoundStartTick === 0) {
+                // FIX: If we are starting a new round (currentRoundStartTick is 0) and there is no pending round end,
+                // it means any events that happened before this (e.g. warmup events) should be cleared.
+                resetRoundState();
             }
             
             if (type === 'round_start') {
