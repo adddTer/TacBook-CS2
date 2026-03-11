@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Match, MatchSeries, ContentGroup, PlayerMatchStats, Tournament } from '../types';
 import { ROSTER } from '../constants/roster';
 import { resolveName } from '../utils/demo/helpers';
@@ -41,6 +41,7 @@ interface ReviewViewProps {
     onDeleteSeries: (series: MatchSeries) => void;
     onDeleteTournament: (tournament: Tournament) => void;
     writableGroups: ContentGroup[];
+    isDebug: boolean;
 }
 
 export const ReviewView: React.FC<ReviewViewProps> = ({
@@ -53,7 +54,8 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     onDeleteMatch,
     onDeleteSeries,
     onDeleteTournament,
-    writableGroups
+    writableGroups,
+    isDebug
 }) => {
     const [activeTab, setActiveTab] = useState<'matches' | 'players' | 'leaderboard' | 'tournaments'>('matches');
     const [playersSubTab, setPlayersSubTab] = useState<'list' | 'history'>('list');
@@ -64,6 +66,22 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     
     // Navigation History
     const [historyStack, setHistoryStack] = useState<string[]>([]);
+    
+    // Check for parser updates
+    useEffect(() => {
+        const CURRENT_PARSER_VERSION = '1.0.0';
+        const autoUpdate = localStorage.getItem('autoUpdateMatches') !== 'false';
+        
+        if (autoUpdate) {
+            allMatches.forEach(match => {
+                if (match.source === 'Demo' && match.parserVersion !== CURRENT_PARSER_VERSION && match.rawDemoJson) {
+                    console.log(`Re-parsing match ${match.id} due to version mismatch: ${match.parserVersion} -> ${CURRENT_PARSER_VERSION}`);
+                    const updatedMatch = parseDemoJson(match.rawDemoJson);
+                    onSaveMatch(updatedMatch, match.groupId || 'local');
+                }
+            });
+        }
+    }, [allMatches, onSaveMatch]);
 
     // Modals
     const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
@@ -543,7 +561,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
                 // Parse
                 const json = JSON.parse(content);
-                const match = parseDemoJson(json);
+                let match = parseDemoJson(json);
                 
                 // Save
                 setLoadingState(prev => ({ ...prev, message: '正在保存数据...', subMessage: `${match.mapId} - ${match.date}` }));
@@ -797,6 +815,15 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                         </button>
                     )}
+                    {isDebug && (
+                        <button 
+                            onClick={() => setShowDebugger(true)}
+                            className="w-10 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
+                            title="结构分析器"
+                        >
+                            <svg className="w-5 h-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+                        </button>
+                    )}
                     <button 
                         onClick={() => setIsSeriesModalOpen(true)}
                         className="w-10 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 rounded-xl flex items-center justify-center hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
@@ -919,10 +946,12 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 errors={parseErrors} 
             />
             
-            <JsonDebugger 
-                isOpen={showDebugger} 
-                onClose={() => setShowDebugger(false)} 
-            />
+            {isDebug && (
+                <JsonDebugger 
+                    isOpen={showDebugger} 
+                    onClose={() => setShowDebugger(false)} 
+                />
+            )}
 
             <ConfirmModal 
                 isOpen={confirmConfig.isOpen}

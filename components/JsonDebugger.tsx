@@ -71,6 +71,13 @@ export const JsonDebugger: React.FC<JsonDebuggerProps> = ({ isOpen, onClose }) =
         reader.readAsText(file);
     };
 
+    const handleClearData = () => {
+        setJsonContent(null);
+        setFileName('');
+        setSelectedEventType(null);
+        setCopySuccess(false);
+    };
+
     const handleCopyReport = () => {
         if (!eventStats) return;
 
@@ -112,27 +119,36 @@ export const JsonDebugger: React.FC<JsonDebuggerProps> = ({ isOpen, onClose }) =
                 
                 <div className="flex items-center gap-2">
                     {jsonContent && (
-                        <button 
-                            onClick={handleCopyReport}
-                            className={`
-                                text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-2
-                                ${copySuccess 
-                                    ? 'bg-green-600 text-white' 
-                                    : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/50'}
-                            `}
-                        >
-                            {copySuccess ? (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                    已复制
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
-                                    复制报告
-                                </>
-                            )}
-                        </button>
+                        <>
+                            <button 
+                                onClick={handleClearData}
+                                className="text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/50"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                清除数据
+                            </button>
+                            <button 
+                                onClick={handleCopyReport}
+                                className={`
+                                    text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-2
+                                    ${copySuccess 
+                                        ? 'bg-green-600 text-white' 
+                                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/50'}
+                                `}
+                            >
+                                {copySuccess ? (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        已复制
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                                        复制报告
+                                    </>
+                                )}
+                            </button>
+                        </>
                     )}
                     <button onClick={onClose} className="p-2 hover:bg-neutral-800 rounded-lg transition-colors text-neutral-400 hover:text-white">
                         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>

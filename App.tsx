@@ -381,6 +381,7 @@ const App: React.FC = () => {
                         onDeleteSeries={deleteSeries}
                         onDeleteTournament={deleteTournament}
                         writableGroups={writableGroups}
+                        isDebug={isDebug}
                     />
                 </div>
             )}

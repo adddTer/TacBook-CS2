@@ -339,6 +339,10 @@ export interface Match {
     
     // NEW: Detailed Round History
     rounds?: MatchRound[]; 
+
+    // NEW: Parser Metadata
+    parserVersion?: string;
+    rawDemoJson?: any;
 }
 
 // --- Series Support ---

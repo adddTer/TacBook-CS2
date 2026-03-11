@@ -104,21 +104,21 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
 
     return (
         <div className="overflow-x-auto pb-4" onClick={closePopup}> 
-            <table className="w-full text-sm text-left whitespace-nowrap min-w-[800px] border-collapse font-sans">
+                <table className="w-full text-xs sm:text-sm text-left whitespace-nowrap min-w-[600px] border-collapse font-sans">
                 <thead>
-                    <tr className={`text-[10px] uppercase font-bold border-b border-neutral-100 dark:border-neutral-800 ${getFilterStyle(isEnemy)}`}>
-                        <th className="px-3 py-3 sticky left-0 z-10 bg-inherit w-36">
+                    <tr className={`text-[9px] sm:text-[10px] uppercase font-bold border-b border-neutral-100 dark:border-neutral-800 ${getFilterStyle(isEnemy)}`}>
+                        <th className="px-2 sm:px-3 py-3 sticky left-0 z-10 bg-inherit w-24 sm:w-36">
                             {title} {filter !== 'ALL' ? `(${filter})` : ''}
                         </th>
-                        {showMatches && <th className="px-2 py-3 text-center w-12">地图数</th>}
-                        <th className="px-2 py-3 text-center w-20">K / D / A</th>
-                        <th className="px-2 py-3 text-center w-12">+/-</th>
-                        <th className="px-2 py-3 text-center w-12" title="平均每回合伤害">ADR</th>
-                        <th className="px-2 py-3 text-center w-12" title="Rating 4.0">RTG</th>
-                        <th className="px-2 py-3 text-center w-14" title="Win Probability Added Avg per Round (Total Points)">WPA</th>
-                        <th className="px-2 py-3 text-center w-12" title="首杀 (Entry Kills)">首杀</th>
-                        <th className="px-2 py-3 text-center w-12" title="多杀 (Multi-Kills)">多杀</th>
-                        <th className="px-2 py-3 text-center w-12" title="残局获胜 (1vN Wins)">残局</th>
+                        {showMatches && <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12">地图数</th>}
+                        <th className="px-1 sm:px-2 py-3 text-center w-16 sm:w-20">K / D / A</th>
+                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12">+/-</th>
+                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12" title="平均每回合伤害">ADR</th>
+                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12" title="Rating 4.0">RTG</th>
+                        <th className="px-1 sm:px-2 py-3 text-center w-12 sm:w-14" title="Win Probability Added Avg per Round (Total Points)">WPA</th>
+                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12" title="首杀 (Entry Kills)">首杀</th>
+                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12" title="多杀 (Multi-Kills)">多杀</th>
+                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12" title="残局获胜 (1vN Wins)">残局</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-50 dark:divide-neutral-800/50">
@@ -152,44 +152,44 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                                 className={`group transition-colors cursor-pointer ${isRosterMember ? 'hover:bg-blue-50/50 dark:hover:bg-blue-900/10' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/30'}`}
                                 onClick={() => onPlayerClick(isRosterMember ? rosterId : (p.steamid || p.playerId))}
                             >
-                                <td className={`px-3 py-3 font-bold sticky left-0 z-10 bg-white dark:bg-neutral-900 border-r border-transparent group-hover:border-neutral-100 dark:group-hover:border-neutral-800 truncate flex items-center gap-2 ${isRosterMember ? 'text-blue-600 dark:text-blue-400 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10' : 'text-neutral-800 dark:text-neutral-200 group-hover:bg-neutral-50 dark:group-hover:bg-neutral-800/30'}`}>
-                                    {isRosterMember && <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>}
-                                    {displayName}
-                                    {p.isMvp && <span className="ml-1 px-1.5 py-0.5 bg-yellow-500 text-white text-[9px] font-black rounded uppercase tracking-wider">MVP</span>}
+                                <td className={`px-2 sm:px-3 py-3 font-bold sticky left-0 z-10 bg-white dark:bg-neutral-900 border-r border-transparent group-hover:border-neutral-100 dark:group-hover:border-neutral-800 truncate flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm ${isRosterMember ? 'text-blue-600 dark:text-blue-400 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10' : 'text-neutral-800 dark:text-neutral-200 group-hover:bg-neutral-50 dark:group-hover:bg-neutral-800/30'}`}>
+                                    {isRosterMember && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>}
+                                    <span className="truncate">{displayName}</span>
+                                    {p.isMvp && <span className="ml-1 px-1 py-0.5 bg-yellow-500 text-white text-[8px] font-black rounded uppercase tracking-wider shrink-0">MVP</span>}
                                 </td>
                                 {showMatches && (
-                                    <td className="px-2 py-3 text-center font-sans tabular-nums text-xs font-bold text-neutral-500">
+                                    <td className="px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs font-bold text-neutral-500">
                                         {p.matchesPlayed}
                                     </td>
                                 )}
-                                <td className="px-2 py-3 text-center font-sans tabular-nums text-xs">
+                                <td className="px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs">
                                     <span className="text-neutral-900 dark:text-white font-bold">{p.kills}</span>
                                     <span className="text-neutral-300 mx-0.5">/</span>
                                     <span className="text-red-500">{p.deaths}</span>
                                     <span className="text-neutral-300 mx-0.5">/</span>
                                     <span className="text-neutral-500">{p.assists}</span>
                                 </td>
-                                <td className={`px-2 py-3 text-center font-sans tabular-nums text-xs font-bold ${kdDiff > 0 ? 'text-green-500' : kdDiff < 0 ? 'text-red-500' : 'text-neutral-300'}`}>
+                                <td className={`px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs font-bold ${kdDiff > 0 ? 'text-green-500' : kdDiff < 0 ? 'text-red-500' : 'text-neutral-300'}`}>
                                     {kdDiff > 0 ? `+${kdDiff}` : kdDiff}
                                 </td>
-                                <td className="px-2 py-3 text-center font-sans tabular-nums text-xs text-neutral-600 dark:text-neutral-400">
+                                <td className="px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs text-neutral-600 dark:text-neutral-400">
                                     {p.adr.toFixed(0)}
                                 </td>
-                                <td className="px-2 py-3 text-center">
-                                    <div className={`font-black text-center font-sans tabular-nums text-sm ${ratingColor}`}>
+                                <td className="px-1 sm:px-2 py-3 text-center">
+                                    <div className={`font-black text-center font-sans tabular-nums text-[11px] sm:text-sm ${ratingColor}`}>
                                         {p.rating.toFixed(2)}
                                     </div>
                                 </td>
 
-                                <td className={`px-2 py-3 text-center font-sans tabular-nums text-xs font-bold ${wpaVal > 0 ? 'text-green-500' : wpaVal < 0 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                <td className={`px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs font-bold ${wpaVal > 0 ? 'text-green-500' : wpaVal < 0 ? 'text-red-500' : 'text-neutral-400'}`}>
                                     {wpaVal > 0 ? '+' : ''}{wpaDisplay}%
                                 </td>
                                 
-                                <td className="px-2 py-3 text-center font-sans tabular-nums text-xs text-neutral-600 dark:text-neutral-400">
+                                <td className="px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs text-neutral-600 dark:text-neutral-400">
                                     {p.entry_kills || 0}
                                 </td>
                                 <td 
-                                    className="px-2 py-3 text-center"
+                                    className="px-1 sm:px-2 py-3 text-center"
                                     onClick={(e) => { e.stopPropagation(); closePopup(); }}
                                 >
                                     <DataPopupCell 
@@ -202,7 +202,7 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                                     />
                                 </td>
                                 <td 
-                                    className="px-2 py-3 text-center"
+                                    className="px-1 sm:px-2 py-3 text-center"
                                     onClick={(e) => { e.stopPropagation(); closePopup(); }}
                                 >
                                     <DataPopupCell 

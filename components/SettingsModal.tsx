@@ -28,15 +28,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenAiConfig
 }) => {
   const [defaultAuthor, setDefaultAuthor] = useState('');
+  const [autoUpdate, setAutoUpdate] = useState(true);
 
   useEffect(() => {
       const saved = localStorage.getItem('tacbook_default_author');
       if (saved) setDefaultAuthor(saved);
+      const savedAutoUpdate = localStorage.getItem('autoUpdateMatches');
+      if (savedAutoUpdate !== null) setAutoUpdate(savedAutoUpdate === 'true');
   }, [isOpen]);
 
   const handleAuthorChange = (val: string) => {
       setDefaultAuthor(val);
       localStorage.setItem('tacbook_default_author', val);
+  };
+
+  const handleAutoUpdateChange = (val: boolean) => {
+      setAutoUpdate(val);
+      localStorage.setItem('autoUpdateMatches', val.toString());
   };
 
   if (!isOpen) return null;
@@ -99,6 +107,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
         </div>
 
+        {/* Auto Update */}
+        <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">自动更新比赛解析数据</label>
+            <button 
+                onClick={() => handleAutoUpdateChange(!autoUpdate)}
+                className={`w-10 h-5 rounded-full transition-colors ${autoUpdate ? 'bg-blue-500' : 'bg-neutral-300 dark:bg-neutral-700'}`}
+            >
+                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${autoUpdate ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+        </div>
+
         {/* Default Author */}
         <div className="space-y-3">
             <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">默认作者 (自动填充)</label>
@@ -158,7 +177,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
         
         <div className="pt-4 text-center">
-            <p className="text-[10px] text-neutral-300">TacBook CS2 v1.3.1</p>
+            <p className="text-[10px] text-neutral-300">TacBook CS2 v1.3.1 | Demo解析器版本: 1.0.0</p>
         </div>
 
       </div>
