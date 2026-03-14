@@ -123,10 +123,13 @@ export class RatingEngine {
         aliveCTs: Set<string>,
         roundTs: Set<string>, // Incoming T players (might be empty in R1)
         roundCTs: Set<string> // Incoming CT players (might be empty in R1)
-    ) {
+    ): { timeUpdates: any[], eventUpdates: any[], timeProbDelta: number, eventProbDelta: number } | void {
         const type = event.event_name;
         const tick = event.tick || 0;
         const TICK_RATE = 64; 
+        
+        let eventUpdates: any[] = [];
+        let timeUpdates: any[] = [];
 
         // --- NEW: Detect Round Transition for Hard Inventory Reset (Fixes R13 Economy Inflation) ---
         if (currentRound > this.lastRoundProcessed) {
@@ -164,7 +167,7 @@ export class RatingEngine {
             this.wpaEngine.startNewRound();
             this.inventory.reset(); 
             this.roundStartTick = 0; // Reset timer anchor
-            return;
+            return { timeUpdates, eventUpdates, timeProbDelta: 0, eventProbDelta: 0 };
         }
 
         // Logic for round start / freeze end
@@ -233,7 +236,7 @@ export class RatingEngine {
             this.damageGraph.clear();
             this.health.reset();
             this.firstKillHappened = false;
-            return;
+            return { timeUpdates, eventUpdates, timeProbDelta: 0, eventProbDelta: 0 };
         }
 
         // FIX: Time Safety Valve
@@ -251,17 +254,28 @@ export class RatingEngine {
         
         // Arrays for WPA Engine (Symmetric Distribution to ALL team members)
         // Use accumulative cache instead of passed args
-        const tPlayers = Array.from(this.knownRoundTs);
-        const ctPlayers = Array.from(this.knownRoundCTs);
+        const currentAliveTs = new Set(this.knownRoundTs);
+        const currentAliveCTs = new Set(this.knownRoundCTs);
+        this.recentDeaths.forEach(d => {
+            currentAliveTs.delete(d.victim);
+            currentAliveCTs.delete(d.victim);
+        });
+
+        const tPlayers = Array.from(currentAliveTs);
+        const ctPlayers = Array.from(currentAliveCTs);
+
+        const probBeforeTime = this.wpaEngine.getCurrentWinProb();
 
         // --- WPA Time Update ---
         // Isolate time decay from event impact
-        const timeUpdates = this.wpaEngine.handleTimeUpdate(
+        timeUpdates = this.wpaEngine.handleTimeUpdate(
             timeElapsed,
             tPlayers,
             ctPlayers
         );
         this.wpaEngine.commitUpdates(timeUpdates);
+
+        const probAfterTime = this.wpaEngine.getCurrentWinProb();
 
         if (type === 'player_hurt') {
             // Fix ID: attacker_steamid / attacker / userid
@@ -287,22 +301,26 @@ export class RatingEngine {
             // ALWAYS record damage for health tracking (to keep health state accurate)
             const actualDmg = this.health.recordDamage(vic, rawDmg);
 
+            // ALWAYS record damage in damageGraph (including friendly fire)
+            if (att !== "BOT" && vic !== "BOT" && att !== vic && att !== "0") {
+                if (!this.damageGraph.has(att)) this.damageGraph.set(att, new Map());
+                const vMap = this.damageGraph.get(att)!;
+                vMap.set(vic, (vMap.get(vic) || 0) + actualDmg);
+            }
+
             if (!isFriendlyFire) {
                 // Only count non-friendly fire damage for ADR/Stats
                 if (att !== "BOT" && vic !== "BOT" && att !== vic && att !== "0") {
                     const stats = this.getRoundStats(att);
                     stats.damage += actualDmg;
 
-                    if (!this.damageGraph.has(att)) this.damageGraph.set(att, new Map());
-                    const vMap = this.damageGraph.get(att)!;
-                    vMap.set(vic, (vMap.get(vic) || 0) + actualDmg);
-                    
                     // WPA for Damage
                     if (attSide) {
                         const wpaUpdates = this.wpaEngine.handleDamage(
                             att, vic, attSide, vicSide || 'T', actualDmg, timeElapsed,
                             tPlayers, ctPlayers
                         );
+                        eventUpdates.push(...wpaUpdates);
                         this.wpaEngine.commitUpdates(wpaUpdates);
                     }
                 }
@@ -314,6 +332,7 @@ export class RatingEngine {
                             att, vic, attSide, vicSide, actualDmg, timeElapsed,
                             tPlayers, ctPlayers
                         );
+                        eventUpdates.push(...wpaUpdates);
                         this.wpaEngine.commitUpdates(wpaUpdates);
                     }
                 }
@@ -336,10 +355,11 @@ export class RatingEngine {
             
             const wpaUpdates = this.wpaEngine.handleObjective(
                 sid, isPlant ? 'plant' : 'defuse', timeElapsed, 
-                isPlant ? tPlayers : Array.from(aliveTs), 
-                isPlant ? ctPlayers : Array.from(aliveCTs),
+                tPlayers, 
+                ctPlayers,
                 isPlant ? activeKits : undefined
             );
+            eventUpdates.push(...wpaUpdates);
             this.wpaEngine.commitUpdates(wpaUpdates);
         }
 
@@ -347,6 +367,7 @@ export class RatingEngine {
             const wpaUpdates = this.wpaEngine.handleExplosion(
                 timeElapsed, tPlayers, ctPlayers
             );
+            eventUpdates.push(...wpaUpdates);
             this.wpaEngine.commitUpdates(wpaUpdates);
         }
 
@@ -423,11 +444,19 @@ export class RatingEngine {
 
                 // NEW: Collect damage contributors to the victim for weighted WPA
                 const damageContributors = new Map<string, number>();
+                const contributorSides = new Map<string, 'T' | 'CT'>();
                 this.damageGraph.forEach((victimMap, attackerSid) => {
                     if (victimMap.has(vic)) {
                         damageContributors.set(attackerSid, victimMap.get(vic)!);
+                        const side = this.knownRoundTs.has(attackerSid) ? 'T' : (this.knownRoundCTs.has(attackerSid) ? 'CT' : undefined);
+                        if (side) contributorSides.set(attackerSid, side);
                     }
                 });
+                
+                if (ast && ast !== "BOT" && ast !== "0") {
+                    const astSide = this.knownRoundTs.has(ast) ? 'T' : (this.knownRoundCTs.has(ast) ? 'CT' : undefined);
+                    if (astSide) contributorSides.set(ast, astSide);
+                }
                 
                 const isBot = vic === 'BOT' || vic === '0' || vic.startsWith('BOT');
 
@@ -438,8 +467,10 @@ export class RatingEngine {
                         hasKit, // Pass kit loss info to WPA
                         damageContributors, // NEW Argument
                         tick, // Pass current tick for 5s window check
-                        isBot // NEW
+                        isBot, // NEW
+                        contributorSides // NEW
                     );
+                    eventUpdates.push(...updates);
                     this.wpaEngine.commitUpdates(updates);
                 }
             } else {
@@ -447,107 +478,191 @@ export class RatingEngine {
                 // console.warn("[RatingEngine] Could not determine victim side for WPA:", vic);
             }
 
-            if (att !== "BOT" && att !== vic && att !== "0" && !isFriendlyKill) {
-                const attStats = this.getRoundStats(att);
-                attStats.kills++;
-
+            if (att !== "BOT" && att !== vic && att !== "0") {
                 const isBot = vic === 'BOT' || vic === '0' || vic.startsWith('BOT');
 
-                if (isBot) {
-                    attStats.botKills++;
-                } else {
-                    attStats.killValue += this.inventory.getStartValue(vic);
+                if (!isFriendlyKill) {
+                    const attStats = this.getRoundStats(att);
+                    attStats.kills++;
 
-                    if (!this.firstKillHappened) {
-                        attStats.isEntryKill = true;
-                        this.firstKillHappened = true;
+                    if (isBot) {
+                        attStats.botKills++;
+                    } else {
+                        attStats.killValue += this.inventory.getStartValue(vic);
+
+                        if (!this.firstKillHappened) {
+                            attStats.isEntryKill = true;
+                            this.firstKillHappened = true;
+                        }
                     }
                 }
 
                 // --- Kill Share Distribution (RTG v5.0) ---
-                // Total Rating Pool for 1 Kill = 1.0 (Baseline)
-                // 50% Fixed to Killer
-                // 50% Distributed by Damage Weight (Flash = 30 dmg)
-                
                 if (!isBot) {
-                    const BASE_KILL_RATING = 1.0;
-                    const FIXED_SHARE = 0.5;
-                    const DAMAGE_SHARE = 0.5;
+                    const FIXED_SHARE = 0.6;
+                    const DAMAGE_SHARE = 0.4;
+                    const MAX_TRADE_TICKS = 512; // 8 seconds at 64 tick
+
+                    // --- Economy Modifier ---
+                    const vicValue = this.inventory.getStartValue(vic);
+                    const attValue = this.inventory.getStartValue(att);
+                    // E = log2(1 + VictimValue / (KillerValue + 500))
+                    let E = Math.log2(1 + (vicValue / (attValue + 500)));
+                    E = Math.max(0.2, Math.min(2.5, E)); // Cap to prevent extreme outliers
+
+                    // NEW: Friendly Fire Penalty Multiplier
+                    const multiplier = isFriendlyKill ? -1.0 : 1.0;
+
+                    // --- Trade Compensation ---
+                    let C_t = 0;
+                    let baitSid: string | null = null;
+                    
+                    // Trade compensation only applies to normal kills
+                    if (!isFriendlyKill) {
+                        // Find the LAST teammate killed by this victim
+                        // recentDeaths is an array of { victim, killer, tick }
+                        for (let i = this.recentDeaths.length - 1; i >= 0; i--) {
+                            const d = this.recentDeaths[i];
+                            if (d.killer === vic) {
+                                const tickDiff = tick - d.tick;
+                                if (tickDiff <= MAX_TRADE_TICKS) {
+                                    const timeSeconds = tickDiff / 64.0;
+                                    // C(t) = 0.40 * e^(-0.47 * t)
+                                    C_t = 0.40 * Math.exp(-0.47 * timeSeconds);
+                                    baitSid = d.victim;
+                                }
+                                break; // Only the LAST person gets it
+                            }
+                        }
+                    }
+
+                    if (baitSid && C_t > 0) {
+                        const baitStats = this.getRoundStats(baitSid);
+                        baitStats.killShareRating += (C_t * E);
+                        baitStats.wasTraded = true;
+                        
+                        const attStats = this.getRoundStats(att);
+                        attStats.traded = true;
+                        
+                        // WPA Trade Restoration
+                        const tradeRestore = this.wpaEngine.getTradeRestoration(baitSid);
+                        this.wpaEngine.commitUpdates([tradeRestore]);
+                    }
+
+                    // Remaining Pool
+                    const V_rem = 1.0 - C_t;
 
                     // Calculate Total Damage Weight
                     let totalWeight = 0;
-                    const contributors: { sid: string, weight: number }[] = [];
+                    const contributors: { sid: string, weight: number, isFlash: boolean, side?: 'T' | 'CT' }[] = [];
 
                     // 1. Damage Contributors
                     this.damageGraph.forEach((victimMap, attackerSid) => {
                         if (victimMap.has(vic)) {
+                            const contributorSide = this.knownRoundTs.has(attackerSid) ? 'T' : (this.knownRoundCTs.has(attackerSid) ? 'CT' : undefined);
                             const dmg = victimMap.get(vic)!;
-                            contributors.push({ sid: attackerSid, weight: dmg });
+                            contributors.push({ sid: attackerSid, weight: dmg, isFlash: false, side: contributorSide });
                             totalWeight += dmg;
                         }
                     });
 
                     // 2. Flash Assist (if any)
                     if (ast && ast !== "BOT" && ast !== "0" && event.assistedflash) {
+                        const astSide = this.knownRoundTs.has(ast) ? 'T' : (this.knownRoundCTs.has(ast) ? 'CT' : undefined);
                         const FLASH_WEIGHT = 30;
-                        contributors.push({ sid: ast, weight: FLASH_WEIGHT });
+                        contributors.push({ sid: ast, weight: FLASH_WEIGHT, isFlash: true, side: astSide });
                         totalWeight += FLASH_WEIGHT;
                     }
+
+                    let totalPenalty = 0;
 
                     // Distribute Shares
                     if (totalWeight > 0) {
                         // Fixed Share to Killer
-                        attStats.killShareRating += (BASE_KILL_RATING * FIXED_SHARE);
+                        const attStats = this.getRoundStats(att);
+                        const killerShare = (V_rem * FIXED_SHARE * E);
+                        attStats.killShareRating += killerShare * multiplier;
+                        if (isFriendlyKill) totalPenalty += killerShare;
 
-                        // Damage Share to Contributors
+                        // Damage/Flash Share to Contributors
+                        const assistPool = V_rem * DAMAGE_SHARE;
                         contributors.forEach(c => {
-                            const share = (c.weight / totalWeight) * (BASE_KILL_RATING * DAMAGE_SHARE);
+                            const shareRatio = c.weight / totalWeight;
                             const pStats = this.getRoundStats(c.sid);
-                            pStats.killShareRating += share;
+                            let share = 0;
+                            if (c.isFlash) {
+                                share = (shareRatio * assistPool * 1.0); // Flash doesn't use E
+                            } else {
+                                share = (shareRatio * assistPool * E); // Damage uses E
+                            }
+                            
+                            // If contributor is on the victim's team, they get a penalty (negative share)
+                            const cMultiplier = (c.side === victimSide) ? -1.0 : 1.0;
+                            pStats.killShareRating += share * cMultiplier;
+                            
+                            // Accumulate penalty to distribute to opposing team
+                            if (cMultiplier < 0) {
+                                totalPenalty += share;
+                            }
                         });
                     } else {
-                        // Fallback: If no damage recorded (e.g. suicide or weird bug), killer takes all
-                        attStats.killShareRating += BASE_KILL_RATING;
+                        // Fallback: If no damage recorded, killer takes all
+                        const attStats = this.getRoundStats(att);
+                        const fallbackShare = (V_rem * E);
+                        attStats.killShareRating += fallbackShare * multiplier;
+                        if (isFriendlyKill) totalPenalty += fallbackShare;
                     }
-                }
 
-                // --- Trade Logic ---
-                const TRADE_WINDOW_TICKS = 256; 
-                
-                const avengedDeath = this.recentDeaths.find(d => 
-                    d.killer === vic && (tick - d.tick) <= TRADE_WINDOW_TICKS
-                );
+                    // NEW: Reward the victim and opposing team for the friendly kill
+                    if (isFriendlyKill) {
+                        // 1. Give the exact penalty amount to the victim
+                        const vicStats = this.getRoundStats(vic);
+                        vicStats.killShareRating += totalPenalty;
 
-                if (avengedDeath) {
-                    const teammateId = avengedDeath.victim;
-                    const tickDiff = tick - avengedDeath.tick;
-                    
-                    attStats.traded = true;
-                    const mateStats = this.getRoundStats(teammateId);
-                    mateStats.wasTraded = true;
+                        // 2. Distribute the exact penalty amount to surviving opposing players
+                        const opposingTeam = attackerSide === 'T' ? ctPlayers : tPlayers;
+                        const survivingOpponents: string[] = [];
+                        if (opposingTeam) {
+                            opposingTeam.forEach(oppSid => {
+                                const oppStats = this.getRoundStats(oppSid);
+                                if (oppStats.survived) {
+                                    survivingOpponents.push(oppSid);
+                                }
+                            });
+                        }
 
-                    // WPA Trade Restoration
-                    const tradeRestore = this.wpaEngine.getTradeRestoration(teammateId);
-                    this.wpaEngine.commitUpdates([tradeRestore]);
-
-                    // Old Rating 3.0 Logic
-                    const damageToEnemy = this.damageGraph.get(teammateId)?.get(vic) || 0;
-                    const cappedDmg = Math.min(damageToEnemy, 100);
-                    const timeFactor = Math.max(0, 1.0 - (tickDiff / TRADE_WINDOW_TICKS));
-                    const entryBonus = (cappedDmg / 100.0) * 0.20 * timeFactor;
-                    mateStats.tradeBonus += entryBonus;
-                    const tradePenalty = (cappedDmg / 100.0) * 0.15;
-                    attStats.tradePenalty += tradePenalty;
+                        if (survivingOpponents.length > 0) {
+                            const rewardPerPlayer = totalPenalty / survivingOpponents.length;
+                            survivingOpponents.forEach(oppSid => {
+                                const oppStats = this.getRoundStats(oppSid);
+                                oppStats.killShareRating += rewardPerPlayer;
+                            });
+                        }
+                    } else if (totalPenalty > 0) {
+                        // If it's a normal kill, but there were friendly fire contributors,
+                        // give their penalty amount to the killer to compensate for "stolen" damage.
+                        const attStats = this.getRoundStats(att);
+                        attStats.killShareRating += totalPenalty;
+                    }
                 }
             }
             
-            if (ast !== "BOT" && ast !== vic && ast !== att && ast !== "0") {
+            if (ast !== "BOT" && ast !== vic && ast !== att && ast !== "0" && !isFriendlyKill) {
                 const astStats = this.getRoundStats(ast);
                 astStats.assists++;
             }
             
             this.recentDeaths.push({ victim: vic, killer: att, tick });
         }
+
+        const probAfterEvent = this.wpaEngine.getCurrentWinProb();
+
+        return { 
+            timeUpdates, 
+            eventUpdates,
+            timeProbDelta: probAfterTime - probBeforeTime,
+            eventProbDelta: probAfterEvent - probAfterTime
+        };
     }
 
     public finalizeRound(

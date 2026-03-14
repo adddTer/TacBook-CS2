@@ -11,9 +11,10 @@ interface PlayerStatsGridProps {
         multiKillRate: number;
         dpr: number;
     };
+    highPrecision?: boolean;
 }
 
-const StatBar = ({ statKey, value }: { statKey: string, value: number }) => {
+const StatBar = ({ statKey, value, highPrecision }: { statKey: string, value: number, highPrecision?: boolean }) => {
     const statDef = GLOBAL_STATS[statKey];
     if (!statDef) return null;
 
@@ -48,10 +49,18 @@ const StatBar = ({ statKey, value }: { statKey: string, value: number }) => {
     }
     pct = Math.max(2, Math.min(98, pct));
 
+    const decimals = highPrecision ? (reverse ? 3 : (label === 'KPR' ? 3 : 2)) : (reverse ? 2 : (label === 'KPR' ? 2 : 1));
+    const pctDecimals = highPrecision ? 2 : 1;
+
     return (
         <div className="flex flex-col items-center justify-center py-4 w-full">
             <div className="text-2xl md:text-3xl font-black text-neutral-900 dark:text-white tabular-nums tracking-tight">
-                {value > 0 && isPercentage && label === 'WPA' ? '+' : ''}{isPercentage ? `${value.toFixed(1)}%` : value.toFixed(reverse ? 2 : (label === 'KPR' ? 2 : 1))}
+                {value !== undefined && value !== null && !isNaN(value) ? (
+                    <>
+                        {value > 0 && isPercentage && label === 'WPA' ? '+' : ''}
+                        {isPercentage ? `${value.toFixed(pctDecimals)}%` : value.toFixed(decimals)}
+                    </>
+                ) : '-'}
             </div>
             <div className="text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mt-1 mb-4">
                 {label}
@@ -88,15 +97,15 @@ const StatBar = ({ statKey, value }: { statKey: string, value: number }) => {
     );
 };
 
-export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ filtered }) => {
+export const PlayerStatsGrid: React.FC<PlayerStatsGridProps> = ({ filtered, highPrecision }) => {
     return (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 md:gap-x-8 gap-y-8 md:gap-y-10 bg-white dark:bg-neutral-900 rounded-3xl p-6 border border-neutral-200 dark:border-neutral-800 shadow-sm">
-            <StatBar statKey="WPA" value={filtered.wpaAvg} />
-            <StatBar statKey="DPR" value={filtered.dpr} />
-            <StatBar statKey="KAST" value={filtered.kast} />
-            <StatBar statKey="MULTI_KILL" value={filtered.multiKillRate} />
-            <StatBar statKey="ADR" value={filtered.adr} />
-            <StatBar statKey="KPR" value={filtered.kpr} />
+            <StatBar statKey="WPA" value={filtered.wpaAvg} highPrecision={highPrecision} />
+            <StatBar statKey="DPR" value={filtered.dpr} highPrecision={highPrecision} />
+            <StatBar statKey="KAST" value={filtered.kast} highPrecision={highPrecision} />
+            <StatBar statKey="MULTI_KILL" value={filtered.multiKillRate} highPrecision={highPrecision} />
+            <StatBar statKey="ADR" value={filtered.adr} highPrecision={highPrecision} />
+            <StatBar statKey="KPR" value={filtered.kpr} highPrecision={highPrecision} />
         </div>
     );
 };

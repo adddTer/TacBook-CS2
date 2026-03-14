@@ -120,31 +120,62 @@ export const calculatePlayerStats = (
     
     // WPA accumulation
     let wpaSum = 0;
-    let kastCount = 0;
     let impactSum = 0;
     
-    history.forEach(({ match }) => {
-            if (!match.rounds) return;
-            const pMatch = [...match.players, ...match.enemyPlayers].find(p => 
-                p.playerId === profileId || 
-                p.steamid === profileId ||
-                resolveName(p.playerId) === profileId ||
-                resolveName(p.steamid) === profileId
-            );
-            if(!pMatch) return;
-            const pid = pMatch.steamid || pMatch.playerId;
-            
-            match.rounds.forEach(r => {
-                const pr = r.playerStats[pid];
-                if (!pr) return;
-                if (sideFilter !== 'ALL' && pr.side !== sideFilter) return;
-                if (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0) return; // Ghost
+    // Weighted stats accumulation
+    let totalKastWeightedSum = 0;
+    let totalMultiKillWeightedSum = 0;
+    let totalKdrWeightedSum = 0;
+    let totalWeightedRounds = 0;
 
-                if (pr.kills > 0 || pr.assists > 0 || pr.survived || pr.wasTraded) kastCount++;
-                if (typeof pr.wpa === 'number') wpaSum += pr.wpa;
-                impactSum += pr.impact;
-            });
+    history.forEach(({ match }) => {
+        if (!match.rounds) return;
+        const pMatch = [...match.players, ...match.enemyPlayers].find(p => 
+            p.playerId === profileId || 
+            p.steamid === profileId ||
+            resolveName(p.playerId) === profileId ||
+            resolveName(p.steamid) === profileId
+        );
+        if(!pMatch) return;
+        const pid = pMatch.steamid || pMatch.playerId;
+        
+        let matchKills = 0;
+        let matchDeaths = 0;
+        let matchMultiKillRounds = 0;
+        let matchKastRounds = 0;
+        let matchRounds = 0;
+
+        match.rounds.forEach(r => {
+            const pr = r.playerStats[pid];
+            if (!pr) return;
+            if (sideFilter !== 'ALL' && pr.side !== sideFilter) return;
+            if (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0) return; // Ghost
+
+            matchRounds++;
+            matchKills += pr.kills;
+            matchDeaths += pr.deaths;
+            if (pr.kills > 0 || pr.assists > 0 || pr.survived || pr.wasTraded) matchKastRounds++;
+            if (pr.kills >= 2) matchMultiKillRounds++;
+            
+            if (typeof pr.wpa === 'number') wpaSum += pr.wpa;
+            impactSum += pr.impact;
+        });
+
+        if (matchRounds > 0) {
+            const matchKast = (matchKastRounds / matchRounds) * 100;
+            const matchMultiKill = (matchMultiKillRounds / matchRounds) * 100;
+            const matchKdr = matchDeaths === 0 ? matchKills : matchKills / matchDeaths;
+            
+            totalKastWeightedSum += matchKast * matchRounds;
+            totalMultiKillWeightedSum += matchMultiKill * matchRounds;
+            totalKdrWeightedSum += matchKdr * matchRounds;
+            totalWeightedRounds += matchRounds;
+        }
     });
+
+    const kastWeightedAvg = totalWeightedRounds === 0 ? 0 : totalKastWeightedSum / totalWeightedRounds;
+    const multiKillWeightedAvg = totalWeightedRounds === 0 ? 0 : totalMultiKillWeightedSum / totalWeightedRounds;
+    const kdrWeightedAvg = totalWeightedRounds === 0 ? 0 : totalKdrWeightedSum / totalWeightedRounds;
 
     // 3. Calculate Overall Ratings (Independent of Filter) for Hero Card
     let totalRating = 0, totalRounds = 0;
@@ -311,14 +342,14 @@ export const calculatePlayerStats = (
         },
         filtered: {
             adr: adr,
-            kdr: safeDiv(stats.kills, stats.deaths),
+            kdr: kdrWeightedAvg,
             kpr: kpr,
             dpr: safeDiv(stats.deaths, rounds),
-            kast: kastVal,
+            kast: kastWeightedAvg,
             impact: safeDiv(impactSum, rounds),
             wpaSum: wpaSum,
             wpaAvg: safeDiv(wpaSum, rounds),
-            multiKillRate: safeDiv(stats.multiKillRounds, rounds) * 100,
+            multiKillRate: multiKillWeightedAvg,
             headshotPct: safeDiv(stats.headshots, stats.kills) * 100,
             survivalRate: safeDiv(stats.survivedRounds, rounds) * 100,
             

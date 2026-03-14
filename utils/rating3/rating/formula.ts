@@ -2,69 +2,50 @@
 import type { RoundContext } from "../ratingTypes";
 
 /**
- * Calculates the Rating 4.0 for a single round based on accumulated stats.
+ * Calculates the Rating 5.0 for a single round based on accumulated stats.
  * Returns the final rating and the calculated impact points.
  */
 export const calculateRoundRating = (stats: RoundContext, startEconomyValue: number): { rating: number, impact: number } => {
-    // 1. Kill Share Rating (RTG v5.0)
-    // Replaces old Kill Rating (KPR) and Damage Rating (ADR) partially
-    // Baseline: 1.0 per kill distributed.
-    // We scale it down to match typical Rating 1.0 scale.
-    // Old Kill (25%) + Dmg (15%) = 40% weight.
-    // Let's say average round has 0.75 kills. 0.75 * 1.0 = 0.75 raw score.
-    // We want this to contribute about 0.4 to the final rating.
-    // So factor = 0.4 / 0.75 ≈ 0.53. Let's use 0.5.
-    const scoreKillShare = stats.killShareRating * 0.50;
+    // 1. Kill Share (40% Weight)
+    // K is the killShareRating which now includes damage, flash, trade compensation, and economy modifier.
+    // Formula: 1.0 * K - 0.25
+    const K = stats.killShareRating;
+    const scoreKill = 1.0 * K - 0.25;
 
-    // 2. Survival Rating
-    const scoreSurv = stats.survived ? 0.30 : 0.0;
-
-    // 3. Impact Rating (Multi-Kill Bonus)
-    // Since base kill value is handled in KillShare, this is purely for "Multi-Kill" bonus
-    // Non-linear scaling for multi-kills + Entry Bonus
-    let impactVal = 0;
-    
-    // Use effective kills (excluding BOTs) for impact calculation
+    // 2. Multi-kill (4% Weight)
+    // M = max(0, kills - 1)
     const effectiveKills = stats.kills - (stats.botKills || 0);
+    const M = Math.max(0, effectiveKills - 1);
+    const scoreMulti = 0.272 * M - 0.02;
 
-    // Bonus only starts at 2K because 1K is covered by KillShare
-    if (effectiveKills === 2) impactVal = 0.5; // Bonus for 2K
-    else if (effectiveKills >= 3) impactVal = 1.2; // Bonus for 3K+
-    
-    if (stats.isEntryKill) impactVal += 0.3; // Reduced from 0.5 because Entry Kill gets full KillShare usually
-    
-    const scoreImpact = impactVal * 0.30;
+    // 3. WPA (33% Weight)
+    // WPA is stored as -50 to +50. We need it as -0.5 to +0.5.
+    const W = stats.wpa / 100.0;
+    const scoreWPA = 2.0 * W + 0.33;
 
-    // 4. KAST (Consistency)
+    // 4. Survival (15% Weight)
+    // S = 1 if survived, 0 if died
+    const S = stats.survived ? 1 : 0;
+    const scoreSurv = 0.588 * S - 0.05;
+
+    // 5. KAST (8% Weight)
+    // A = 1 if KAST triggered, 0 otherwise
     const isKast = effectiveKills > 0 || stats.assists > 0 || stats.survived || stats.traded || stats.wasTraded;
-    const scoreKast = isKast ? 0.20 : 0.0;
-
-    // 5. Economy Rating (ROI)
-    const startValue = startEconomyValue + 500; 
-    const valueGenerated = stats.killValue; 
-    let scoreEcon = 0;
-    if (valueGenerated > 0) {
-            scoreEcon = Math.log2(1 + (valueGenerated / startValue)) * 0.10;
-    }
-
-    // 6. Trade Adjustment
-    const tradeScore = stats.tradeBonus - stats.tradePenalty;
-
-    // 7. WPA Rating (RTG v5.0)
-    // WPA is typically -0.5 to +0.5 (stored as -50 to +50 due to SCALING=100).
-    // We want good WPA to boost rating significantly.
-    // Coefficient 1.0 means +20% WPA adds +0.20 to Rating.
-    // FIX: Divide by 100 because stats.wpa is scaled by 100 in WPAEngine.
-    const scoreWPA = (stats.wpa / 100.0) * 1.0;
+    const A = isKast ? 1 : 0;
+    const scoreKast = 0.178 * A - 0.05;
 
     // Summation
-    let roundRating = scoreKillShare + scoreSurv + scoreImpact + scoreKast + scoreEcon + tradeScore + scoreWPA;
-    
-    // Apply Mapping Formula: 1.83 * RTG - 0.19
-    const mappedRating = (roundRating * 1.83) - 0.19;
+    let roundRating = scoreKill + scoreMulti + scoreWPA + scoreSurv + scoreKast;
+
+    // Global Normalization
+    roundRating *= 1.16;
+
+    // Impact calculation (for display purposes)
+    // Impact focuses on multi-kills, positive WPA, and raw kill share
+    const impact = scoreMulti + Math.max(0, scoreWPA - 0.33) + (K * 0.5);
 
     return {
-        rating: parseFloat(mappedRating.toFixed(3)),
-        impact: scoreImpact + (stats.killShareRating * 0.5) // Impact includes kill share for display
+        rating: parseFloat(roundRating.toFixed(3)),
+        impact: parseFloat(impact.toFixed(3))
     };
 };

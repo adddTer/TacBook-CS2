@@ -249,6 +249,12 @@ export interface MatchTimelineEvent {
     
     // WPA
     winProb?: number; // T Win Probability after this event (0-1)
+    wpaUpdates?: {
+        timeUpdates: any[];
+        eventUpdates: any[];
+        timeProbDelta: number;
+        eventProbDelta: number;
+    };
 }
 
 export interface MatchRound {

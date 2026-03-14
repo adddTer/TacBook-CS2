@@ -26,7 +26,25 @@ export const parseDemoJson = (data: DemoData): Match => {
     const events = Array.isArray(data) ? data : (data.events || []);
     const meta = (!Array.isArray(data) && data.meta) ? data.meta : { map_name: 'Unknown', server_name: '' };
     
-    events.sort((a: any, b: any) => (a.tick || 0) - (b.tick || 0));
+    const EVENT_PRIORITY: Record<string, number> = {
+        'weapon_fire': 1,
+        'player_hurt': 2,
+        'player_death': 3,
+        'bomb_planted': 4,
+        'bomb_defused': 5,
+        'bomb_exploded': 6,
+        'round_end': 7,
+        'round_officially_ended': 8
+    };
+
+    events.sort((a: any, b: any) => {
+        if (a.tick !== b.tick) {
+            return (a.tick || 0) - (b.tick || 0);
+        }
+        const pA = EVENT_PRIORITY[a.event_name] || 99;
+        const pB = EVENT_PRIORITY[b.event_name] || 99;
+        return pA - pB;
+    });
 
     // --- PHASE 1-4: Identify Players & Teams (Extracted) ---
     const { 
@@ -837,7 +855,21 @@ export const parseDemoJson = (data: DemoData): Match => {
              }
         }
 
-        ratingEngine.handleEvent(e, currentRound, teammateSteamIds, aliveTs, aliveCTs, roundTs, roundCTs);
+        const rawWpaUpdates = ratingEngine.handleEvent(e, currentRound, teammateSteamIds, aliveTs, aliveCTs, roundTs, roundCTs);
+        let wpaUpdates: any = undefined;
+        
+        if (rawWpaUpdates) {
+            const enrichUpdate = (u: any) => ({
+                ...u,
+                playerName: steamIdToName.get(u.sid) || "Unknown",
+                playerSide: roundTs.has(u.sid) ? 'T' : (roundCTs.has(u.sid) ? 'CT' : undefined)
+            });
+            wpaUpdates = {
+                ...rawWpaUpdates,
+                timeUpdates: rawWpaUpdates.timeUpdates.map(enrichUpdate),
+                eventUpdates: rawWpaUpdates.eventUpdates.map(enrichUpdate)
+            };
+        }
 
         // MOVED: Win Probability Event generation AFTER handleEvent so engine is initialized
         if (type === 'round_freeze_end') {
@@ -887,7 +919,8 @@ export const parseDemoJson = (data: DemoData): Match => {
                 type: 'damage', // Using generic type for start event, strictly logic only
                 subject: { steamid: '0', name: 'Round Start', side: 'CT' },
                 weapon: 'init',
-                winProb: ratingEngine.getRoundWinProb() // Initial Win Prob
+                winProb: ratingEngine.getRoundWinProb(), // Initial Win Prob
+                wpaUpdates: wpaUpdates || undefined
             });
         }
 
@@ -965,7 +998,8 @@ export const parseDemoJson = (data: DemoData): Match => {
                 isWallbang: e.penetrated > 0,
                 isBlind: e.attackerblind,
                 isSmoke: e.thrusmoke,
-                winProb: ratingEngine.getRoundWinProb()
+                winProb: ratingEngine.getRoundWinProb(),
+                wpaUpdates: wpaUpdates || undefined
             });
 
             if (att && roundClutchAttempts.has(att) && att !== vic && att !== "BOT") {
@@ -1018,13 +1052,15 @@ export const parseDemoJson = (data: DemoData): Match => {
                      currentRoundEvents.push({
                          tick, seconds: 0, type: 'flash_assist',
                          subject: getTimelineInfo(ast), target: getTimelineInfo(vic),
-                         winProb: ratingEngine.getRoundWinProb()
+                         winProb: ratingEngine.getRoundWinProb(),
+                         wpaUpdates: wpaUpdates || undefined
                      });
                  } else {
                      currentRoundEvents.push({
                          tick, seconds: 0, type: 'assist',
                          subject: getTimelineInfo(ast), target: getTimelineInfo(vic),
-                         winProb: ratingEngine.getRoundWinProb()
+                         winProb: ratingEngine.getRoundWinProb(),
+                         wpaUpdates: wpaUpdates || undefined
                      });
                  }
             }
@@ -1077,7 +1113,8 @@ export const parseDemoJson = (data: DemoData): Match => {
                     weapon: (e.weapon || "").replace("weapon_", ""),
                     damage: actualDmg,
                     hitgroup: hg, // Use corrected hitgroup
-                    winProb: ratingEngine.getRoundWinProb()
+                    winProb: ratingEngine.getRoundWinProb(),
+                    wpaUpdates: wpaUpdates || undefined
                 });
             }
 
@@ -1139,7 +1176,8 @@ export const parseDemoJson = (data: DemoData): Match => {
             };
             currentRoundEvents.push({
                 tick, seconds: 0, type: 'plant', subject: getTimelineInfo(sid),
-                winProb: ratingEngine.getRoundWinProb()
+                winProb: ratingEngine.getRoundWinProb(),
+                wpaUpdates: wpaUpdates || undefined
             });
         }
         else if (type === 'bomb_defused') {
@@ -1153,13 +1191,15 @@ export const parseDemoJson = (data: DemoData): Match => {
             };
             currentRoundEvents.push({
                 tick, seconds: 0, type: 'defuse', subject: getTimelineInfo(sid),
-                winProb: ratingEngine.getRoundWinProb()
+                winProb: ratingEngine.getRoundWinProb(),
+                wpaUpdates: wpaUpdates || undefined
             });
         }
         else if (type === 'bomb_exploded') {
             currentRoundEvents.push({
                 tick, seconds: 0, type: 'explode',
-                winProb: ratingEngine.getRoundWinProb()
+                winProb: ratingEngine.getRoundWinProb(),
+                wpaUpdates: wpaUpdates || undefined
             });
         }
     }

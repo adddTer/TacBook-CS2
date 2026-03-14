@@ -25,6 +25,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { AlertModal } from './AlertModal';
 import { FilterState } from './review/MatchFilterBar';
 import { RosterTimelineView } from './review/RosterTimelineView';
+import { StatsTab } from './review/StatsTab';
 
 import { exportPlayersToJson } from '../utils/exportPlayers';
 import { calculatePlayerStats } from '../utils/analytics/playerStatsCalculator';
@@ -57,7 +58,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     writableGroups,
     isDebug
 }) => {
-    const [activeTab, setActiveTab] = useState<'matches' | 'players' | 'leaderboard' | 'tournaments'>('matches');
+    const [activeTab, setActiveTab] = useState<'matches' | 'players' | 'leaderboard' | 'tournaments' | 'stats'>('matches');
     const [playersSubTab, setPlayersSubTab] = useState<'list' | 'history'>('list');
     const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -436,7 +437,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         setSelectedTournament(tournament);
     };
 
-    const handleTabChange = (tab: 'matches' | 'players' | 'leaderboard' | 'tournaments') => {
+    const handleTabChange = (tab: 'matches' | 'players' | 'leaderboard' | 'tournaments' | 'stats') => {
         setActiveTab(tab);
         setSelectedMatch(null);
         setSelectedSeries(null);
@@ -761,6 +762,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     >
                         排行榜
                     </button>
+                    {isDebug && (
+                        <button
+                            onClick={() => handleTabChange('stats')}
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'stats' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
+                        >
+                            统计
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex gap-2">
@@ -913,6 +922,10 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
             {activeTab === 'leaderboard' && (
                 <LeaderboardTab allMatches={allMatches} />
+            )}
+
+            {activeTab === 'stats' && (
+                <StatsTab allMatches={allMatches} />
             )}
 
             {/* Modals */}

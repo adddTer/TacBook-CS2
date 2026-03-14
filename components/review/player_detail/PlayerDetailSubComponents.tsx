@@ -206,7 +206,7 @@ export const MetricItem: React.FC<{ label: string, value: string | number }> = (
     </div>
 );
 
-export const DetailCard = ({ type, data, score }: { type: AbilityType, data: any, score: number }) => {
+export const DetailCard = ({ type, data, score, highPrecision }: { type: AbilityType, data: any, score: number, highPrecision?: boolean }) => {
     const info = ABILITY_INFO[type];
     
     // Map score 0-100 to index 0-8 for 9 levels of evaluations
@@ -235,6 +235,17 @@ export const DetailCard = ({ type, data, score }: { type: AbilityType, data: any
     const formatValue = (key: string, fmt?: string) => {
         const val = data[key];
         if (val === undefined || val === null || (typeof val === 'number' && isNaN(val))) return '-';
+        
+        if (highPrecision) {
+            if (fmt === '0.0%') return (val).toFixed(2) + '%';
+            if (fmt === '0%') return (val).toFixed(1) + '%';
+            if (fmt === '0.00') return (val).toFixed(3);
+            if (fmt === '0.0') return (val).toFixed(2);
+            if (fmt === '0.0s') return (val).toFixed(2) + 's';
+            if (fmt === '0.00s') return (val).toFixed(3) + 's';
+            return (typeof val === 'number' ? val.toFixed(1) : val);
+        }
+
         if (fmt === '0.0%') return (val).toFixed(1) + '%';
         if (fmt === '0%') return (val).toFixed(0) + '%';
         if (fmt === '0.00') return (val).toFixed(2);

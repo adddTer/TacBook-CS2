@@ -277,7 +277,8 @@ export class WPAEngine {
         kitsLost: boolean = false, 
         damageContributors: Map<string, number> = new Map(),
         currentTick: number = 0,
-        isBot: boolean = false // NEW
+        isBot: boolean = false, // NEW
+        contributorSides: Map<string, 'T' | 'CT'> = new Map() // NEW
     ): WPAUpdate[] {
         this.updateRoundTime(timeElapsed); 
 
@@ -346,7 +347,7 @@ export class WPAEngine {
             victimSid,
             allTs, allCTs,
             'kill',
-            { killerSid, damageContributors, assisters },
+            { killerSid, attackerSide, damageContributors, assisters, contributorSides },
             currentTick
         );
     }
@@ -479,8 +480,10 @@ export class WPAEngine {
         reason: string,
         killContext?: {
             killerSid: string,
+            attackerSide: 'T' | 'CT',
             damageContributors: Map<string, number>,
-            assisters: { sid: string, isFlash?: boolean }[]
+            assisters: { sid: string, isFlash?: boolean }[],
+            contributorSides?: Map<string, 'T' | 'CT'>
         },
         currentTick: number = 0
     ): WPAUpdate[] {
@@ -509,7 +512,7 @@ export class WPAEngine {
              // If CT kills T, probDelta < 0 (T loses, CT gains).
              // We assume the killer is on the team that gained probability, 
              // but to be safe, we check if the killer is T or CT and compare with probDelta.
-             const isKillerT = allTs.includes(killContext.killerSid);
+             const isKillerT = killContext.attackerSide === 'T';
              const killerTeamGained = isKillerT ? probDelta > 0 : probDelta < 0;
              
              // If for some reason the killer's team LOST probability (e.g., weird edge case), 
@@ -577,9 +580,18 @@ export class WPAEngine {
              else updates.push({ sid: killContext.killerSid, delta: killerFixedShare, ...debugInfo });
              
              // Distribute Weighted Pool
+             let totalPenaltyToRedistribute = 0;
              if (totalWeight > 0) {
                  weights.forEach((w, sid) => {
-                     const share = (w / totalWeight) * weightedPool;
+                     let share = (w / totalWeight) * weightedPool;
+                     
+                     // If contributor is on the victim's team (friendly fire), they get a penalty
+                     const side = killContext.contributorSides?.get(sid);
+                     if (side && side !== killContext.attackerSide) {
+                         totalPenaltyToRedistribute += share; // Keep original sign
+                         share = -share;
+                     }
+                     
                      const existing = updates.find(u => u.sid === sid);
                      if (existing) existing.delta += share;
                      else updates.push({ sid, delta: share, ...debugInfo });
@@ -588,6 +600,13 @@ export class WPAEngine {
                  // If no contributors, give weighted pool to killer
                  const existing = updates.find(u => u.sid === killContext.killerSid);
                  if (existing) existing.delta += weightedPool;
+             }
+             
+             // If there was friendly fire, the penalty is distributed as a reward to the killer's team
+             if (Math.abs(totalPenaltyToRedistribute) > 0) {
+                 const killerTeam = killContext.attackerSide === 'T' ? allTs : allCTs;
+                 // We need to distribute 2 * original_share to killerTeam.
+                 this.distributeToSide(totalPenaltyToRedistribute * 2, killerTeam, updates);
              }
              
              // Victim Penalty

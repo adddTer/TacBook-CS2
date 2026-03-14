@@ -8,13 +8,15 @@ interface PlayerAbilitySectionProps {
     selectedAbility: AbilityType;
     onSelectAbility: (id: AbilityType) => void;
     detailData: any; 
+    highPrecision?: boolean;
 }
 
 export const PlayerAbilitySection: React.FC<PlayerAbilitySectionProps> = ({
     abilities,
     selectedAbility,
     onSelectAbility,
-    detailData
+    detailData,
+    highPrecision
 }) => {
     const selectedScore = abilities.find(a => a.id === selectedAbility)?.value || 0;
     
@@ -58,7 +60,7 @@ export const PlayerAbilitySection: React.FC<PlayerAbilitySectionProps> = ({
 
                     {/* 3. Detailed Card Area */}
                     <div className="lg:w-1/3 w-full">
-                        <DetailCard type={selectedAbility} data={detailData} score={selectedScore} />
+                        <DetailCard type={selectedAbility} data={detailData} score={selectedScore} highPrecision={highPrecision} />
                     </div>
                 </div>
             </div>

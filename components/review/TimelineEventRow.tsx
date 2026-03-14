@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { MatchTimelineEvent } from '../../types';
 import { formatTime, getWeaponName, Icons } from './TimelineHelpers';
 
@@ -12,6 +12,7 @@ interface TimelineEventRowProps {
 }
 
 export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeMode, plantTime, bombEndTime, showWinProb }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
     const timeStr = formatTime(event.seconds, timeMode, plantTime);
     
     const isPostPlant = plantTime !== undefined && event.seconds >= plantTime;
@@ -196,7 +197,12 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
 
     // Default layout for most events
     return (
-        <div className="flex gap-4 relative group min-h-[32px]">
+        <div 
+            className={`flex gap-4 relative group min-h-[32px] ${event.wpaUpdates ? 'cursor-pointer' : ''}`}
+            onClick={() => {
+                if (event.wpaUpdates) setIsExpanded(!isExpanded);
+            }}
+        >
             {/* Time Column */}
             <div className="w-12 text-right shrink-0 flex flex-col items-end pt-1.5">
                  <span className={`font-mono text-xs font-bold transition-colors ${
@@ -232,6 +238,69 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
                             ></div>
                         </div>
                         <span className="text-[9px] font-black text-amber-600 dark:text-amber-500 w-9 tabular-nums">{(event.winProb * 100).toFixed(0)}%</span>
+                    </div>
+                )}
+
+                {/* Expanded WPA Details */}
+                {isExpanded && event.wpaUpdates && (
+                    <div className="mt-3 p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg border border-neutral-200 dark:border-neutral-700/50 text-xs shadow-sm">
+                        <div className="mb-3 pb-2 border-b border-neutral-200 dark:border-neutral-700">
+                            <div className="font-bold text-neutral-700 dark:text-neutral-300 mb-2 flex items-center gap-2">
+                                <span>CT 胜率变化</span>
+                                <span className="text-neutral-400 font-normal text-[10px]">(基于当前局势)</span>
+                            </div>
+                            <div className="flex flex-wrap gap-x-8 gap-y-2 text-neutral-600 dark:text-neutral-400">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-neutral-500">时间流逝:</span>
+                                    <span className={`font-mono font-medium ${-event.wpaUpdates.timeProbDelta > 0 ? 'text-green-600 dark:text-green-400' : -event.wpaUpdates.timeProbDelta < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                                        {-event.wpaUpdates.timeProbDelta > 0 ? '+' : ''}{(-event.wpaUpdates.timeProbDelta * 100).toFixed(2)}%
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-neutral-500">事件影响:</span>
+                                    <span className={`font-mono font-medium ${-event.wpaUpdates.eventProbDelta > 0 ? 'text-green-600 dark:text-green-400' : -event.wpaUpdates.eventProbDelta < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                                        {-event.wpaUpdates.eventProbDelta > 0 ? '+' : ''}{(-event.wpaUpdates.eventProbDelta * 100).toFixed(2)}%
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 max-w-2xl">
+                            <div>
+                                <div className="font-bold text-neutral-700 dark:text-neutral-300 mb-2 flex items-center gap-1.5">
+                                    <Icons.Timer className="w-3.5 h-3.5 text-neutral-400" />
+                                    时间流逝加/扣分
+                                </div>
+                                <ul className="space-y-1.5">
+                                    {event.wpaUpdates.timeUpdates.map((u: any, i: number) => (
+                                        <li key={i} className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
+                                            <span className={`font-medium ${getPColor(u.playerSide)}`}>{u.playerName}</span>
+                                            <span className={`font-mono text-[11px] ${u.delta > 0 ? 'text-green-600 dark:text-green-400' : u.delta < 0 ? 'text-red-600 dark:text-red-400' : 'text-neutral-500'}`}>
+                                                {u.delta > 0 ? '+' : ''}{u.delta.toFixed(2)}%
+                                            </span>
+                                        </li>
+                                    ))}
+                                    {event.wpaUpdates.timeUpdates.length === 0 && <li className="text-neutral-400 italic px-2 py-1">无变化</li>}
+                                </ul>
+                            </div>
+                            <div>
+                                <div className="font-bold text-neutral-700 dark:text-neutral-300 mb-2 flex items-center gap-1.5">
+                                    <Icons.Target className="w-3.5 h-3.5 text-neutral-400" />
+                                    事件影响加/扣分
+                                </div>
+                                <ul className="space-y-1.5">
+                                    {event.wpaUpdates.eventUpdates.map((u: any, i: number) => (
+                                        <li key={i} className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
+                                            <span className={`font-medium ${getPColor(u.playerSide)}`}>{u.playerName}</span>
+                                            <span className={`font-mono text-[11px] ${u.delta > 0 ? 'text-green-600 dark:text-green-400' : u.delta < 0 ? 'text-red-600 dark:text-red-400' : 'text-neutral-500'}`}>
+                                                {u.delta > 0 ? '+' : ''}{u.delta.toFixed(2)}%
+                                            </span>
+                                        </li>
+                                    ))}
+                                    {event.wpaUpdates.eventUpdates.length === 0 && <li className="text-neutral-400 italic px-2 py-1">无变化</li>}
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
