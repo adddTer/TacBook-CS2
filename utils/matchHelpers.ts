@@ -10,12 +10,25 @@ export const isMyTeamMatch = (match: Match): boolean => {
     // Check 'players' array (which parser puts 'My Team' in)
     // We want to see if our core roster is present in the 'us' side.
     return match.players.some(p => {
-        return ROSTER.some(r => 
-            r.id === p.playerId || 
-            r.name === p.playerId || 
-            (p.steamid && r.id === p.steamid) ||
-            (p.steamid && r.steamids?.includes(p.steamid))
-        );
+        return ROSTER.some(r => {
+            if (r.id === p.playerId || r.name === p.playerId) return true;
+            if (!p.steamid) return false;
+            
+            const pSteamIdStr = String(p.steamid);
+            if (r.id === pSteamIdStr) return true;
+            
+            let isMatch = r.steamids?.includes(pSteamIdStr) || 
+                (pSteamIdStr.endsWith('00') && r.steamids?.some(id => id.startsWith(pSteamIdStr.slice(0, -2))));
+                
+            if (!isMatch && /^\d+$/.test(pSteamIdStr) && pSteamIdStr.length < 16) {
+                const accountId = parseInt(pSteamIdStr, 10);
+                const base = BigInt('76561197960265728');
+                const convertedId = (base + BigInt(accountId)).toString();
+                isMatch = r.steamids?.includes(convertedId);
+            }
+            
+            return isMatch;
+        });
     });
 };
 
@@ -77,25 +90,66 @@ export const validateSeriesMatch = (anchorMatch: Match, newMatch: Match): { vali
     };
 };
 
+import { TEAMS } from '../constants/teams';
+
+const identifyTeam = (players: PlayerMatchStats[]): string | undefined => {
+    if (!players || players.length === 0) return undefined;
+    
+    for (const team of TEAMS) {
+        let matchCount = 0;
+        for (const p of players) {
+            if (p.steamid) {
+                const pSteamIdStr = String(p.steamid);
+                // Check exact match or prefix match (if precision was lost during JSON parsing)
+                let isMatch = team.members.some(m => 
+                    m.steamIds.includes(pSteamIdStr) || 
+                    (pSteamIdStr.endsWith('00') && m.steamIds.some(id => id.startsWith(pSteamIdStr.slice(0, -2))))
+                );
+                
+                // Also check if p.steamid is a 32-bit account ID
+                if (!isMatch && /^\d+$/.test(pSteamIdStr) && pSteamIdStr.length < 16) {
+                    const accountId = parseInt(pSteamIdStr, 10);
+                    const base = BigInt('76561197960265728');
+                    const convertedId = (base + BigInt(accountId)).toString();
+                    isMatch = team.members.some(m => m.steamIds.includes(convertedId));
+                }
+                
+                if (isMatch) {
+                    matchCount++;
+                }
+            }
+        }
+        
+        if (matchCount >= 3) {
+            return team.name;
+        }
+    }
+    return undefined;
+};
+
 /**
  * Helper to get display names for teams in a match.
  */
 export const getTeamNames = (match: Match): { teamA: string, teamB: string } => {
     const isMine = isMyTeamMatch(match);
     
-    // If it's my team, prioritize standard names
-    if (isMine) {
-        return {
-            teamA: match.teamNameUs || '我方',
-            teamB: match.teamNameThem || '敌方'
-        };
+    let teamA = match.teamNameUs;
+    let teamB = match.teamNameThem;
+
+    const identifiedTeamA = identifyTeam(match.players);
+    const identifiedTeamB = identifyTeam(match.enemyPlayers);
+
+    if (identifiedTeamA) teamA = identifiedTeamA;
+    if (identifiedTeamB) teamB = identifiedTeamB;
+
+    if (!teamA) {
+        teamA = isMine ? '我方' : 'Team A';
     }
-    
-    // Neutral match
-    return {
-        teamA: match.teamNameUs || 'Team A',
-        teamB: match.teamNameThem || 'Team B'
-    };
+    if (!teamB) {
+        teamB = isMine ? '敌方' : 'Team B';
+    }
+
+    return { teamA, teamB };
 };
 
 // --- Map Name Helper ---

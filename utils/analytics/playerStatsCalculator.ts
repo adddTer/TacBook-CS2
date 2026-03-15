@@ -130,16 +130,9 @@ export const calculatePlayerStats = (
 
     history.forEach(({ match }) => {
         if (!match.rounds) return;
-        const pMatch = [...match.players, ...match.enemyPlayers].find(p => 
-            p.playerId === profileId || 
-            p.steamid === profileId ||
-            resolveName(p.playerId) === profileId ||
-            resolveName(p.steamid) === profileId
-        );
+        const pMatch = [...match.players, ...match.enemyPlayers].find(p => p.steamid === profileId);
         if(!pMatch) return;
-        const pid = pMatch.steamid || pMatch.playerId;
-        
-        let matchKills = 0;
+        const pid = pMatch.steamid;
         let matchDeaths = 0;
         let matchMultiKillRounds = 0;
         let matchKastRounds = 0;
@@ -185,13 +178,10 @@ export const calculatePlayerStats = (
     history.forEach(({ match }) => {
         if(!match.rounds) return;
         const pMatch = [...match.players, ...match.enemyPlayers].find(p => 
-            p.playerId === profileId || 
-            p.steamid === profileId ||
-            resolveName(p.playerId) === profileId ||
-            resolveName(p.steamid) === profileId
+            p.steamid === profileId
         );
         if(!pMatch) return;
-        const pid = pMatch.steamid || pMatch.playerId;
+        const pid = pMatch.steamid;
 
         match.rounds.forEach(r => {
             const pr = r.playerStats[pid];

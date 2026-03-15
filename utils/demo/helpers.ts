@@ -15,20 +15,14 @@ export const normalizeSteamId = (id: string | number | null | undefined): string
         }
     }
     
+    // Handle 32-bit account IDs (usually less than 16 digits)
+    if (/^\d+$/.test(str) && str.length < 16) {
+        const accountId = parseInt(str, 10);
+        const base = BigInt('76561197960265728');
+        return (base + BigInt(accountId)).toString();
+    }
+    
     return str;
-};
-
-export const NAME_ALIASES: Record<string, string> = {
-    'forsakenN': 'F1oyd',
-    '冥医': 'Sanatio',
-    'addd_233': 'addd',
-    '𝐚𝐝𝐝𝐝': 'addd',
-    'Ser1EN': 'Ser1EN',
-    'ClayDEN': 'Ser1EN', 
-    'FuNct1on': 'FuNct1on',
-    'R\u2061\u2061\u2061ain\u2061\u2061\u2061\u2061\u2061': 'Rain',
-    '王源不给颗烟': 'R1kaN',
-    'Z-Electronics': 'electronics'
 };
 
 export const WEAPON_SIDE_MAP: Record<string, 'T' | 'CT'> = {
@@ -38,14 +32,24 @@ export const WEAPON_SIDE_MAP: Record<string, 'T' | 'CT'> = {
 
 export const resolveName = (rawName: string | null | undefined): string => {
     if (!rawName) return "Unknown";
-    if (typeof rawName !== 'string') return String(rawName);
-    const clean = rawName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-    if (NAME_ALIASES[clean]) return NAME_ALIASES[clean];
-    const rosterMatch = ROSTER.find(r => 
-        r.id.toLowerCase() === clean.toLowerCase() || 
-        r.name.toLowerCase() === clean.toLowerCase() ||
-        (r.steamids && r.steamids.includes(clean))
-    );
+    const clean = String(rawName).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    
+    const rosterMatch = ROSTER.find(r => {
+        if (r.id === clean || r.name === clean) return true;
+        
+        let isMatch = r.steamids?.includes(clean) || 
+            (clean.endsWith('00') && r.steamids?.some(id => id.startsWith(clean.slice(0, -2))));
+            
+        if (!isMatch && /^\d+$/.test(clean) && clean.length < 16) {
+            const accountId = parseInt(clean, 10);
+            const base = BigInt('76561197960265728');
+            const convertedId = (base + BigInt(accountId)).toString();
+            isMatch = r.steamids?.includes(convertedId);
+        }
+        
+        return isMatch;
+    });
+    
     if (rosterMatch) return rosterMatch.id;
     return clean;
 };

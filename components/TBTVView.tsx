@@ -5,13 +5,11 @@ import { ROSTER } from '../constants/roster';
 import { MAPS } from '../constants';
 import { Match, PlayerMatchStats, Rank } from '../types';
 import { getTeamNames } from '../utils/matchHelpers';
+import { resolveName } from '../utils/demo/helpers';
 
-// Mapping for in-game names to Roster IDs
-const NAME_MAPPING: Record<string, string> = {
-  'addd_233': 'addd',
+const getRosterId = (p: PlayerMatchStats) => {
+    return resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
 };
-
-const getRosterId = (name: string) => NAME_MAPPING[name] || name;
 
 export const TBTVView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'matches' | 'players'>('matches');
@@ -25,7 +23,7 @@ export const TBTVView: React.FC = () => {
   const playerStats = useMemo(() => {
     return ROSTER.map(player => {
         const matchesPlayed = matches
-            .filter(m => m.players.some(p => getRosterId(p.playerId) === player.id))
+            .filter(m => m.players.some(p => getRosterId(p) === player.id))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
         const totalMatches = matchesPlayed.length;
@@ -46,7 +44,7 @@ export const TBTVView: React.FC = () => {
             };
         }
 
-        const latestMatchPlayer = matchesPlayed[0].players.find(p => getRosterId(p.playerId) === player.id);
+        const latestMatchPlayer = matchesPlayed[0].players.find(p => getRosterId(p) === player.id);
         const currentRank = latestMatchPlayer?.rank || '?';
 
         let sums = {
@@ -55,7 +53,7 @@ export const TBTVView: React.FC = () => {
         };
 
         matchesPlayed.forEach(m => {
-            const p = m.players.find(p => getRosterId(p.playerId) === player.id)!;
+            const p = m.players.find(p => getRosterId(p) === player.id)!;
             sums.k += p.kills;
             sums.d += p.deaths;
             sums.a += p.assists;
@@ -84,10 +82,10 @@ export const TBTVView: React.FC = () => {
   const selectedPlayerStats = useMemo(() => {
       if (!selectedPlayerId) return null;
       const profile = playerStats.find(p => p.id === selectedPlayerId);
-      const history = matches.filter(m => m.players.some(p => getRosterId(p.playerId) === selectedPlayerId))
+      const history = matches.filter(m => m.players.some(p => getRosterId(p) === selectedPlayerId))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .map(m => {
-            const stats = m.players.find(p => getRosterId(p.playerId) === selectedPlayerId)!;
+            const stats = m.players.find(p => getRosterId(p) === selectedPlayerId)!;
             return { match: m, stats };
         });
       return { profile, history };
@@ -109,7 +107,9 @@ export const TBTVView: React.FC = () => {
           reader.onload = (ev) => {
               try {
                   const content = ev.target?.result as string;
-                  const data = JSON.parse(content);
+                  // Fix precision loss for large numbers like steamid
+                  const fixedContent = content.replace(/"(steamid|attacker_steamid|user_steamid|assister_steamid|userid)"\s*:\s*(\d{16,20})/g, '"$1":"$2"');
+                  const data = JSON.parse(fixedContent);
                   if (Array.isArray(data)) {
                        setMatches(prev => [...data, ...prev]);
                   } else {
@@ -129,6 +129,15 @@ export const TBTVView: React.FC = () => {
 
   // --- Helper Components ---
   
+  const CommanderBadge = () => (
+      <span className="ml-1 inline-flex items-center justify-center bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shadow-sm shadow-amber-500/20 shrink-0" title="指挥 (IGL)">
+          <svg className="w-2.5 h-2.5 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
+          指挥
+      </span>
+  );
+
   const RankBadge = ({ rank }: { rank: string }) => {
       const isGold = rank.includes('++') || rank === 'S';
       const displayRank = rank.replace('++', '+'); 
@@ -186,7 +195,7 @@ export const TBTVView: React.FC = () => {
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                 {[...players].sort((a,b) => b.rating - a.rating).map(p => {
                     const kdDiff = p.kills - p.deaths;
-                    const rosterId = getRosterId(p.playerId);
+                    const rosterId = getRosterId(p);
                     const isRosterMember = ROSTER.some(r => r.id === rosterId);
                     
                     return (
@@ -270,7 +279,9 @@ export const TBTVView: React.FC = () => {
                                    {profile.id[0]}
                                </div>
                                <div>
-                                   <h2 className="text-2xl font-black text-neutral-900 dark:text-white leading-none">{profile.id}</h2>
+                                   <h2 className="text-2xl font-black text-neutral-900 dark:text-white leading-none flex items-center">
+                                       {profile.id}
+                                   </h2>
                                    <p className="text-xs font-bold text-neutral-500 mt-1">{profile.role}</p>
                                    <div className="flex items-center gap-2 mt-2">
                                        <RankBadge rank={profile.currentRank} />
@@ -522,7 +533,10 @@ export const TBTVView: React.FC = () => {
                             </div>
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <div className="font-bold text-neutral-900 dark:text-white">{player.name}</div>
+                                    <div className="font-bold text-neutral-900 dark:text-white flex items-center">
+                                        {player.name}
+                                        {player.isCommander && <CommanderBadge />}
+                                    </div>
                                     <RankBadge rank={player.currentRank} />
                                 </div>
                                 <div className="text-[10px] text-neutral-500">{player.role.split(' ')[0]}</div>

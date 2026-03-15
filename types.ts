@@ -144,6 +144,7 @@ export interface PlayerProfile {
     role: string;
     roleType: string;
     steamids?: string[];
+    isCommander?: boolean;
 }
 
 export type Rank = string; // Flexible rank string (e.g., 'B+', 'S', 'A')

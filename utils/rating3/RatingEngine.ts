@@ -458,6 +458,17 @@ export class RatingEngine {
                     if (astSide) contributorSides.set(ast, astSide);
                 }
                 
+                // Identify surviving players of the killer's team
+                const killerTeam = attackerSide === 'T' ? tPlayers : ctPlayers;
+                const survivingKillerTeam: string[] = [];
+                if (killerTeam) {
+                    killerTeam.forEach(sid => {
+                        if (this.getRoundStats(sid).survived) {
+                            survivingKillerTeam.push(sid);
+                        }
+                    });
+                }
+                
                 const isBot = vic === 'BOT' || vic === '0' || vic.startsWith('BOT');
 
                 if (attackerSide) {
@@ -468,7 +479,8 @@ export class RatingEngine {
                         damageContributors, // NEW Argument
                         tick, // Pass current tick for 5s window check
                         isBot, // NEW
-                        contributorSides // NEW
+                        contributorSides, // NEW
+                        survivingKillerTeam // NEW
                     );
                     eventUpdates.push(...updates);
                     this.wpaEngine.commitUpdates(updates);
@@ -640,9 +652,23 @@ export class RatingEngine {
                         }
                     } else if (totalPenalty > 0) {
                         // If it's a normal kill, but there were friendly fire contributors,
-                        // give their penalty amount to the killer to compensate for "stolen" damage.
-                        const attStats = this.getRoundStats(att);
-                        attStats.killShareRating += totalPenalty;
+                        // give their penalty amount to the killer's team (surviving players)
+                        const killerTeam = attackerSide === 'T' ? tPlayers : ctPlayers;
+                        const survivingKillerTeam: string[] = [];
+                        if (killerTeam) {
+                            killerTeam.forEach(sid => {
+                                if (this.getRoundStats(sid).survived) {
+                                    survivingKillerTeam.push(sid);
+                                }
+                            });
+                        }
+                        
+                        if (survivingKillerTeam.length > 0) {
+                            const rewardPerPlayer = totalPenalty / survivingKillerTeam.length;
+                            survivingKillerTeam.forEach(sid => {
+                                this.getRoundStats(sid).killShareRating += rewardPerPlayer;
+                            });
+                        }
                     }
                 }
             }

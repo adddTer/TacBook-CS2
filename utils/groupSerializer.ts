@@ -103,7 +103,8 @@ export const importGroupFromZip = async (file: File | Blob): Promise<ContentGrou
         for (const file of matchFiles) {
             const content = await file.async("string");
             try {
-                const m = JSON.parse(content);
+                const fixedContent = content.replace(/"(steamid|attacker_steamid|user_steamid|assister_steamid|userid)"\s*:\s*(\d{16,20})/g, '"$1":"$2"');
+                const m = JSON.parse(fixedContent);
                 m.groupId = metadata.id; // Link to group
                 matches.push(m);
             } catch (e) { console.warn("Failed to parse match", file.name); }

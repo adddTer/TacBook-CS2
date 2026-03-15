@@ -33,7 +33,7 @@ export class MatchAggregator {
                 const matchRounds = (match.score.us + match.score.them) || 24;
                 const currentRounds = p.r3_rounds_played || matchRounds;
                 
-                const resolvedId = resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
+                const resolvedId = p.steamid;
                 const key = resolvedId;
                 const existing = statsMap.get(key);
                 if (existing) {
@@ -213,7 +213,7 @@ export class MatchAggregator {
         matches.forEach(match => {
             const allPlayers = [...match.players, ...match.enemyPlayers];
             allPlayers.forEach(p => {
-                const resolvedId = resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
+                const resolvedId = p.steamid;
                 const history = playerHistoryMap.get(resolvedId) || [];
                 history.push({ match, stats: p });
                 playerHistoryMap.set(resolvedId, history);
@@ -226,8 +226,7 @@ export class MatchAggregator {
         // 2. Calculate full stats for each player
         const basicStats = this.aggregate(matches);
         const basicStatsMap = new Map(basicStats.map(p => {
-            const resolvedId = resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
-            return [resolvedId, p];
+            return [p.steamid, p];
         }));
 
         return Array.from(playerHistoryMap.entries()).map(([id, history]) => {

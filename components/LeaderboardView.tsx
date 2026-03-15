@@ -13,6 +13,15 @@ interface LeaderboardViewProps {
 type SortField = 'rating' | 'wpa' | 'adr' | 'kast' | 'kd' | 'impact' | 'entry' | 'matches' | 'utility' | 'clutch';
 type SortOrder = 'asc' | 'desc';
 
+const CommanderBadge = () => (
+    <span className="ml-1 inline-flex items-center justify-center bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shadow-sm shadow-amber-500/20 shrink-0" title="指挥 (IGL)">
+        <svg className="w-2.5 h-2.5 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+        指挥
+    </span>
+);
+
 export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) => {
     const [sortField, setSortField] = useState<SortField>('rating');
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -285,7 +294,10 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                                 {processedData[1].id[0]}
                             </div>
                             <div>
-                                <div className="font-bold text-lg">{processedData[1].id}</div>
+                                <div className="font-bold text-lg flex items-center">
+                                    {processedData[1].id}
+                                    {ROSTER.find(r => r.id === processedData[1].id)?.isCommander && <CommanderBadge />}
+                                </div>
                                 <div className="text-xs text-neutral-500">{processedData[1].role}</div>
                             </div>
                         </div>
@@ -310,7 +322,10 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                                 </div>
                                 <div>
                                     <div className="text-xs font-bold text-yellow-400 uppercase tracking-widest mb-1">Season MVP</div>
-                                    <div className="font-black text-3xl">{processedData[0].id}</div>
+                                    <div className="font-black text-3xl flex items-center">
+                                        {processedData[0].id}
+                                        {ROSTER.find(r => r.id === processedData[0].id)?.isCommander && <CommanderBadge />}
+                                    </div>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -342,7 +357,10 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                                 {processedData[2].id[0]}
                             </div>
                             <div>
-                                <div className="font-bold text-lg">{processedData[2].id}</div>
+                                <div className="font-bold text-lg flex items-center">
+                                    {processedData[2].id}
+                                    {ROSTER.find(r => r.id === processedData[2].id)?.isCommander && <CommanderBadge />}
+                                </div>
                                 <div className="text-xs text-neutral-500">{processedData[2].role}</div>
                             </div>
                         </div>
@@ -384,7 +402,10 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                                                 #{idx + 1}
                                             </span>
                                             <div>
-                                                <div className="leading-none text-sm">{p.name}</div>
+                                                <div className="leading-none text-sm flex items-center">
+                                                    {p.name}
+                                                    {ROSTER.find(r => r.id === p.id)?.isCommander && <CommanderBadge />}
+                                                </div>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <span className="text-[9px] font-medium text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-1.5 rounded border border-neutral-200 dark:border-neutral-700">{p.role}</span>
                                                     <RankBadge rank={p.rank} />

@@ -136,6 +136,14 @@ export const PlayerHeroCard: React.FC<PlayerHeroCardProps> = ({ profile, stats, 
                         </div>
                     )}
 
+                    {profile.id === 'addd' && (
+                        <div className="mt-2 mb-2">
+                            <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                                指挥
+                            </div>
+                        </div>
+                    )}
+
                     {role ? (
                         <div className="mt-2 mb-2">
                             <div className="flex items-center gap-2 mb-1">

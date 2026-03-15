@@ -561,7 +561,9 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 });
 
                 // Parse
-                const json = JSON.parse(content);
+                // Fix precision loss for large numbers like steamid
+                const fixedContent = content.replace(/"(steamid|attacker_steamid|user_steamid|assister_steamid|userid)"\s*:\s*(\d{16,20})/g, '"$1":"$2"');
+                const json = JSON.parse(fixedContent);
                 let match = parseDemoJson(json);
                 
                 // Save

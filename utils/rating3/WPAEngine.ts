@@ -278,7 +278,8 @@ export class WPAEngine {
         damageContributors: Map<string, number> = new Map(),
         currentTick: number = 0,
         isBot: boolean = false, // NEW
-        contributorSides: Map<string, 'T' | 'CT'> = new Map() // NEW
+        contributorSides: Map<string, 'T' | 'CT'> = new Map(), // NEW
+        survivingKillerTeam: string[] = [] // NEW
     ): WPAUpdate[] {
         this.updateRoundTime(timeElapsed); 
 
@@ -347,7 +348,7 @@ export class WPAEngine {
             victimSid,
             allTs, allCTs,
             'kill',
-            { killerSid, attackerSide, damageContributors, assisters, contributorSides },
+            { killerSid, attackerSide, damageContributors, assisters, contributorSides, survivingKillerTeam },
             currentTick
         );
     }
@@ -483,7 +484,8 @@ export class WPAEngine {
             attackerSide: 'T' | 'CT',
             damageContributors: Map<string, number>,
             assisters: { sid: string, isFlash?: boolean }[],
-            contributorSides?: Map<string, 'T' | 'CT'>
+            contributorSides?: Map<string, 'T' | 'CT'>,
+            survivingKillerTeam?: string[]
         },
         currentTick: number = 0
     ): WPAUpdate[] {
@@ -604,9 +606,23 @@ export class WPAEngine {
              
              // If there was friendly fire, the penalty is distributed as a reward to the killer's team
              if (Math.abs(totalPenaltyToRedistribute) > 0) {
-                 const killerTeam = killContext.attackerSide === 'T' ? allTs : allCTs;
-                 // We need to distribute 2 * original_share to killerTeam.
-                 this.distributeToSide(totalPenaltyToRedistribute * 2, killerTeam, updates);
+                 // 1. Compensate the victim
+                 if (victimSid) {
+                     const existingVictim = updates.find(u => u.sid === victimSid);
+                     if (existingVictim) existingVictim.delta += totalPenaltyToRedistribute;
+                     else updates.push({ sid: victimSid, delta: totalPenaltyToRedistribute, ...debugInfo });
+                 }
+
+                 // 2. Reward the killer's team (surviving players)
+                 const survivingKillerTeam = killContext.survivingKillerTeam;
+                 if (survivingKillerTeam && survivingKillerTeam.length > 0) {
+                     const rewardPerPlayer = totalPenaltyToRedistribute / survivingKillerTeam.length;
+                     survivingKillerTeam.forEach(sid => {
+                         const existing = updates.find(u => u.sid === sid);
+                         if (existing) existing.delta += rewardPerPlayer;
+                         else updates.push({ sid, delta: rewardPerPlayer, ...debugInfo });
+                     });
+                 }
              }
              
              // Victim Penalty
