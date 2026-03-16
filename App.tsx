@@ -10,6 +10,7 @@ import { UtilityEditor } from './components/UtilityEditor';
 import { ReviewView } from './components/ReviewView';
 import { ArsenalView } from './components/ArsenalView'; 
 import { EventsView } from './components/events/EventsView';
+import { TrainingCamp } from './components/TrainingCamp';
 import { BottomNav } from './components/BottomNav';
 import { TacticDetailView } from './components/TacticDetailView';
 import { UtilityDetailView } from './components/UtilityDetailView';
@@ -27,7 +28,7 @@ const App: React.FC = () => {
   // --- Global App State ---
   const [side, setSide] = useState<Side>('T');
   const [currentMap, setCurrentMap] = useState<MapId>('mirage');
-  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'economy' | 'events'>('tactics');
+  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'economy' | 'events' | 'training'>('tactics');
   const [theme, setTheme] = useState<Theme>('system');
   const [utilityViewMode, setUtilityViewMode] = useState<'detail' | 'accordion'>('detail');
   const [isDebug, setIsDebug] = useState(false);
@@ -67,7 +68,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
-      if (['tactics', 'utilities', 'weapons', 'economy', 'events'].includes(hash)) {
+      if (['tactics', 'utilities', 'weapons', 'economy', 'events', 'training'].includes(hash)) {
         setViewMode(hash as any);
       } else if (hash.startsWith('match/') || hash.startsWith('player/')) {
         setViewMode('weapons');
@@ -196,6 +197,11 @@ const App: React.FC = () => {
               if (selectedTactic?.id === tactic.id) setSelectedTactic(null);
           }
       });
+  };
+
+  const handleToggleRecommended = (tactic: Tactic) => {
+      const updatedTactic = { ...tactic, isRecommended: !tactic.isRecommended };
+      handleSaveTactic(updatedTactic, tactic.groupId);
   };
 
   const handleDeleteUtility = (utility: Utility) => {
@@ -333,7 +339,12 @@ const App: React.FC = () => {
                                 >
                                     {copiedId === tactic.id ? <span className="text-green-500">Copied!</span> : `#${tactic.id}`}
                                 </button>
-                                <TacticCard tactic={tactic} onClick={() => setSelectedTactic(tactic)} />
+                                <TacticCard 
+                                    tactic={tactic} 
+                                    onClick={() => setSelectedTactic(tactic)} 
+                                    onEdit={isItemEditable(tactic.groupId) ? () => { setEditingTactic(tactic); setActiveEditor('tactic'); } : undefined}
+                                    onToggleRecommended={isItemEditable(tactic.groupId) ? () => handleToggleRecommended(tactic) : undefined}
+                                />
                             </div>
                             ))}
                         </div>
@@ -389,6 +400,7 @@ const App: React.FC = () => {
             {viewMode === 'economy' && <div className="max-w-[1920px] mx-auto"><ArsenalView /></div>}
             
             {viewMode === 'events' && <div className="max-w-[1920px] mx-auto"><EventsView /></div>}
+            {viewMode === 'training' && <TrainingCamp allTactics={allTactics} allUtilities={allUtilities} />}
           </main>
       </div>
 
