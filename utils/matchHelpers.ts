@@ -90,40 +90,7 @@ export const validateSeriesMatch = (anchorMatch: Match, newMatch: Match): { vali
     };
 };
 
-import { TEAMS } from '../constants/teams';
-
 const identifyTeam = (players: PlayerMatchStats[]): string | undefined => {
-    if (!players || players.length === 0) return undefined;
-    
-    for (const team of TEAMS) {
-        let matchCount = 0;
-        for (const p of players) {
-            if (p.steamid) {
-                const pSteamIdStr = String(p.steamid);
-                // Check exact match or prefix match (if precision was lost during JSON parsing)
-                let isMatch = team.members.some(m => 
-                    m.steamIds.includes(pSteamIdStr) || 
-                    (pSteamIdStr.endsWith('00') && m.steamIds.some(id => id.startsWith(pSteamIdStr.slice(0, -2))))
-                );
-                
-                // Also check if p.steamid is a 32-bit account ID
-                if (!isMatch && /^\d+$/.test(pSteamIdStr) && pSteamIdStr.length < 16) {
-                    const accountId = parseInt(pSteamIdStr, 10);
-                    const base = BigInt('76561197960265728');
-                    const convertedId = (base + BigInt(accountId)).toString();
-                    isMatch = team.members.some(m => m.steamIds.includes(convertedId));
-                }
-                
-                if (isMatch) {
-                    matchCount++;
-                }
-            }
-        }
-        
-        if (matchCount >= 3) {
-            return team.name;
-        }
-    }
     return undefined;
 };
 
