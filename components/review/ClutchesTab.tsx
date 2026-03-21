@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { PlayerMatchStats } from '../../types';
+import { resolveName } from '../../utils/demo/helpers';
 
 interface ClutchesTabProps {
     players: PlayerMatchStats[];
@@ -30,7 +31,7 @@ export const ClutchesTab: React.FC<ClutchesTabProps> = ({ players, enemyPlayers,
                     {activeClutchers.map(p => (
                         <div key={p.playerId} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                             <div className="font-bold text-sm text-neutral-900 dark:text-white w-32 shrink-0 truncate">
-                                {p.playerId}
+                                {p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId)}
                             </div>
                             <div className="flex flex-wrap gap-2 flex-1">
                                 {p.clutchHistory.sort((a,b) => a.round - b.round).map((attempt, idx) => {

@@ -640,7 +640,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
         const profile = {
             id: selectedPlayerId,
-            name: p.playerId, // Use original name from stats
+            name: p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId),
             role: dynamicRole.name,
             roleType: ROSTER.find(r => r.id === selectedPlayerId) ? 'Member' : 'Guest',
             steamid: p.steamid,

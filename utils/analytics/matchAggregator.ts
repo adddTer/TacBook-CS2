@@ -33,8 +33,7 @@ export class MatchAggregator {
                 const matchRounds = (match.score.us + match.score.them) || 24;
                 const currentRounds = p.r3_rounds_played || matchRounds;
                 
-                const resolvedId = p.steamid;
-                const key = resolvedId;
+                const key = p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
                 const existing = statsMap.get(key);
                 if (existing) {
                     existing.kills += p.kills;
@@ -118,7 +117,7 @@ export class MatchAggregator {
                 } else {
                     // Deep copy to avoid mutating original match data
                     const copy = JSON.parse(JSON.stringify(p));
-                    copy.playerId = resolvedId;
+                    copy.playerId = key;
                     copy.matchesPlayed = 1;
                     const initialRounds = copy.r3_rounds_played || matchRounds;
                     copy.r3_rounds_played = initialRounds;
@@ -213,20 +212,20 @@ export class MatchAggregator {
         matches.forEach(match => {
             const allPlayers = [...match.players, ...match.enemyPlayers];
             allPlayers.forEach(p => {
-                const resolvedId = p.steamid;
-                const history = playerHistoryMap.get(resolvedId) || [];
+                const key = p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
+                const history = playerHistoryMap.get(key) || [];
                 history.push({ match, stats: p });
-                playerHistoryMap.set(resolvedId, history);
+                playerHistoryMap.set(key, history);
                 
-                if (!playerNameMap.has(resolvedId)) playerNameMap.set(resolvedId, p.playerId);
-                if (p.steamid && !playerSteamMap.has(resolvedId)) playerSteamMap.set(resolvedId, p.steamid);
+                if (!playerNameMap.has(key)) playerNameMap.set(key, p.playerId);
+                if (p.steamid && !playerSteamMap.has(key)) playerSteamMap.set(key, p.steamid);
             });
         });
 
         // 2. Calculate full stats for each player
         const basicStats = this.aggregate(matches);
         const basicStatsMap = new Map(basicStats.map(p => {
-            return [p.steamid, p];
+            return [p.playerId, p]; // p.playerId is the key from aggregate()
         }));
 
         return Array.from(playerHistoryMap.entries()).map(([id, history]) => {

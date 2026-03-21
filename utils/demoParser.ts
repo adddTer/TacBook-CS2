@@ -1016,9 +1016,15 @@ export const parseDemoJson = (data: DemoData): Match => {
             const rAtt = att ? getRoundPlayerStats(att) : null;
             const rAst = ast ? getRoundPlayerStats(ast) : null;
 
+            const isVicT = roundTs.has(vic);
+            const isVicCT = roundCTs.has(vic);
+            const isAttT = roundTs.has(att);
+            const isAttCT = roundCTs.has(att);
+            const isFriendlyKill = (isVicT && isAttT) || (isVicCT && isAttCT);
+
             if (pVic) pVic.deaths++;
 
-            if (pAtt && att !== vic && att !== "BOT") {
+            if (pAtt && att !== vic && att !== "BOT" && !isFriendlyKill) {
                 pAtt.kills++;
                 if (rAtt) rAtt.kills++;
 
@@ -1043,7 +1049,7 @@ export const parseDemoJson = (data: DemoData): Match => {
                     pVic.duels[aKey].deaths++;
                 }
             }
-            if (pAst && ast !== "BOT" && ast !== att && ast !== vic) {
+            if (pAst && ast !== "BOT" && ast !== att && ast !== vic && !isFriendlyKill) {
                  pAst.assists++;
                  if (rAst) rAst.assists = (rAst.assists || 0) + 1;
                  

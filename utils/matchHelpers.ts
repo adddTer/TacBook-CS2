@@ -7,9 +7,8 @@ import { MAPS } from '../constants/maps';
  * Returns true if ANY player in the match is found in the defined ROSTER.
  */
 export const isMyTeamMatch = (match: Match): boolean => {
-    // Check 'players' array (which parser puts 'My Team' in)
-    // We want to see if our core roster is present in the 'us' side.
-    return match.players.some(p => {
+    // Check both 'players' and 'enemyPlayers' arrays
+    return [...match.players, ...match.enemyPlayers].some(p => {
         return ROSTER.some(r => {
             if (r.id === p.playerId || r.name === p.playerId) return true;
             if (!p.steamid) return false;
@@ -98,8 +97,6 @@ const identifyTeam = (players: PlayerMatchStats[]): string | undefined => {
  * Helper to get display names for teams in a match.
  */
 export const getTeamNames = (match: Match): { teamA: string, teamB: string } => {
-    const isMine = isMyTeamMatch(match);
-    
     let teamA = match.teamNameUs;
     let teamB = match.teamNameThem;
 
@@ -109,11 +106,25 @@ export const getTeamNames = (match: Match): { teamA: string, teamB: string } => 
     if (identifiedTeamA) teamA = identifiedTeamA;
     if (identifiedTeamB) teamB = identifiedTeamB;
 
+    const isTeamAUs = match.players.some(p => ROSTER.some(r => 
+        r.id === p.playerId || r.name === p.playerId || 
+        (p.steamid && (r.steamids?.includes(String(p.steamid)) || 
+        (String(p.steamid).endsWith('00') && r.steamids?.some(id => id.startsWith(String(p.steamid).slice(0, -2)))) ||
+        (/^\d+$/.test(String(p.steamid)) && String(p.steamid).length < 16 && r.steamids?.includes((BigInt('76561197960265728') + BigInt(parseInt(String(p.steamid), 10))).toString()))))
+    ));
+    
+    const isTeamBUs = match.enemyPlayers.some(p => ROSTER.some(r => 
+        r.id === p.playerId || r.name === p.playerId || 
+        (p.steamid && (r.steamids?.includes(String(p.steamid)) || 
+        (String(p.steamid).endsWith('00') && r.steamids?.some(id => id.startsWith(String(p.steamid).slice(0, -2)))) ||
+        (/^\d+$/.test(String(p.steamid)) && String(p.steamid).length < 16 && r.steamids?.includes((BigInt('76561197960265728') + BigInt(parseInt(String(p.steamid), 10))).toString()))))
+    ));
+
     if (!teamA) {
-        teamA = isMine ? '我方' : 'Team A';
+        teamA = isTeamAUs ? '我方' : (isTeamBUs ? '敌方' : 'Team A');
     }
     if (!teamB) {
-        teamB = isMine ? '敌方' : 'Team B';
+        teamB = isTeamBUs ? '我方' : (isTeamAUs ? '敌方' : 'Team B');
     }
 
     return { teamA, teamB };

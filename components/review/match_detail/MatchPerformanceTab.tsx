@@ -91,12 +91,12 @@ export const MatchPerformanceTab: React.FC<MatchPerformanceTabProps> = ({ match,
                 >
                     <optgroup label={teamA}>
                         {match.players.map(p => (
-                            <option key={p.playerId} value={p.playerId}>{resolveName(p.playerId)}</option>
+                            <option key={p.playerId} value={p.playerId}>{p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId)}</option>
                         ))}
                     </optgroup>
                     <optgroup label={teamB}>
                         {match.enemyPlayers.map(p => (
-                            <option key={p.playerId} value={p.playerId}>{resolveName(p.playerId)}</option>
+                            <option key={p.playerId} value={p.playerId}>{p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId)}</option>
                         ))}
                     </optgroup>
                 </select>

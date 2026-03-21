@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { MatchTimelineEvent } from '../../types';
 import { formatTime, getWeaponName, Icons } from './TimelineHelpers';
+import { resolveName } from '../../utils/demo/helpers';
 
 interface TimelineEventRowProps {
     event: MatchTimelineEvent;
@@ -15,10 +16,16 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
     const [isExpanded, setIsExpanded] = useState(false);
     const timeStr = formatTime(event.seconds, timeMode, plantTime);
     
+    const getName = (subject?: { steamid: string, name: string }) => {
+        if (!subject) return undefined;
+        if (subject.name === 'World' || subject.name === 'BOT' || subject.name === 'Round Start' || subject.name === 'Round Start (Est)' || subject.name === 'Round Start (Auto-Fix)') return subject.name;
+        return subject.steamid && resolveName(subject.steamid) !== subject.steamid ? resolveName(subject.steamid) : subject.name;
+    };
+
     const isPostPlant = plantTime !== undefined && event.seconds >= plantTime;
     const isBombActive = isPostPlant && (bombEndTime === undefined || event.seconds < bombEndTime);
 
-    const isRoundStart = event.type === 'damage' && event.subject?.name === 'Round Start';
+    const isRoundStart = event.type === 'damage' && getName(event.subject) === 'Round Start';
 
     if (isRoundStart) {
         return (
@@ -50,14 +57,14 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
 
     if (event.type === 'kill') {
         const isBomb = event.weapon?.toLowerCase().includes('planted_c4') || event.weapon?.toLowerCase().includes('bomb');
-        const isWorld = event.subject?.name === 'World' || event.subject?.name === 'BOT' || isBomb;
-        const isSuicide = event.subject?.name === event.target?.name;
+        const isWorld = getName(event.subject) === 'World' || getName(event.subject) === 'BOT' || isBomb;
+        const isSuicide = getName(event.subject) === getName(event.target);
 
         iconBg = "bg-neutral-800 dark:bg-neutral-700 shadow-sm ring-1 ring-white/10";
         iconColor = "text-white";
         icon = <Icons.Kill />;
         
-        let killerName = event.subject?.name;
+        let killerName = getName(event.subject);
         let killerSide = event.subject?.side;
         
         if (isBomb) {
@@ -99,7 +106,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
                 <svg className="w-3 h-3 text-neutral-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
                 
                 <span className={`font-bold text-sm ${getPColor(event.target?.side)}`}>
-                    {event.target?.name}
+                    {getName(event.target)}
                 </span>
             </div>
         );
@@ -110,7 +117,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
             <div className="flex items-center gap-2 py-1.5">
                 <span className="font-bold text-red-600 dark:text-red-400 text-xs uppercase tracking-wider">C4 已安放</span>
                 <span className="w-1 h-1 rounded-full bg-neutral-300 dark:bg-neutral-700"></span>
-                <span className={`text-xs font-bold ${getPColor(event.subject?.side)}`}>{event.subject?.name}</span>
+                <span className={`text-xs font-bold ${getPColor(event.subject?.side)}`}>{getName(event.subject)}</span>
             </div>
         );
     } else if (event.type === 'defuse') {
@@ -120,7 +127,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
             <div className="flex items-center gap-2 py-1.5">
                 <span className="font-bold text-green-600 dark:text-green-400 text-xs uppercase tracking-wider">C4 已拆除</span>
                 <span className="w-1 h-1 rounded-full bg-neutral-300 dark:bg-neutral-700"></span>
-                <span className={`text-xs font-bold ${getPColor(event.subject?.side)}`}>{event.subject?.name}</span>
+                <span className={`text-xs font-bold ${getPColor(event.subject?.side)}`}>{getName(event.subject)}</span>
             </div>
         );
     } else if (event.type === 'explode') {
@@ -138,7 +145,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
                     {isFlash ? '闪光助攻' : '助攻'}
                 </span>
                 <span className={`font-medium ${getPColor(event.subject?.side)}`}>
-                    {event.subject?.name}
+                    {getName(event.subject)}
                 </span>
                 {event.damage && !isFlash && (
                     <span className="text-[10px] text-neutral-400 font-mono">
@@ -148,7 +155,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
              </div>
         );
     } else if (event.type === 'damage') {
-        const isWorld = event.subject?.name === 'World';
+        const isWorld = getName(event.subject) === 'World';
         const isBomb = event.weapon?.toLowerCase().includes('planted_c4') || event.weapon?.toLowerCase().includes('bomb');
         const isFall = event.weapon?.toLowerCase().includes('fall');
 
@@ -156,7 +163,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
         iconSize = "w-3 h-3"; // Tiny dot
         icon = null;
         
-        let sourceName = event.subject?.name;
+        let sourceName = getName(event.subject);
         let sourceSide = event.subject?.side;
         
         if (isWorld) {
@@ -171,7 +178,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
                 <span className={sourceSide ? getPColor(sourceSide) : "text-neutral-500 font-medium"}>{sourceName}</span>
                 <span className="font-mono text-red-400">-{event.damage}</span>
                 <span className="opacity-50">to</span>
-                <span className={getPColor(event.target?.side)}>{event.target?.name}</span>
+                <span className={getPColor(event.target?.side)}>{getName(event.target)}</span>
                 {event.weapon && !isWorld && <span className="opacity-50 text-[9px] italic">({getWeaponName(event.weapon)})</span>}
             </div>
         );

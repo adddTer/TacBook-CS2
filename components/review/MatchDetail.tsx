@@ -11,6 +11,7 @@ import { EconomyTab } from './EconomyTab';
 import { MatchPerformanceTab } from './match_detail/MatchPerformanceTab';
 import { isMyTeamMatch, getTeamNames, calculateScoreFromRounds } from '../../utils/matchHelpers';
 import { useAggregatedStats } from '../../hooks/useAggregatedStats';
+import { resolveName } from '../../utils/demo/helpers';
 
 interface MatchDetailProps {
     match: Match;
@@ -53,7 +54,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
         const rows: string[] = [headers.join(',')];
 
         const processPlayer = (p: PlayerMatchStats, teamName: string) => {
-            const name = (p as any).name || p.playerId;
+            const resolved = p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
+            const name = (p as any).name || resolved;
             const kdDiff = p.kills - p.deaths;
             const clutches = p.clutches || { '1v1': { won: 0 }, '1v2': { won: 0 }, '1v3': { won: 0 }, '1v4': { won: 0 }, '1v5': { won: 0 } };
             

@@ -8,7 +8,7 @@ import { getTeamNames } from '../utils/matchHelpers';
 import { resolveName } from '../utils/demo/helpers';
 
 const getRosterId = (p: PlayerMatchStats) => {
-    return resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
+    return p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
 };
 
 export const TBTVView: React.FC = () => {

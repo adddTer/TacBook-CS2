@@ -7,6 +7,7 @@ export interface RosterChange {
 }
 
 export const ROSTER_HISTORY: RosterChange[] = [
+    { date: '2026-03-21', type: 'in', player: 'FuNct1on', role: '道具手' },
     { date: '2026-03-14', type: 'bench', player: 'FuNct1on', role: '道具手' },
     { date: '2026-03-14', type: 'role_change', player: 'addd', role: '指挥/自由人' },
     { date: '2026-03-14', type: 'in', player: 'YinDaoMaYi', role: '补枪手' },

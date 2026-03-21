@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { PlayerMatchStats } from '../../types';
+import { resolveName } from '../../utils/demo/helpers';
 
 interface DuelsTabProps {
     players: PlayerMatchStats[];
@@ -19,7 +20,7 @@ export const DuelsTab: React.FC<DuelsTabProps> = ({ players, enemyPlayers }) => 
                             </th>
                             {enemyPlayers.map((enemy, i) => (
                                 <th key={i} className="p-2 text-center text-neutral-600 dark:text-neutral-300 font-bold border-b border-neutral-100 dark:border-neutral-800 w-20 min-w-[5rem] truncate">
-                                    {enemy.playerId}
+                                    {enemy.steamid && resolveName(enemy.steamid) !== enemy.steamid ? resolveName(enemy.steamid) : resolveName(enemy.playerId)}
                                 </th>
                             ))}
                         </tr>
@@ -28,7 +29,7 @@ export const DuelsTab: React.FC<DuelsTabProps> = ({ players, enemyPlayers }) => 
                         {players.map((p, i) => (
                             <tr key={i}>
                                 <td className="p-3 text-left font-bold text-neutral-900 dark:text-white sticky left-0 z-10 bg-white dark:bg-neutral-900 border-r border-neutral-100 dark:border-neutral-800 truncate w-28 min-w-[7rem]">
-                                    {p.playerId}
+                                    {p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId)}
                                 </td>
                                 {enemyPlayers.map((enemy, j) => {
                                     const record = (enemy.steamid && p.duels[enemy.steamid]) || { kills: 0, deaths: 0 };

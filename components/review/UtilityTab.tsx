@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { PlayerMatchStats } from '../../types';
+import { resolveName } from '../../utils/demo/helpers';
 
 interface UtilityTabProps {
     players: PlayerMatchStats[];
@@ -43,14 +44,14 @@ export const UtilityTab: React.FC<UtilityTabProps> = ({ players, enemyPlayers, t
                                 <div className="flex items-start gap-4">
                                     {/* Rank/Avatar */}
                                     <div className="w-12 h-12 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 text-lg font-black text-neutral-400">
-                                        {p.playerId[0]}
+                                        {(p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId))[0]}
                                     </div>
 
                                     <div className="flex-1 min-w-0">
                                         {/* Name & Throws */}
                                         <div className="flex justify-between items-center mb-4">
                                             <h4 className="font-bold text-sm text-neutral-900 dark:text-white truncate pr-2">
-                                                {p.playerId}
+                                                {p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId)}
                                             </h4>
                                             <div className="flex items-center gap-3 bg-neutral-50 dark:bg-neutral-800/50 px-2 py-1 rounded-lg">
                                                  <ThrowStat label="烟" count={p.utility.smokesThrown} />

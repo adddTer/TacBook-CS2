@@ -125,7 +125,7 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                     {sortedPlayers.map((p, idx) => {
                         const kdDiff = p.kills - p.deaths;
                         // Resolve roster ID if possible, otherwise use playerId (which is name) or steamid
-                        const rosterId = resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
+                        const rosterId = p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
                         const isRosterMember = ROSTER.some(r => r.id === rosterId);
                         const ratingColor = getRatingColorClass(p.rating, 'text');
                         
@@ -143,8 +143,8 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                         // WPA is already in percentage (e.g. 6.19 for 6.19%), so just format it
                         const wpaDisplay = wpaVal.toFixed(2);
 
-                        // If playerId is a SteamID (fallback), try to show something better if possible, but usually playerId is Name
-                        const displayName = p.playerId;
+                        // If playerId is a SteamID (fallback), try to show something better if possible
+                        const displayName = rosterId;
 
                         return (
                             <tr 

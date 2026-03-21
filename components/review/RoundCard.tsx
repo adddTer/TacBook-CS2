@@ -5,6 +5,7 @@ import { TimelineEventRow } from './TimelineEventRow';
 import { RoundTeamStats } from './RoundTeamStats';
 import { getWinReasonText, formatTime, Icons } from './TimelineHelpers';
 import { ROSTER } from '../../constants/roster';
+import { resolveName } from '../../utils/demo/helpers';
 
 interface RoundCardProps {
     round: MatchRound;
@@ -55,8 +56,9 @@ export const RoundCard: React.FC<RoundCardProps> = ({ round, isExpanded, onToggl
     const statsArray = Object.entries(round.playerStats).map(([sid, stats]) => {
         let name = sid;
         const pMatch = match.players.find(p => p.steamid === sid) || match.enemyPlayers.find(p => p.steamid === sid);
-        if (pMatch) name = pMatch.playerId;
-        else {
+        if (pMatch) {
+            name = pMatch.steamid && resolveName(pMatch.steamid) !== pMatch.steamid ? resolveName(pMatch.steamid) : resolveName(pMatch.playerId);
+        } else {
             const roster = ROSTER.find(r => r.id === sid || r.name === sid);
             if (roster) name = roster.id;
         }
