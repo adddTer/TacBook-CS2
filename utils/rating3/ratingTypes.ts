@@ -22,6 +22,7 @@ export interface RoundContext {
     impactPoints: number;
     killValue: number; // For Econ Rating
     killShareRating: number; // New: Accumulated kill share rating
+    survivalScore: number; // New: Dynamic survival score based on P_exp
     botKills: number; // New: Track kills against BOTs to exclude from rating
     rating: number; 
     wpa: number; // Accumulated WPA for this round

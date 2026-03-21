@@ -70,6 +70,10 @@ export class InventoryTracker {
         return this.endValues.get(sid) || 0;
     }
 
+    public getCurrentValue(sid: string): number {
+        return this.calculateValue(sid);
+    }
+
     public handlePlayerDeath(sid: string) {
         // When a player dies, they lose their inventory.
         // We clear it so subsequent snapshots (if death happens after round end) are accurate (0 value).
@@ -162,7 +166,8 @@ export class InventoryTracker {
         const items = this.inventory.get(String(sid));
         if (!items) return 0; // No items = 0 value (default pistol doesn't count)
 
-        let value = 0;
+        let armorValue = 0;
+        let maxWeaponValue = 0;
         
         items.forEach(item => {
             // Exclude default pistols from value calculation as per user request
@@ -170,12 +175,18 @@ export class InventoryTracker {
                 return;
             }
 
-            if (WEAPON_VALUES[item]) {
-                value += WEAPON_VALUES[item];
+            const itemValue = WEAPON_VALUES[item] || 0;
+
+            if (item === 'kevlar' || item === 'assaultsuit' || item === 'vest' || item === 'vesthelm') {
+                armorValue = Math.max(armorValue, itemValue);
+            } else {
+                // Assume everything else is a weapon/utility. We only want the most expensive one.
+                // Wait, the user said "最多计算一把". So we find the max value among non-armor items.
+                maxWeaponValue = Math.max(maxWeaponValue, itemValue);
             }
         });
 
-        return value;
+        return armorValue + maxWeaponValue;
     }
     
     public hasKit(sid: string): boolean {

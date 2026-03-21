@@ -24,9 +24,8 @@ export const calculateRoundRating = (stats: RoundContext, startEconomyValue: num
     const scoreWPA = 2.0 * W + 0.33;
 
     // 4. Survival (15% Weight)
-    // S = 1 if survived, 0 if died
-    const S = stats.survived ? 1 : 0;
-    const scoreSurv = 0.588 * S - 0.05;
+    // Dynamic survival score based on P_exp
+    const scoreSurv = stats.survivalScore;
 
     // 5. KAST (8% Weight)
     // A = 1 if KAST triggered, 0 otherwise

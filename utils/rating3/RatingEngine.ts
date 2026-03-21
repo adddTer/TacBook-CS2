@@ -5,6 +5,7 @@ import { HealthTracker } from "./HealthTracker";
 import { WPAEngine, type WPAUpdate } from "./WPAEngine";
 import { normalizeSteamId } from "../demo/helpers";
 import type { RoundContext } from "./ratingTypes"; // Changed from ./types
+import { getExpectedWinRate } from "./economy";
 import { calculateRoundRating } from "./rating/formula";
 
 export type { RoundContext }; 
@@ -51,6 +52,7 @@ export class RatingEngine {
                 impactPoints: 0, killValue: 0, rating: 0,
                 wpa: 0,
                 killShareRating: 0, // Init
+                survivalScore: 0.538, // Init to survived
                 botKills: 0 // Init
             });
         }
@@ -383,50 +385,27 @@ export class RatingEngine {
             // [Bug Fix] Check if victim had kit BEFORE clearing inventory
             const hasKit = this.inventory.hasKit(vic);
 
-            this.inventory.handlePlayerDeath(vic);
-            const vicStats = this.getRoundStats(vic);
-            vicStats.deaths++;
-            vicStats.survived = false;
-            
-            if (!this.firstKillHappened) {
-                vicStats.isEntryDeath = true;
-            }
-
-            // --- WPA Calculation ---
-            // Robust Side Detection for Victim
+            // --- Robust Side Detection ---
             let victimSide: 'T' | 'CT' | undefined;
-            
-            // 1. Check alive sets first (most accurate for current state tracking)
             if (aliveTs.has(vic)) victimSide = 'T';
             else if (aliveCTs.has(vic)) victimSide = 'CT';
-            
-            // 2. Then round roster (accumulated cache)
             else if (this.knownRoundTs.has(vic)) victimSide = 'T';
             else if (this.knownRoundCTs.has(vic)) victimSide = 'CT';
-            
-            // 3. Fallback to event properties (least reliable but necessary for incomplete data)
             if (!victimSide) {
                 const teamNum = event.user_team_num || event.team_num || event.team;
                 if (teamNum == 2) victimSide = 'T';
                 if (teamNum == 3) victimSide = 'CT';
             }
-
-            // 4. Ultimate Fallback: Deduce from teammates (User Request Step 3)
             if (!victimSide) {
-                // Try to determine 'Our Side' from known players
                 let ourSide: 'T' | 'CT' | undefined;
-                // Check known T's for a teammate
                 for (const id of this.knownRoundTs) { if (teammateSteamIds.has(id)) { ourSide = 'T'; break; } }
-                // Check known CT's
                 if (!ourSide) for (const id of this.knownRoundCTs) { if (teammateSteamIds.has(id)) { ourSide = 'CT'; break; } }
-                
                 if (ourSide) {
                     const isTeammate = teammateSteamIds.has(vic);
                     victimSide = isTeammate ? ourSide : (ourSide === 'T' ? 'CT' : 'T');
                 }
             }
-            
-            // Determine Attacker Side
+
             let attackerSide: 'T' | 'CT' | undefined;
             if (aliveTs.has(att)) attackerSide = 'T';
             else if (aliveCTs.has(att)) attackerSide = 'CT';
@@ -434,7 +413,24 @@ export class RatingEngine {
             else if (this.knownRoundCTs.has(att)) attackerSide = 'CT';
             
             const isFriendlyKill = attackerSide && victimSide && attackerSide === victimSide;
+            const isWorldOrSuicide = att === vic || att === "World" || att === "0" || !att;
+
+            // --- Survival Score Calculation ---
+            const vicValue = this.inventory.getCurrentValue(vic);
+            const attValue = this.inventory.getCurrentValue(att);
+            const pExpVictim = getExpectedWinRate(vicValue, attValue, victimSide || 'T', !!isFriendlyKill, isWorldOrSuicide);
+
+            this.inventory.handlePlayerDeath(vic);
+            const vicStats = this.getRoundStats(vic);
+            vicStats.deaths++;
+            vicStats.survived = false;
+            vicStats.survivalScore = -0.10 * pExpVictim;
             
+            if (!this.firstKillHappened) {
+                vicStats.isEntryDeath = true;
+            }
+
+            // --- WPA Calculation ---
             if (victimSide) {
                 const assisters = [];
                 if (ast && ast !== "BOT" && ast !== "0") {
@@ -515,12 +511,9 @@ export class RatingEngine {
                     const DAMAGE_SHARE = 0.4;
                     const MAX_TRADE_TICKS = 512; // 8 seconds at 64 tick
 
-                    // --- Economy Modifier ---
-                    const vicValue = this.inventory.getStartValue(vic);
-                    const attValue = this.inventory.getStartValue(att);
-                    // E = log2(1 + VictimValue / (KillerValue + 500))
-                    let E = Math.log2(1 + (vicValue / (attValue + 500)));
-                    E = Math.max(0.2, Math.min(2.5, E)); // Cap to prevent extreme outliers
+                    // --- Economy Modifier (Expected Win Rate) ---
+                    const pExpKiller = getExpectedWinRate(attValue, vicValue, attackerSide || 'CT', !!isFriendlyKill, isWorldOrSuicide);
+                    let E = 0.5 / pExpKiller;
 
                     // NEW: Friendly Fire Penalty Multiplier
                     const multiplier = isFriendlyKill ? -1.0 : 1.0;

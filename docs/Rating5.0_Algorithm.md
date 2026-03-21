@@ -23,7 +23,7 @@ The new Rating 5.0 formula is derived from expected values to ensure a natural b
 | :--- | :--- | :--- | :--- | :--- |
 | **Kill Share** | 40% | $K$ (Kill Value) | $1.0 \times K - 0.25$ | Combines Kill, Damage, Economy, and Trade Compensation. |
 | **WPA** | 33% | $W$ (WPA Net) | $2.0 \times W + 0.33$ | Win Probability Added (-0.5 to +0.5). Base 0.33 for 0 WPA. |
-| **Survival** | 15% | $S$ (1 or 0) | $0.588 \times S - 0.05$ | 1 if survived, 0 if died. |
+| **Survival** | 15% | $S$ (Dynamic) | $0.538$ or $-0.10 \times P_{exp}$ | 0.538 if survived, dynamic penalty if died based on expected win rate. |
 | **KAST** | 8% | $A$ (1 or 0) | $0.178 \times A - 0.05$ | 1 if Kill, Assist, Survived, or Traded. |
 | **Multi-Kill** | 4% | $M$ (Extra Kills) | $0.272 \times M - 0.02$ | $M = \max(0, \text{kills} - 1)$. |
 
@@ -31,12 +31,22 @@ The new Rating 5.0 formula is derived from expected values to ensure a natural b
 
 ## Detailed Calculation Logic
 
-### 1. Economy Modifier ($E$)
-Calculated for every kill to scale its value based on investment.
-$$E = \log_2\left(1 + \frac{\text{VictimValue}}{\text{KillerValue} + 500}\right)$$
-*Bounded between 0.2 and 2.5 to prevent extreme outliers.*
+### 1. Economy Modifier ($E_{kill}$)
+Calculated for every kill to scale its value based on investment, using an Expected Win Rate ($P_{exp}$) matrix derived from HLTV big data.
+The matrix defines the theoretical win rate of a T player against a CT player based on their equipment value tiers (Armor + Most Expensive Weapon).
 
-### 2. Trade Compensation ($C_t$)
+$$E_{kill} = \frac{0.5}{P_{exp\_killer}}$$
+
+*   $P_{exp\_killer}$ is the expected win rate of the killer against the victim.
+*   The result naturally floats between ~0.64 and ~2.5.
+
+### 2. Survival / Death Penalty
+Replaces the static survival score with a dynamic penalty based on the expected win rate at the time of death.
+*   **Survived**: $Score_{surv} = 0.538$
+*   **Died**: $Score_{surv} = -0.10 \times P_{exp\_victim}$ (where $P_{exp\_victim}$ is the expected win rate of the victim against their killer).
+*   **Suicide/World Death**: $P_{exp\_victim} = 0.50$, resulting in a $-0.05$ penalty.
+
+### 3. Trade Compensation ($C_t$)
 If a teammate is killed by the victim within the last 8 seconds ($t \le 8$), they receive compensation.
 $$C(t) = 0.40 \times e^{-0.47t}$$
 *   0s $\approx$ 40%
@@ -45,16 +55,16 @@ $$C(t) = 0.40 \times e^{-0.47t}$$
 *   3s $\approx$ 10%
 *   8s $\approx$ 0.9%
 
-### 3. Kill Share Distribution
+### 4. Kill Share Distribution
 For a single kill, the value is distributed as follows:
 
-1.  **Bait (Traded Teammate)**: Receives $C(t) \times E$.
+1.  **Bait (Traded Teammate)**: Receives $C(t) \times E_{kill}$.
 2.  **Remaining Pool ($V_{rem}$)**: $1.0 - C(t)$.
-3.  **Killer Base Share**: Receives $0.6 \times V_{rem} \times E$.
+3.  **Killer Base Share**: Receives $0.6 \times V_{rem} \times E_{kill}$.
 4.  **Assist Pool**: $0.4 \times V_{rem}$. Distributed by weight:
     *   1 Damage = 1 Weight
     *   1 Flash Assist = 30 Weight
-    *   *Damage share is multiplied by $E$, Flash share is NOT.*
+    *   *Damage share is multiplied by $E_{kill}$, Flash share is NOT.*
 
 **Friendly Fire / Team Kill Penalty**:
 If a player kills a teammate, the Kill Share mechanism is inverted to penalize the offending team and reward the opposing team and the victim, mirroring the WPA system:
@@ -62,7 +72,7 @@ If a player kills a teammate, the Kill Share mechanism is inverted to penalize t
 *   The **victim** receives a positive Kill Share Rating exactly equal to the total penalty applied to the perpetrators.
 *   The **surviving players on the opposing team** evenly split a positive Kill Share Rating exactly equal to the total penalty applied to the perpetrators.
 
-### 4. Round Rating Formula
+### 5. Round Rating Formula
 The final rating for a player in a single round is the sum of the five components, multiplied by a global normalization coefficient.
 $$Rating = (Score_{kill} + Score_{wpa} + Score_{surv} + Score_{kast} + Score_{multi}) \times 1.16$$
 
