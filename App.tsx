@@ -23,6 +23,7 @@ import { useTactics } from './hooks/useTactics';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useAppStorage } from './hooks/useAppStorage'; 
 import { Side, MapId, Tactic, Tag, Utility, Theme } from './types';
+import { safeStorage } from './utils/storage';
 
 const App: React.FC = () => {
   // --- Global App State ---
@@ -31,7 +32,7 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'economy' | 'events' | 'training'>('tactics');
   const [theme, setTheme] = useState<Theme>('system');
   const [utilityViewMode, setUtilityViewMode] = useState<'detail' | 'accordion'>('detail');
-  const [isDebug, setIsDebug] = useState(false);
+  const [isDebug, setIsDebug] = useState(true);
 
   // --- Data Management Hook ---
   const { 
@@ -109,11 +110,11 @@ const App: React.FC = () => {
   
   // Load Preferences
   useEffect(() => {
-    const savedUtilMode = localStorage.getItem('tacbook_utility_view_mode') as 'detail' | 'accordion';
+    const savedUtilMode = safeStorage.getItem('tacbook_utility_view_mode') as 'detail' | 'accordion';
     if (savedUtilMode) setUtilityViewMode(savedUtilMode);
-    const savedTheme = localStorage.getItem('tacbook_theme') as Theme;
+    const savedTheme = safeStorage.getItem('tacbook_theme') as Theme;
     if (savedTheme) setTheme(savedTheme);
-    if (!!process.env.API_KEY || !!localStorage.getItem('tacbook_gemini_api_key')) setIsDebug(true);
+    setIsDebug(true); // Always enable statistics interface
   }, []);
 
   // Apply Theme
@@ -171,12 +172,12 @@ const App: React.FC = () => {
 
   const handleUtilityViewModeChange = (mode: 'detail' | 'accordion') => {
       setUtilityViewMode(mode);
-      localStorage.setItem('tacbook_utility_view_mode', mode);
+      safeStorage.setItem('tacbook_utility_view_mode', mode);
   };
 
   const handleThemeChange = (newTheme: Theme) => {
       setTheme(newTheme);
-      localStorage.setItem('tacbook_theme', newTheme);
+      safeStorage.setItem('tacbook_theme', newTheme);
   };
 
   const handleCopyId = (e: React.MouseEvent, id: string) => {

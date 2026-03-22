@@ -31,6 +31,8 @@ import { exportPlayersToJson } from '../utils/exportPlayers';
 import { calculatePlayerStats } from '../utils/analytics/playerStatsCalculator';
 import { identifyRole } from '../utils/analytics/roleIdentifier';
 
+import { safeStorage } from '../utils/storage';
+
 interface ReviewViewProps {
     allMatches: Match[];
     allSeries: MatchSeries[];
@@ -70,8 +72,8 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     
     // Check for parser updates
     useEffect(() => {
-        const CURRENT_PARSER_VERSION = '1.0.0';
-        const autoUpdate = localStorage.getItem('autoUpdateMatches') !== 'false';
+        const CURRENT_PARSER_VERSION = '1.1.0';
+        const autoUpdate = safeStorage.getItem('autoUpdateMatches') !== 'false';
         
         if (autoUpdate) {
             allMatches.forEach(match => {

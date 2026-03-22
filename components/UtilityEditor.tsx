@@ -4,6 +4,7 @@ import { Utility, Side, Site, MapId, ImageAttachment, UtilityTolerance, ContentG
 import { generateId } from '../utils/idGenerator';
 import { compressImage } from '../utils/imageHelper';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
+import { safeStorage } from '../utils/storage';
 
 interface UtilityEditorProps {
   initialUtility?: Utility;
@@ -14,7 +15,7 @@ interface UtilityEditorProps {
   writableGroups: ContentGroup[];
 }
 
-const getDefaultAuthor = () => localStorage.getItem('tacbook_default_author') || '';
+const getDefaultAuthor = () => safeStorage.getItem('tacbook_default_author') || '';
 
 export const UtilityEditor: React.FC<UtilityEditorProps> = ({
   initialUtility,

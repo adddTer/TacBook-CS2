@@ -73,10 +73,9 @@ If a player kills a teammate, the Kill Share mechanism is inverted to penalize t
 *   The **surviving players on the opposing team** evenly split a positive Kill Share Rating exactly equal to the total penalty applied to the perpetrators.
 
 ### 5. Round Rating Formula
-The final rating for a player in a single round is the sum of the five components, multiplied by a global normalization coefficient.
-$$Rating = (Score_{kill} + Score_{wpa} + Score_{surv} + Score_{kast} + Score_{multi}) \times 1.16$$
+The final rating for a player in a single round is the sum of the five components.
+$$Rating = Score_{kill} + Score_{wpa} + Score_{surv} + Score_{kast} + Score_{multi}$$
 
-*   **Global Normalization**: A coefficient of `1.16` is applied to align the average rating with the community standard of ~1.00.
 *   **Baseline**: An average round yields ~1.0 Rating.
 *   **High Impact**: A 1v2 Clutch (+40% WPA, 2 Kills) yields a massive rating boost.
 *   **Empty Frags**: Exit kills in a lost round (0% WPA) yield significantly lower ratings than impactful kills.

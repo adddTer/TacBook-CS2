@@ -18,6 +18,8 @@ import { PlayerMatchHistory } from './player_detail/PlayerMatchHistory';
 import { PlayerAiReportModal } from './player_detail/PlayerAiReportModal';
 import { identifyRole } from '../../utils/analytics/roleIdentifier';
 
+import { safeStorage } from '../../utils/storage';
+
 interface PlayerDetailProps {
     profile: any;
     history: { match: Match, stats: PlayerMatchStats }[];
@@ -55,7 +57,7 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
     // Load saved report from localStorage on mount or when key filters change
     useEffect(() => {
         const key = `tacbook_ai_report_v2_${profile.id}_${sideFilter}`; 
-        const saved = localStorage.getItem(key);
+        const saved = safeStorage.getItem(key);
         if (saved) {
             try {
                 setAnalysis(JSON.parse(saved));
@@ -92,7 +94,7 @@ export const PlayerDetail: React.FC<PlayerDetailProps> = ({ profile, history, on
             setAnalysis(result);
             // Save to localStorage
             const key = `tacbook_ai_report_v2_${profile.id}_${sideFilter}`;
-            localStorage.setItem(key, JSON.stringify(result));
+            safeStorage.setItem(key, JSON.stringify(result));
             
         } catch (e: any) {
             console.error(e);

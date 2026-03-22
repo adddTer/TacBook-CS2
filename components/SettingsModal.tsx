@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Theme } from '../types';
+import { safeStorage } from '../utils/storage';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -31,20 +32,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [autoUpdate, setAutoUpdate] = useState(true);
 
   useEffect(() => {
-      const saved = localStorage.getItem('tacbook_default_author');
+      const saved = safeStorage.getItem('tacbook_default_author');
       if (saved) setDefaultAuthor(saved);
-      const savedAutoUpdate = localStorage.getItem('autoUpdateMatches');
+      const savedAutoUpdate = safeStorage.getItem('autoUpdateMatches');
       if (savedAutoUpdate !== null) setAutoUpdate(savedAutoUpdate === 'true');
   }, [isOpen]);
 
   const handleAuthorChange = (val: string) => {
       setDefaultAuthor(val);
-      localStorage.setItem('tacbook_default_author', val);
+      safeStorage.setItem('tacbook_default_author', val);
   };
 
   const handleAutoUpdateChange = (val: boolean) => {
       setAutoUpdate(val);
-      localStorage.setItem('autoUpdateMatches', val.toString());
+      safeStorage.setItem('autoUpdateMatches', val.toString());
   };
 
   if (!isOpen) return null;

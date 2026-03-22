@@ -13,6 +13,7 @@ import { exportTacticToZip } from '../utils/exportHelper';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
 import { ShareOptionsModal } from './ShareOptionsModal';
 import html2canvas from 'html2canvas';
+import { safeStorage } from '../utils/storage';
 
 interface TacticEditorProps {
   initialTactic?: Tactic;
@@ -26,7 +27,7 @@ interface TacticEditorProps {
 const DRAFT_KEY = 'tacbook_tactic_draft';
 
 // Helper to get default author
-const getDefaultAuthor = () => localStorage.getItem('tacbook_default_author') || '';
+const getDefaultAuthor = () => safeStorage.getItem('tacbook_default_author') || '';
 
 export const TacticEditor: React.FC<TacticEditorProps> = ({
   initialTactic,
@@ -88,7 +89,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
       }
     } else {
       // New Tactic
-      const draft = localStorage.getItem(DRAFT_KEY);
+      const draft = safeStorage.getItem(DRAFT_KEY);
       if (draft) {
           try {
               const parsed = JSON.parse(draft);
@@ -113,7 +114,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
   // Save draft
   useEffect(() => {
      if (!initialTactic) {
-         localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+         safeStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
      }
   }, [formData, initialTactic]);
 
@@ -183,7 +184,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
   const handleSaveToGroup = () => {
       if (!validate()) return;
       onSave(formData as Tactic, targetGroupId);
-      if (!initialTactic) localStorage.removeItem(DRAFT_KEY);
+      if (!initialTactic) safeStorage.removeItem(DRAFT_KEY);
   };
 
   const prepareExport = async () => {

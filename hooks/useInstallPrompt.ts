@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from 'react';
+import { safeStorage } from '../utils/storage';
 
 export const useInstallPrompt = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -22,7 +23,7 @@ export const useInstallPrompt = () => {
     
     // On iOS, show prompt automatically after delay IF NOT DISMISSED
     if (isIosDevice) {
-        const isDismissed = localStorage.getItem('tacbook_install_dismissed');
+        const isDismissed = safeStorage.getItem('tacbook_install_dismissed');
         if (!isDismissed) {
             setTimeout(() => setShowPrompt(true), 3000);
         }
@@ -34,7 +35,7 @@ export const useInstallPrompt = () => {
       setDeferredPrompt(e);
       
       // Only auto-show if not dismissed
-      const isDismissed = localStorage.getItem('tacbook_install_dismissed');
+      const isDismissed = safeStorage.getItem('tacbook_install_dismissed');
       if (!isDismissed) {
           setTimeout(() => setShowPrompt(true), 3000);
       }
@@ -66,7 +67,7 @@ export const useInstallPrompt = () => {
 
   const closePrompt = () => {
       setShowPrompt(false);
-      localStorage.setItem('tacbook_install_dismissed', 'true');
+      safeStorage.setItem('tacbook_install_dismissed', 'true');
   };
 
   return {

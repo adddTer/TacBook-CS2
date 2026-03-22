@@ -2,6 +2,7 @@
 import { Side } from "../../types";
 import type { WPAUpdate } from "./ratingTypes"; // Changed from ./types
 import { MATRIX_PRE, MATRIX_POST, COEFF } from "./wpa/constants";
+import { getExpectedWinRate } from "./economy";
 
 export type { WPAUpdate }; 
 
@@ -9,8 +10,6 @@ export class WPAEngine {
     // State
     private tAlive: number = 5;
     private ctAlive: number = 5;
-    private tHealth: number = 500;
-    private ctHealth: number = 500;
     
     private isPlanted: boolean = false;
     private plantTime: number = 0; 
@@ -42,8 +41,6 @@ export class WPAEngine {
     public reset() {
         this.tAlive = 5;
         this.ctAlive = 5;
-        this.tHealth = 500;
-        this.ctHealth = 500;
         this.isPlanted = false;
         this.isDefusedState = false;
         this.isExplodedState = false;
@@ -61,11 +58,14 @@ export class WPAEngine {
     }
 
     public initializeRound(tEquip: number, ctEquip: number) {
-        const diff = tEquip - ctEquip;
-        const sign = Math.sign(diff);
-        const magnitude = Math.log(1 + Math.abs(diff) / COEFF.ECON_NORM);
+        const tAvg = tEquip / 5;
+        const ctAvg = ctEquip / 5;
         
-        this.roundStartEconMod = (sign * magnitude * COEFF.ECONOMY) || 0;
+        const expectedTWinRate = getExpectedWinRate(tAvg, ctAvg, 'T', false, false);
+        
+        // Base T win rate for 5v5 is MATRIX_PRE[5][5] = 0.488
+        this.roundStartEconMod = expectedTWinRate - 0.488;
+        
         // Recalculate initial prob with new econ mod
         this.currentWinProb = this.calculateWinProb();
     }
@@ -215,11 +215,6 @@ export class WPAEngine {
             }
         }
 
-        // Health Modifier
-        const hpDiff = this.tHealth - this.ctHealth;
-        const hpMod = COEFF.HEALTH * (hpDiff / 500.0);
-        p += hpMod;
-
         return Math.max(0.0, Math.min(1.0, p));
     }
 
@@ -230,43 +225,9 @@ export class WPAEngine {
         damage: number, timeElapsed: number,
         allTs: string[], allCTs: string[]
     ): WPAUpdate[] {
-        this.updateRoundTime(timeElapsed); 
-        
-        // Always update victim's health
-        if (victimSide === 'T') this.tHealth = Math.max(0, this.tHealth - damage);
-        else this.ctHealth = Math.max(0, this.ctHealth - damage);
-        
-        const isFriendlyFire = attackerSide === victimSide;
-        
-        if (isFriendlyFire) {
-            const prevProb = this.currentWinProb;
-            const newProb = this.calculateWinProb();
-            this.currentWinProb = newProb;
-            
-            const probDelta = newProb - prevProb;
-            const totalPoints = probDelta * COEFF.SCALING;
-            
-            const updates: WPAUpdate[] = [];
-            if (Math.abs(totalPoints) < 0.001) return [];
-            
-            // If T damages T, T win prob decreases (probDelta < 0), totalPoints < 0.
-            // If CT damages CT, T win prob increases (probDelta > 0), totalPoints > 0.
-            const killerTeamLoss = attackerSide === 'T' ? totalPoints : -totalPoints; // Should be negative
-            const opposingTeamGain = -killerTeamLoss; // Should be positive
-            
-            // Penalize the attacker
-            updates.push({ sid: attackerSid, delta: killerTeamLoss, reason: 'friendly_damage' });
-            
-            // Reward the opposing team
-            const opposingTeam = attackerSide === 'T' ? allCTs : allTs;
-            this.distributeToSide(opposingTeamGain, opposingTeam, updates);
-            
-            return updates;
-        }
-
-        return this.generateUpdates(
-            [attackerSid], [], victimSid, allTs, allCTs, 'damage'
-        );
+        // Health modifier is removed, so damage does not directly affect WPA anymore.
+        // We still process time decay up to this point.
+        return this.handleTimeUpdate(timeElapsed, allTs, allCTs);
     }
 
     public handleKill(
@@ -281,8 +242,10 @@ export class WPAEngine {
         contributorSides: Map<string, 'T' | 'CT'> = new Map(), // NEW
         survivingKillerTeam: string[] = [] // NEW
     ): WPAUpdate[] {
-        this.updateRoundTime(timeElapsed); 
+        // 1. Process time decay BEFORE the kill
+        const timeUpdates = this.handleTimeUpdate(timeElapsed, allTs, allCTs);
 
+        // 2. Now process the kill
         // Update Alive Counts BEFORE calculation to get new state probability
         if (victimSide === 'T') this.tAlive--;
         else {
@@ -311,7 +274,7 @@ export class WPAEngine {
              // Penalize BOT (victim) directly
              updates.push({ sid: victimSid, delta: -Math.abs(totalPoints), reason: 'bot_death' });
              
-             return updates;
+             return [...timeUpdates, ...updates];
         }
         
         const isFriendlyKill = attackerSide === victimSide;
@@ -325,7 +288,7 @@ export class WPAEngine {
             const totalPoints = probDelta * COEFF.SCALING;
             
             const updates: WPAUpdate[] = [];
-            if (Math.abs(totalPoints) < 0.001) return [];
+            if (Math.abs(totalPoints) < 0.001) return timeUpdates;
             
             // If T kills T, T win prob decreases (probDelta < 0), totalPoints < 0.
             // If CT kills CT, T win prob increases (probDelta > 0), totalPoints > 0.
@@ -339,10 +302,10 @@ export class WPAEngine {
             const opposingTeam = attackerSide === 'T' ? allCTs : allTs;
             this.distributeToSide(opposingTeamGain, opposingTeam, updates);
             
-            return updates;
+            return [...timeUpdates, ...updates];
         }
 
-        return this.generateUpdates(
+        const killUpdates = this.generateUpdates(
             [killerSid], 
             assisters.map(a => ({ sid: a.sid, weight: a.isFlash ? 0.35 : 0.25 })),
             victimSid,
@@ -351,6 +314,8 @@ export class WPAEngine {
             { killerSid, attackerSide, damageContributors, assisters, contributorSides, survivingKillerTeam },
             currentTick
         );
+        
+        return [...timeUpdates, ...killUpdates];
     }
 
     public handleDefuseStart(sid: string, hasKit: boolean) {
@@ -367,18 +332,13 @@ export class WPAEngine {
         const prevProb = this.currentWinProb;
         const newProb = this.calculateWinProb();
         
-        // Optimization: Ignore small time decays to reduce noise
-        if (Math.abs(newProb - prevProb) < 0.005) {
-            // Even if small, we MUST update currentWinProb so the next event doesn't inherit the drift
-            this.currentWinProb = newProb;
-            return [];
-        }
-        
         this.currentWinProb = newProb;
         const probDelta = newProb - prevProb;
         const totalPoints = probDelta * COEFF.SCALING;
         
         const updates: WPAUpdate[] = [];
+        
+        if (Math.abs(totalPoints) < 0.001) return [];
         
         // Distribute time decay impact to teams
         // If T Win Prob increases (probDelta > 0), T gains, CT loses.
@@ -403,12 +363,12 @@ export class WPAEngine {
         allTs: string[], allCTs: string[],
         ctKitsCount?: number
     ): WPAUpdate[] {
-        this.updateRoundTime(timeElapsed);
+        const timeUpdates = this.handleTimeUpdate(timeElapsed, allTs, allCTs);
 
         if (type === 'plant') {
             // FIX: Prevent double plant events (e.g. from bugs or weird demo data) from resetting state
             if (this.isPlanted) {
-                return [];
+                return timeUpdates;
             }
             this.isPlanted = true;
             this.plantTime = timeElapsed; 
@@ -419,16 +379,18 @@ export class WPAEngine {
             this.tAlive = 0; // Defuse = Immediate Loss for T
         }
 
-        return this.generateUpdates(
+        const objUpdates = this.generateUpdates(
             [playerSid], [], null, allTs, allCTs, type
         );
+        
+        return [...timeUpdates, ...objUpdates];
     }
 
     public handleExplosion(
         timeElapsed: number,
         allTs: string[], allCTs: string[]
     ): WPAUpdate[] {
-        this.updateRoundTime(timeElapsed);
+        const timeUpdates = this.handleTimeUpdate(timeElapsed, allTs, allCTs);
         
         const prevProb = this.currentWinProb;
         this.isExplodedState = true; // Force 1.0
@@ -440,7 +402,7 @@ export class WPAEngine {
         
         const updates: WPAUpdate[] = [];
         
-        if (Math.abs(totalPoints) < 0.001) return [];
+        if (Math.abs(totalPoints) < 0.001) return timeUpdates;
         
         // Distribute Gain to T Team
         this.distributeToSide(totalPoints, allTs, updates);
@@ -448,7 +410,7 @@ export class WPAEngine {
         // Distribute Loss to CT Team
         this.distributeToSide(-totalPoints, allCTs, updates);
         
-        return updates;
+        return [...timeUpdates, ...updates];
     }
 
     public finalizeRound(winnerSide: 'T' | 'CT', allTs: string[], allCTs: string[]): WPAUpdate[] {

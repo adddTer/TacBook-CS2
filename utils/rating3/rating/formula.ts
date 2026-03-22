@@ -36,9 +36,6 @@ export const calculateRoundRating = (stats: RoundContext, startEconomyValue: num
     // Summation
     let roundRating = scoreKill + scoreMulti + scoreWPA + scoreSurv + scoreKast;
 
-    // Global Normalization
-    roundRating *= 1.16;
-
     // Impact calculation (for display purposes)
     // Impact focuses on multi-kills, positive WPA, and raw kill share
     const impact = scoreMulti + Math.max(0, scoreWPA - 0.33) + (K * 0.5);

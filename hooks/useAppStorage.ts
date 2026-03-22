@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { ContentGroup, Tactic, Utility, Match, MatchSeries, Tournament } from '../types';
 import { generateGroupId } from '../utils/idGenerator';
 import { loadGroupsFromDB, saveGroupsToDB } from '../utils/db';
+import { safeStorage } from '../utils/storage';
 
 export const useAppStorage = () => {
     const [groups, setGroups] = useState<ContentGroup[]>([]);
@@ -23,7 +24,7 @@ export const useAppStorage = () => {
 
             // 2. Migration: If DB is empty, check LocalStorage (Old Storage)
             if (!loadedGroups) {
-                const savedGroupsStr = localStorage.getItem('tacbook_groups');
+                const savedGroupsStr = safeStorage.getItem('tacbook_groups');
                 if (savedGroupsStr) {
                     try {
                         const parsedGroups = JSON.parse(savedGroupsStr);
@@ -32,7 +33,7 @@ export const useAppStorage = () => {
                             // Migrate: Save to DB immediately
                             await saveGroupsToDB(loadedGroups!);
                             // Clear legacy storage to free up space/memory
-                            localStorage.removeItem('tacbook_groups');
+                            safeStorage.removeItem('tacbook_groups');
                             console.log("Migrated data from LocalStorage to IndexedDB");
                         }
                     } catch (e) {
@@ -53,7 +54,7 @@ export const useAppStorage = () => {
             }
 
             // Load Active IDs (Keep this in localStorage as it's small config data)
-            const savedActiveIdsStr = localStorage.getItem('tacbook_active_group_ids');
+            const savedActiveIdsStr = safeStorage.getItem('tacbook_active_group_ids');
             let hasLoadedActiveIds = false;
             
             if (savedActiveIdsStr) {
@@ -112,7 +113,7 @@ export const useAppStorage = () => {
             if (validActiveIds.length !== activeGroupIds.length) {
                 setActiveGroupIds(validActiveIds);
             } else {
-                localStorage.setItem('tacbook_active_group_ids', JSON.stringify(activeGroupIds));
+                safeStorage.setItem('tacbook_active_group_ids', JSON.stringify(activeGroupIds));
             }
         }
     }, [activeGroupIds, groups, isDataLoaded]);

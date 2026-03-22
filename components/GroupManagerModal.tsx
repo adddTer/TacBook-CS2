@@ -6,6 +6,7 @@ import { generateGroupId } from '../utils/idGenerator';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
 import { ConfirmModal } from './ConfirmModal';
 import { ShareOptionsModal } from './ShareOptionsModal';
+import { safeStorage } from '../utils/storage';
 
 interface GroupManagerModalProps {
     isOpen: boolean;
@@ -197,7 +198,7 @@ export const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                     description: formDesc,
                     version: 1,
                     isReadOnly: false,
-                    author: localStorage.getItem('tacbook_default_author') || 'User',
+                    author: safeStorage.getItem('tacbook_default_author') || 'User',
                     lastUpdated: Date.now()
                 },
                 tactics: [],
