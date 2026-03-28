@@ -9,6 +9,7 @@ import { ClutchesTab } from './ClutchesTab';
 import { TimelineTab } from './TimelineTab';
 import { EconomyTab } from './EconomyTab';
 import { MatchPerformanceTab } from './match_detail/MatchPerformanceTab';
+import { WPAPlusTab } from './WPAPlusTab';
 import { isMyTeamMatch, getTeamNames, calculateScoreFromRounds } from '../../utils/matchHelpers';
 import { useAggregatedStats } from '../../hooks/useAggregatedStats';
 import { resolveName } from '../../utils/demo/helpers';
@@ -26,7 +27,7 @@ type SideFilter = 'ALL' | 'CT' | 'T';
 // --- MAIN CONTAINER ---
 
 export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlayerClick, onDelete, onShare }) => {
-    const [detailTab, setDetailTab] = useState<'overview' | 'performance' | 'duels' | 'utility' | 'clutches' | 'timeline'>('overview');
+    const [detailTab, setDetailTab] = useState<'overview' | 'performance' | 'duels' | 'utility' | 'clutches' | 'timeline' | 'wpa'>('overview');
     const [sideFilter, setSideFilter] = useState<SideFilter>('ALL');
     const [showDefinitions, setShowDefinitions] = useState(false);
 
@@ -173,14 +174,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
 
                 {/* Tab Navigation */}
                 <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl mb-6 sticky top-0 z-20 shadow-lg shadow-neutral-100/50 dark:shadow-black/20 overflow-x-auto">
-                      {['overview', 'performance', 'timeline', 'duels', 'utility', 'clutches'].map((t) => (
+                      {['overview', 'performance', 'timeline', 'duels', 'utility', 'clutches', 'wpa'].map((t) => (
                           <button
                             key={t}
                             onClick={() => setDetailTab(t as any)}
                             className={`flex-1 py-2.5 px-2 rounded-lg text-xs font-bold transition-all capitalize whitespace-nowrap
                                 ${detailTab === t ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
                           >
-                              {t === 'overview' ? '战报' : t === 'performance' ? '表现' : t === 'timeline' ? '时间轴' : t === 'duels' ? '对位' : t === 'utility' ? '道具' : '残局'}
+                              {t === 'overview' ? '战报' : t === 'performance' ? '表现' : t === 'timeline' ? '时间轴' : t === 'duels' ? '对位' : t === 'utility' ? '道具' : t === 'clutches' ? '残局' : 'WPA+'}
                           </button>
                       ))}
                 </div>
@@ -219,6 +220,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                     {detailTab === 'duels' && <DuelsTab players={match.players} enemyPlayers={match.enemyPlayers} />}
                     {detailTab === 'utility' && <UtilityTab players={match.players} enemyPlayers={match.enemyPlayers} teamAName={teamA} teamBName={teamB} />}
                     {detailTab === 'clutches' && <ClutchesTab players={match.players} enemyPlayers={match.enemyPlayers} teamAName={teamA} teamBName={teamB} />}
+                    {detailTab === 'wpa' && <WPAPlusTab />}
                 </div>
 
             </div>

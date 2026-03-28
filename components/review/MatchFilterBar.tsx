@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MAPS } from '../../constants';
 
 export interface FilterState {
-    type: 'all' | 'series' | 'match';
+    type: 'all' | 'bon' | 'match';
     map: string;
     server: string;
     result: 'all' | 'win' | 'loss' | 'tie' | 'na';
@@ -77,7 +77,7 @@ export const MatchFilterBar: React.FC<MatchFilterBarProps> = ({
                     className="bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
                 >
                     <option value="all">全部类型</option>
-                    <option value="series">系列赛</option>
+                    <option value="bon">BON</option>
                     <option value="match">单场比赛</option>
                 </select>
 

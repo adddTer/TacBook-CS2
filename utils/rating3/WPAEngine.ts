@@ -61,10 +61,21 @@ export class WPAEngine {
         const tAvg = tEquip / 5;
         const ctAvg = ctEquip / 5;
         
-        const expectedTWinRate = getExpectedWinRate(tAvg, ctAvg, 'T', false, false);
+        // This is the 1v1 engagement win rate based on equipment value
+        const p = getExpectedWinRate(tAvg, ctAvg, 'T', false, false);
+        
+        // Convert 1v1 win rate to 5v5 round win rate using Negative Binomial Distribution
+        // Probability of getting 5 kills before the enemy gets 5 kills
+        const q = 1 - p;
+        let p5v5 = 0;
+        const coeffs = [1, 5, 15, 35, 70]; // C(4+k, k) for k=0..4
+        for (let k = 0; k < 5; k++) {
+            p5v5 += coeffs[k] * Math.pow(p, 5) * Math.pow(q, k);
+        }
         
         // Base T win rate for 5v5 is MATRIX_PRE[5][5] = 0.488
-        this.roundStartEconMod = expectedTWinRate - 0.488;
+        // We calculate the delta from 0.5 (neutral 5v5) and apply it to the base
+        this.roundStartEconMod = p5v5 - 0.5;
         
         // Recalculate initial prob with new econ mod
         this.currentWinProb = this.calculateWinProb();
@@ -226,8 +237,8 @@ export class WPAEngine {
         allTs: string[], allCTs: string[]
     ): WPAUpdate[] {
         // Health modifier is removed, so damage does not directly affect WPA anymore.
-        // We still process time decay up to this point.
-        return this.handleTimeUpdate(timeElapsed, allTs, allCTs);
+        // We no longer process time decay here to allow it to accumulate for major events.
+        return [];
     }
 
     public handleKill(
@@ -240,7 +251,8 @@ export class WPAEngine {
         currentTick: number = 0,
         isBot: boolean = false, // NEW
         contributorSides: Map<string, 'T' | 'CT'> = new Map(), // NEW
-        survivingKillerTeam: string[] = [] // NEW
+        survivingKillerTeam: string[] = [], // NEW
+        tradeCompensation: { sid: string, weight: number }[] = [] // NEW
     ): WPAUpdate[] {
         // 1. Process time decay BEFORE the kill
         const timeUpdates = this.handleTimeUpdate(timeElapsed, allTs, allCTs);
@@ -311,7 +323,7 @@ export class WPAEngine {
             victimSid,
             allTs, allCTs,
             'kill',
-            { killerSid, attackerSide, damageContributors, assisters, contributorSides, survivingKillerTeam },
+            { killerSid, attackerSide, damageContributors, assisters, contributorSides, survivingKillerTeam, tradeCompensation },
             currentTick
         );
         
@@ -447,7 +459,8 @@ export class WPAEngine {
             damageContributors: Map<string, number>,
             assisters: { sid: string, isFlash?: boolean }[],
             contributorSides?: Map<string, 'T' | 'CT'>,
-            survivingKillerTeam?: string[]
+            survivingKillerTeam?: string[],
+            tradeCompensation?: { sid: string, weight: number }[]
         },
         currentTick: number = 0
     ): WPAUpdate[] {
@@ -486,8 +499,7 @@ export class WPAEngine {
              const killerGainTotal = impactMagnitude * killerMultiplier;
              const penaltyTotal = -killerGainTotal;
              
-             let killerFixedShare = killerGainTotal * 0.5;
-             let weightedPool = killerGainTotal * 0.5;
+             let poolMultiplier = 1.0;
              
              // DEFUSER BONUS (35%)
              // Rule: If Scenario 1 (Defuse Win) AND Kill is within 5s of Defuse, Defuser gets 35%.
@@ -520,8 +532,27 @@ export class WPAEngine {
 
                  // Reduce the pool for standard distribution
                  // Remaining: 65%
-                 killerFixedShare = killerGainTotal * 0.325; // 0.65 * 0.5
-                 weightedPool = killerGainTotal * 0.325;     // 0.65 * 0.5
+                 poolMultiplier = 0.65;
+             }
+
+             let c_t_total = 0;
+             if (killContext.tradeCompensation) {
+                 killContext.tradeCompensation.forEach(tc => c_t_total += tc.weight);
+             }
+             c_t_total = Math.min(c_t_total, 1.0);
+             const v_rem = 1.0 - c_t_total;
+
+             let killerFixedShare = killerGainTotal * poolMultiplier * v_rem * 0.6;
+             let weightedPool = killerGainTotal * poolMultiplier * v_rem * 0.4;
+
+             // Distribute trade compensation
+             if (killContext.tradeCompensation) {
+                 killContext.tradeCompensation.forEach(tc => {
+                     const share = killerGainTotal * poolMultiplier * tc.weight;
+                     const existing = updates.find(u => u.sid === tc.sid);
+                     if (existing) existing.delta += share;
+                     else updates.push({ sid: tc.sid, delta: share, ...debugInfo });
+                 });
              }
 
              const weights = new Map<string, number>();
@@ -684,9 +715,5 @@ export class WPAEngine {
 
     public getPlayerRoundWPA(sid: string): number {
         return this.playerRoundWPA.get(sid) || 0;
-    }
-    
-    public getTradeRestoration(victimSid: string): WPAUpdate {
-        return { sid: victimSid, delta: 0, reason: 'trade_bonus' };
     }
 }

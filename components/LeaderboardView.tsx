@@ -1,10 +1,11 @@
 
 import React, { useMemo, useState } from 'react';
-import { Match, PlayerRoundStats } from '../types';
+import { Match } from '../types';
 import { ROSTER } from '../constants/roster';
 import { resolveName } from '../utils/demo/helpers';
 import { getRatingColorClass, RankBadge } from './review/ReviewShared';
 import { Search, Filter, Trophy, Target, Zap, Shield, Crosshair, Activity, Flame } from 'lucide-react';
+import { MatchAggregator } from '../utils/analytics/matchAggregator';
 
 interface LeaderboardViewProps {
     allMatches: Match[];
@@ -31,138 +32,49 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
 
     // --- Aggregation Logic ---
     const aggregatedStats = useMemo(() => {
+        const aggregatedAll = MatchAggregator.aggregateFull(allMatches);
+        
         return ROSTER.map(player => {
-            // Find matches where this player participated
+            const aggregatedPlayer = aggregatedAll.find(p => p.playerId === player.id || p.steamid === player.id);
+            if (!aggregatedPlayer || aggregatedPlayer.matchesPlayed === 0) return null;
+
+            // Get latest rank
             const matchesPlayed = allMatches.filter(m => {
                 const allP = [...m.players, ...m.enemyPlayers];
                 return allP.some(p => resolveName(p.playerId) === player.id || resolveName(p.steamid) === player.id);
             });
-
-            if (matchesPlayed.length === 0) return null;
-
-            // Get latest rank
             const latestMatch = matchesPlayed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
             const latestPlayerStats = [...latestMatch.players, ...latestMatch.enemyPlayers]
                 .find(p => resolveName(p.playerId) === player.id || resolveName(p.steamid) === player.id);
             const currentRank = latestPlayerStats?.rank || '?';
 
-            // Accumulators
-            let sums = {
-                rounds: 0,
-                kills: 0, deaths: 0, assists: 0,
-                damage: 0,
-                ratingSum: 0, // Weighted by rounds
-                wpaSum: 0,
-                impactSum: 0,
-                kastRounds: 0,
-                entryAttempts: 0,
-                entrySuccess: 0,
-                multiKills: 0,
-                clutchWins: 0,
-                utilityDamage: 0
-            };
-
-            matchesPlayed.forEach(m => {
-                const pMatch = [...m.players, ...m.enemyPlayers].find(p => resolveName(p.playerId) === player.id || resolveName(p.steamid) === player.id);
-                if (!pMatch) return;
-                
-                const pid = pMatch.steamid || pMatch.playerId;
-                
-                // Filter ghost rounds
-                const validRounds = m.rounds ? m.rounds.filter(r => {
-                    const allS = Object.values(r.playerStats) as PlayerRoundStats[];
-                    return !allS.every(s => s.rating === 0 && s.damage === 0);
-                }) : [];
-
-                if (validRounds.length > 0) {
-                    validRounds.forEach(r => {
-                        const pr = r.playerStats[pid];
-                        if (!pr) return;
-                        if (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0 && pr.kills === 0) return;
-
-                        sums.rounds++;
-                        sums.kills += pr.kills;
-                        sums.deaths += pr.deaths;
-                        sums.assists += pr.assists;
-                        sums.damage += pr.damage;
-                        sums.ratingSum += pr.rating;
-                        sums.impactSum += pr.impact;
-                        
-                        if (typeof pr.wpa === 'number' && !isNaN(pr.wpa)) {
-                            sums.wpaSum += pr.wpa;
-                        }
-
-                        if (pr.kills > 0 || pr.assists > 0 || pr.survived || pr.wasTraded) {
-                            sums.kastRounds++;
-                        }
-
-                        if (pr.isEntryKill || pr.isEntryDeath) {
-                            sums.entryAttempts++;
-                            if (pr.isEntryKill) sums.entrySuccess++;
-                        }
-
-                        if (pr.kills >= 3) sums.multiKills++;
-
-                        if (pr.utility) {
-                            sums.utilityDamage += (pr.utility.heDamage || 0) + (pr.utility.molotovDamage || 0);
-                        } else {
-                            sums.utilityDamage += pr.utilityDamage || 0;
-                        }
-                    });
-                } else {
-                    // Fallback to match-level stats if per-round data is missing
-                    const matchRounds = pMatch.r3_rounds_played || (m.score.us + m.score.them) || 24;
-                    sums.rounds += matchRounds;
-                    sums.kills += pMatch.kills;
-                    sums.deaths += pMatch.deaths;
-                    sums.assists += pMatch.assists;
-                    sums.damage += (pMatch.total_damage || (pMatch.adr * matchRounds));
-                    sums.ratingSum += (pMatch.rating * matchRounds);
-                    sums.impactSum += ((pMatch.r3_impact_accum || (pMatch.rating * matchRounds)));
-                    
-                    const matchWpaSum = pMatch.r3_wpa_accum !== undefined ? pMatch.r3_wpa_accum : pMatch.wpa;
-                    sums.wpaSum += matchWpaSum;
-                    
-                    // Entry/Multi/Utility fallbacks
-                    sums.entryAttempts += (pMatch.entry_kills || 0); // Rough estimate
-                    sums.entrySuccess += (pMatch.entry_kills || 0);
-                    if (pMatch.multikills) {
-                        sums.multiKills += (pMatch.multikills.k3 || 0) + (pMatch.multikills.k4 || 0) + (pMatch.multikills.k5 || 0);
-                    }
-                    if (pMatch.utility) {
-                        sums.utilityDamage += (pMatch.utility.heDamage || 0) + (pMatch.utility.molotovDamage || 0);
-                    }
-                }
-
-                if (pMatch.clutches) {
-                    sums.clutchWins += pMatch.clutches['1v1'].won + pMatch.clutches['1v2'].won + pMatch.clutches['1v3'].won + pMatch.clutches['1v4'].won + pMatch.clutches['1v5'].won;
-                }
-            });
-
-            const totalRounds = Math.max(1, sums.rounds);
-            const totalDeaths = Math.max(1, sums.deaths);
-            const rating = sums.ratingSum / totalRounds;
+            // Calculate total clutches won
+            let clutchWins = 0;
+            if (aggregatedPlayer.basic.clutches) {
+                const c = aggregatedPlayer.basic.clutches;
+                clutchWins = (c['1v1']?.won || 0) + (c['1v2']?.won || 0) + (c['1v3']?.won || 0) + (c['1v4']?.won || 0) + (c['1v5']?.won || 0);
+            }
 
             return {
                 id: player.id,
                 name: player.name,
-                role: player.roleType, // Use roleType for cleaner display (e.g. "自由人" instead of "自由人/指挥")
+                role: player.roleType, // Use roleType for cleaner display
                 fullRole: player.role,
                 rank: currentRank,
-                matches: matchesPlayed.length,
+                matches: aggregatedPlayer.matchesPlayed,
                 
                 // Calculated Metrics
-                rating: rating,
-                wpa: sums.wpaSum / totalRounds,
-                adr: sums.damage / totalRounds,
-                kd: sums.kills / totalDeaths,
-                impact: sums.impactSum / totalRounds,
+                rating: aggregatedPlayer.full.overall.rating,
+                wpa: aggregatedPlayer.full.filtered.wpaAvg,
+                adr: aggregatedPlayer.full.filtered.adr,
+                kd: aggregatedPlayer.full.filtered.kdr,
+                impact: aggregatedPlayer.full.filtered.impact,
                 
                 // Detailed Stats
-                entryRate: sums.entryAttempts > 0 ? (sums.entrySuccess / sums.entryAttempts) * 100 : 0,
-                entryVol: sums.entryAttempts,
-                utilDmgPerRound: sums.utilityDamage / totalRounds,
-                clutches: sums.clutchWins
+                entryRate: aggregatedPlayer.full.filtered.details.openingSuccessPct,
+                entryVol: aggregatedPlayer.full.filtered.details.openingAttempts,
+                utilDmgPerRound: aggregatedPlayer.full.filtered.details.utilDmgPerRound,
+                clutches: clutchWins
             };
         }).filter(Boolean) as any[];
     }, [allMatches]);

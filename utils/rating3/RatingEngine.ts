@@ -270,12 +270,17 @@ export class RatingEngine {
 
         // --- WPA Time Update ---
         // Isolate time decay from event impact
-        timeUpdates = this.wpaEngine.handleTimeUpdate(
-            timeElapsed,
-            tPlayers,
-            ctPlayers
-        );
-        this.wpaEngine.commitUpdates(timeUpdates);
+        // ONLY process time decay for major events to avoid "eating" the time decay in player_hurt
+        const isMajorEvent = ['player_death', 'bomb_planted', 'bomb_defused', 'bomb_exploded'].includes(type);
+        
+        if (isMajorEvent) {
+            timeUpdates = this.wpaEngine.handleTimeUpdate(
+                timeElapsed,
+                tPlayers,
+                ctPlayers
+            );
+            this.wpaEngine.commitUpdates(timeUpdates);
+        }
 
         const probAfterTime = this.wpaEngine.getCurrentWinProb();
 
@@ -431,6 +436,60 @@ export class RatingEngine {
             }
 
             // --- WPA Calculation ---
+            const isBot = vic === 'BOT' || vic === '0' || vic.startsWith('BOT');
+            const MAX_TRADE_TICKS = 512; // 8 seconds at 64 tick
+
+            // --- Trade Compensation Calculation ---
+            let C_t_total = 0;
+            const tradeCompensation: { sid: string, weight: number }[] = [];
+            
+            // Trade compensation only applies to normal kills and non-bot victims
+            if (!isFriendlyKill && !isBot) {
+                // Find all teammates killed by this victim
+                const victimKills = [];
+                for (let i = this.recentDeaths.length - 1; i >= 0; i--) {
+                    const d = this.recentDeaths[i];
+                    if (d.killer === vic) {
+                        victimKills.push(d);
+                    }
+                }
+
+                if (victimKills.length > 0) {
+                    const vLast = victimKills[0];
+                    const t0Ticks = tick - vLast.tick;
+                    
+                    if (t0Ticks <= MAX_TRADE_TICKS) {
+                        const t0Seconds = t0Ticks / 64.0;
+                        // C(t) = 0.40 * e^(-0.47 * t)
+                        C_t_total = 0.40 * Math.exp(-0.47 * t0Seconds);
+                        
+                        const validVictims: { sid: string, weight: number }[] = [];
+                        validVictims.push({ sid: vLast.victim, weight: C_t_total }); // V_last weight
+                        
+                        let prevTick = vLast.tick;
+                        for (let i = 1; i < victimKills.length; i++) {
+                            const vPrev = victimKills[i];
+                            const tDiffTicks = prevTick - vPrev.tick;
+                            if (tDiffTicks > MAX_TRADE_TICKS) {
+                                break; // Chain broken
+                            }
+                            const tDiffSeconds = tDiffTicks / 64.0;
+                            const weight = 0.40 * Math.exp(-0.47 * tDiffSeconds);
+                            validVictims.push({ sid: vPrev.victim, weight: weight });
+                            prevTick = vPrev.tick;
+                        }
+                        
+                        const sumWeights = validVictims.reduce((sum, v) => sum + v.weight, 0);
+                        if (sumWeights > 0) {
+                            validVictims.forEach(v => {
+                                const finalWeight = C_t_total * (v.weight / sumWeights);
+                                tradeCompensation.push({ sid: v.sid, weight: finalWeight });
+                            });
+                        }
+                    }
+                }
+            }
+
             if (victimSide) {
                 const assisters = [];
                 if (ast && ast !== "BOT" && ast !== "0") {
@@ -465,8 +524,6 @@ export class RatingEngine {
                     });
                 }
                 
-                const isBot = vic === 'BOT' || vic === '0' || vic.startsWith('BOT');
-
                 if (attackerSide) {
                     const updates = this.wpaEngine.handleKill(
                         att, vic, victimSide, attackerSide, assisters, timeElapsed,
@@ -476,7 +533,8 @@ export class RatingEngine {
                         tick, // Pass current tick for 5s window check
                         isBot, // NEW
                         contributorSides, // NEW
-                        survivingKillerTeam // NEW
+                        survivingKillerTeam, // NEW
+                        tradeCompensation // NEW
                     );
                     eventUpdates.push(...updates);
                     this.wpaEngine.commitUpdates(updates);
@@ -487,8 +545,6 @@ export class RatingEngine {
             }
 
             if (att !== "BOT" && att !== vic && att !== "0") {
-                const isBot = vic === 'BOT' || vic === '0' || vic.startsWith('BOT');
-
                 if (!isFriendlyKill) {
                     const attStats = this.getRoundStats(att);
                     attStats.kills++;
@@ -509,7 +565,6 @@ export class RatingEngine {
                 if (!isBot) {
                     const FIXED_SHARE = 0.6;
                     const DAMAGE_SHARE = 0.4;
-                    const MAX_TRADE_TICKS = 512; // 8 seconds at 64 tick
 
                     // --- Economy Modifier (Expected Win Rate) ---
                     const pExpKiller = getExpectedWinRate(attValue, vicValue, attackerSide || 'CT', !!isFriendlyKill, isWorldOrSuicide);
@@ -518,44 +573,19 @@ export class RatingEngine {
                     // NEW: Friendly Fire Penalty Multiplier
                     const multiplier = isFriendlyKill ? -1.0 : 1.0;
 
-                    // --- Trade Compensation ---
-                    let C_t = 0;
-                    let baitSid: string | null = null;
-                    
-                    // Trade compensation only applies to normal kills
-                    if (!isFriendlyKill) {
-                        // Find the LAST teammate killed by this victim
-                        // recentDeaths is an array of { victim, killer, tick }
-                        for (let i = this.recentDeaths.length - 1; i >= 0; i--) {
-                            const d = this.recentDeaths[i];
-                            if (d.killer === vic) {
-                                const tickDiff = tick - d.tick;
-                                if (tickDiff <= MAX_TRADE_TICKS) {
-                                    const timeSeconds = tickDiff / 64.0;
-                                    // C(t) = 0.40 * e^(-0.47 * t)
-                                    C_t = 0.40 * Math.exp(-0.47 * timeSeconds);
-                                    baitSid = d.victim;
-                                }
-                                break; // Only the LAST person gets it
-                            }
-                        }
-                    }
-
-                    if (baitSid && C_t > 0) {
-                        const baitStats = this.getRoundStats(baitSid);
-                        baitStats.killShareRating += (C_t * E);
-                        baitStats.wasTraded = true;
+                    if (tradeCompensation.length > 0) {
+                        tradeCompensation.forEach(tc => {
+                            const baitStats = this.getRoundStats(tc.sid);
+                            baitStats.killShareRating += tc.weight;
+                            baitStats.wasTraded = true;
+                        });
                         
                         const attStats = this.getRoundStats(att);
                         attStats.traded = true;
-                        
-                        // WPA Trade Restoration
-                        const tradeRestore = this.wpaEngine.getTradeRestoration(baitSid);
-                        this.wpaEngine.commitUpdates([tradeRestore]);
                     }
 
                     // Remaining Pool
-                    const V_rem = 1.0 - C_t;
+                    const V_rem = 1.0 - C_t_total;
 
                     // Calculate Total Damage Weight
                     let totalWeight = 0;

@@ -1,366 +1,394 @@
-
-import { Match, PlayerMatchStats } from '../../types';
-import { aggregatePlayerStats } from './statsAggregator';
-import { calculateFirepower } from './calculateFirepower';
-import { calculateEntry } from './calculateEntry';
-import { calculateTrade } from './calculateTrade';
-import { calculateOpening } from './calculateOpening';
-import { calculateClutch } from './calculateClutch';
-import { calculateSniper } from './calculateSniper';
-import { calculateUtility } from './calculateUtility';
-import { resolveName } from '../demo/helpers';
+import { Match, PlayerMatchStats } from "../../types";
+import { aggregatePlayerStats } from "./statsAggregator";
+import { calculateFirepower } from "./calculateFirepower";
+import { calculateEntry } from "./calculateEntry";
+import { calculateTrade } from "./calculateTrade";
+import { calculateOpening } from "./calculateOpening";
+import { calculateClutch } from "./calculateClutch";
+import { calculateSniper } from "./calculateSniper";
+import { calculateUtility } from "./calculateUtility";
+import { resolveName } from "../demo/helpers";
 
 export interface StatsResult {
-    overall: {
-        rating: number;
-        ctRating: number;
-        tRating: number;
+  overall: {
+    rating: number;
+    ctRating: number;
+    tRating: number;
+  };
+  filtered: {
+    adr: number;
+    kdr: number;
+    kpr: number;
+    dpr: number;
+    kast: number;
+    impact: number;
+    wpaSum: number;
+    wpaAvg: number;
+    multiKillRate: number;
+    headshotPct: number;
+    survivalRate: number;
+
+    // Ability Scores (0-100)
+    scoreFirepower: number;
+    scoreEntry: number;
+    scoreTrade: number;
+    scoreOpening: number;
+    scoreClutch: number;
+    scoreSniper: number;
+    scoreUtility: number;
+
+    // Granular Details for UI
+    details: {
+      // Firepower
+      kpr: number;
+      roundsWithKills: number;
+      kprWin: number;
+      rating: number;
+      dpr: number; // Damage per round
+      multiKillRounds: number;
+      dprWin: number;
+      pistolRating: number;
+
+      // Entry
+      savedByTeammatePerRound: number;
+      tradedDeathsPerRound: number;
+      tradedDeathsPct: number;
+      openingDeathsTradedPct: number;
+      assistsPerRound: number;
+      supportRounds: number;
+
+      // Trade
+      savedTeammatePerRound: number;
+      tradeKillsPerRound: number;
+      tradeKillsPct: number;
+      assistPct: number;
+      damagePerKill: number;
+
+      // Opening
+      openingKillsPerRound: number;
+      openingDeathsPerRound: number;
+      openingAttempts: number;
+      openingSuccessPct: number;
+      winPctAfterOpening: number;
+      attacksPerRound: number; // Approx opening attempts / round
+
+      // Clutch
+      clutchPointsPerRound: number;
+      lastAlivePct: number;
+      win1v1Pct: number | null; // Allow null for N/A
+      timeAlivePerRound: number;
+      savesPerLoss: number;
+
+      // Sniper
+      sniperKillsPerRound: number;
+      sniperKillsPct: number;
+      roundsWithSniperKillsPct: number;
+      sniperMultiKillRounds: number;
+      sniperOpeningKillsPerRound: number;
+
+      // Utility
+      utilDmgPerRound: number;
+      utilKillsPer100: number;
+      flashesPerRound: number;
+      flashAssistsPerRound: number;
+      blindTimePerRound: number;
+
+      // Raw Stats for Validation
+      totalFlashes: number;
+      totalBlinded: number;
+      totalFlashAssists: number;
     };
-    filtered: {
-        adr: number;
-        kdr: number;
-        kpr: number;
-        dpr: number;
-        kast: number;
-        impact: number;
-        wpaSum: number;
-        wpaAvg: number;
-        multiKillRate: number;
-        headshotPct: number;
-        survivalRate: number;
-        
-        // Ability Scores (0-100)
-        scoreFirepower: number;
-        scoreEntry: number; 
-        scoreTrade: number;
-        scoreOpening: number; 
-        scoreClutch: number;
-        scoreSniper: number;
-        scoreUtility: number;
-
-        // Granular Details for UI
-        details: {
-            // Firepower
-            kpr: number;
-            roundsWithKills: number;
-            kprWin: number;
-            rating: number;
-            dpr: number; // Damage per round
-            multiKillRounds: number;
-            dprWin: number;
-            pistolRating: number;
-
-            // Entry
-            savedByTeammatePerRound: number;
-            tradedDeathsPerRound: number;
-            tradedDeathsPct: number;
-            openingDeathsTradedPct: number;
-            assistsPerRound: number;
-            supportRounds: number;
-
-            // Trade
-            savedTeammatePerRound: number;
-            tradeKillsPerRound: number;
-            tradeKillsPct: number;
-            assistPct: number;
-            damagePerKill: number;
-
-            // Opening
-            openingKillsPerRound: number;
-            openingDeathsPerRound: number;
-            openingAttempts: number;
-            openingSuccessPct: number;
-            winPctAfterOpening: number;
-            attacksPerRound: number; // Approx opening attempts / round
-
-            // Clutch
-            clutchPointsPerRound: number;
-            lastAlivePct: number;
-            win1v1Pct: number | null; // Allow null for N/A
-            timeAlivePerRound: number;
-            savesPerLoss: number;
-
-            // Sniper
-            sniperKillsPerRound: number;
-            sniperKillsPct: number;
-            roundsWithSniperKillsPct: number;
-            sniperMultiKillRounds: number;
-            sniperOpeningKillsPerRound: number;
-
-            // Utility
-            utilDmgPerRound: number;
-            utilKillsPer100: number;
-            flashesPerRound: number;
-            flashAssistsPerRound: number;
-            blindTimePerRound: number;
-            
-            // Raw Stats for Validation
-            totalFlashes: number;
-            totalBlinded: number;
-            totalFlashAssists: number;
-        }
-    };
+  };
 }
 
 export const calculatePlayerStats = (
-    profileId: string, 
-    history: { match: Match, stats: PlayerMatchStats }[], 
-    sideFilter: 'ALL' | 'CT' | 'T'
+  profileId: string,
+  history: { match: Match; stats: PlayerMatchStats }[],
+  sideFilter: "ALL" | "CT" | "T",
 ): StatsResult => {
-    // 1. Use the Aggregator to get all raw data
-    const stats = aggregatePlayerStats(profileId, history, sideFilter);
-    
-    // 2. Calculate Derived Averages for Display (Filtered)
-    const safeDiv = (a: number, b: number) => b === 0 ? 0 : a / b;
-    const rounds = stats.roundsPlayed || 1; // Prevent div by zero globally
+  // 1. Use the Aggregator to get all raw data
+  const stats = aggregatePlayerStats(profileId, history, sideFilter);
 
-    const adr = safeDiv(stats.damage, rounds);
-    const kpr = safeDiv(stats.kills, rounds);
-    const avgRating = safeDiv(stats.ratingSum, rounds); 
-    
-    // WPA accumulation
-    let wpaSum = 0;
-    let impactSum = 0;
-    
-    // Weighted stats accumulation
-    let totalKastWeightedSum = 0;
-    let totalMultiKillWeightedSum = 0;
-    let totalKdrWeightedSum = 0;
-    let totalWeightedRounds = 0;
+  // 2. Calculate Derived Averages for Display (Filtered)
+  const safeDiv = (a: number, b: number) => (b === 0 ? 0 : a / b);
+  const rounds = stats.roundsPlayed || 1; // Prevent div by zero globally
 
-    history.forEach(({ match }) => {
-        if (!match.rounds) return;
-        const pMatch = [...match.players, ...match.enemyPlayers].find(p => 
-            p.playerId === profileId || 
-            p.steamid === profileId ||
-            resolveName(p.playerId) === profileId ||
-            resolveName(p.steamid) === profileId
-        );
-        if(!pMatch) return;
-        const pid = pMatch.steamid || pMatch.playerId;
-        let matchDeaths = 0;
-        let matchKills = 0;
-        let matchMultiKillRounds = 0;
-        let matchKastRounds = 0;
-        let matchRounds = 0;
+  const adr = safeDiv(stats.damage, rounds);
+  const kpr = safeDiv(stats.kills, rounds);
+  const avgRating = safeDiv(stats.ratingSum, rounds);
 
-        match.rounds.forEach(r => {
-            const pr = r.playerStats[pid];
-            if (!pr) return;
-            if (sideFilter !== 'ALL' && pr.side !== sideFilter) return;
-            if (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0) return; // Ghost
+  // WPA accumulation
+  let wpaSum = 0;
+  let impactSum = 0;
 
-            matchRounds++;
-            matchKills += pr.kills;
-            matchDeaths += pr.deaths;
-            if (pr.kills > 0 || pr.assists > 0 || pr.survived || pr.wasTraded) matchKastRounds++;
-            if (pr.kills >= 2) matchMultiKillRounds++;
-            
-            if (typeof pr.wpa === 'number') wpaSum += pr.wpa;
-            impactSum += pr.impact;
-        });
+  // Weighted stats accumulation
+  let totalKastWeightedSum = 0;
+  let totalMultiKillWeightedSum = 0;
+  let totalKdrWeightedSum = 0;
+  let totalWeightedRounds = 0;
 
-        if (matchRounds > 0) {
-            const matchKast = (matchKastRounds / matchRounds) * 100;
-            const matchMultiKill = (matchMultiKillRounds / matchRounds) * 100;
-            const matchKdr = matchDeaths === 0 ? matchKills : matchKills / matchDeaths;
-            
-            totalKastWeightedSum += matchKast * matchRounds;
-            totalMultiKillWeightedSum += matchMultiKill * matchRounds;
-            totalKdrWeightedSum += matchKdr * matchRounds;
-            totalWeightedRounds += matchRounds;
-        }
+  history.forEach(({ match }) => {
+    if (!match.rounds) return;
+    const pMatch = [...match.players, ...match.enemyPlayers].find(
+      (p) =>
+        p.playerId === profileId ||
+        p.steamid === profileId ||
+        resolveName(p.playerId) === profileId ||
+        resolveName(p.steamid) === profileId,
+    );
+    if (!pMatch) return;
+    const pid = pMatch.steamid || pMatch.playerId;
+    let matchDeaths = 0;
+    let matchKills = 0;
+    let matchMultiKillRounds = 0;
+    let matchKastRounds = 0;
+    let matchRounds = 0;
+
+    match.rounds.forEach((r) => {
+      const pr = r.playerStats[pid];
+      if (!pr) return;
+      if (sideFilter !== "ALL" && pr.side !== sideFilter) return;
+      if (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0) return; // Ghost
+
+      matchRounds++;
+      matchKills += pr.kills;
+      matchDeaths += pr.deaths;
+      if (pr.kills > 0 || pr.assists > 0 || pr.survived || pr.wasTraded)
+        matchKastRounds++;
+      if (pr.kills >= 2) matchMultiKillRounds++;
+
+      if (typeof pr.wpa === "number") wpaSum += pr.wpa;
+      impactSum += pr.impact;
     });
 
-    const kastWeightedAvg = totalWeightedRounds === 0 ? 0 : totalKastWeightedSum / totalWeightedRounds;
-    const multiKillWeightedAvg = totalWeightedRounds === 0 ? 0 : totalMultiKillWeightedSum / totalWeightedRounds;
-    const kdrWeightedAvg = totalWeightedRounds === 0 ? 0 : totalKdrWeightedSum / totalWeightedRounds;
+    if (matchRounds > 0) {
+      const matchKast = (matchKastRounds / matchRounds) * 100;
+      const matchMultiKill = (matchMultiKillRounds / matchRounds) * 100;
+      const matchKdr =
+        matchDeaths === 0 ? matchKills : matchKills / matchDeaths;
 
-    // 3. Calculate Overall Ratings (Independent of Filter) for Hero Card
-    let totalRating = 0, totalRounds = 0;
-    let ctRatingSum = 0, ctRounds = 0;
-    let tRatingSum = 0, tRounds = 0;
-    
-    history.forEach(({ match }) => {
-        if(!match.rounds) return;
-        const pMatch = [...match.players, ...match.enemyPlayers].find(p => 
-            p.playerId === profileId || 
-            p.steamid === profileId ||
-            resolveName(p.playerId) === profileId ||
-            resolveName(p.steamid) === profileId
-        );
-        if(!pMatch) return;
-        const pid = pMatch.steamid || pMatch.playerId;
+      totalKastWeightedSum += matchKast * matchRounds;
+      totalMultiKillWeightedSum += matchMultiKill * matchRounds;
+      totalKdrWeightedSum += matchKdr * matchRounds;
+      totalWeightedRounds += matchRounds;
+    }
+  });
 
-        match.rounds.forEach(r => {
-            const pr = r.playerStats[pid];
-            if (!pr || (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0)) return;
-            
-            totalRating += pr.rating;
-            totalRounds++;
-            if (pr.side === 'CT') { ctRatingSum += pr.rating; ctRounds++; }
-            else { tRatingSum += pr.rating; tRounds++; }
-        });
+  const kastWeightedAvg =
+    totalWeightedRounds === 0 ? 0 : totalKastWeightedSum / totalWeightedRounds;
+  const multiKillWeightedAvg =
+    totalWeightedRounds === 0
+      ? 0
+      : totalMultiKillWeightedSum / totalWeightedRounds;
+  const kdrWeightedAvg =
+    totalWeightedRounds === 0 ? 0 : totalKdrWeightedSum / totalWeightedRounds;
+
+  // 3. Calculate Overall Ratings (Independent of Filter) for Hero Card
+  let totalRating = 0,
+    totalRounds = 0;
+  let ctRatingSum = 0,
+    ctRounds = 0;
+  let tRatingSum = 0,
+    tRounds = 0;
+
+  history.forEach(({ match }) => {
+    if (!match.rounds) return;
+    const pMatch = [...match.players, ...match.enemyPlayers].find(
+      (p) =>
+        p.playerId === profileId ||
+        p.steamid === profileId ||
+        resolveName(p.playerId) === profileId ||
+        resolveName(p.steamid) === profileId,
+    );
+    if (!pMatch) return;
+    const pid = pMatch.steamid || pMatch.playerId;
+
+    match.rounds.forEach((r) => {
+      const pr = r.playerStats[pid];
+      if (!pr || (pr.rating === 0 && pr.damage === 0 && pr.deaths === 0))
+        return;
+
+      totalRating += pr.rating;
+      totalRounds++;
+      if (pr.side === "CT") {
+        ctRatingSum += pr.rating;
+        ctRounds++;
+      } else {
+        tRatingSum += pr.rating;
+        tRounds++;
+      }
     });
+  });
 
-    // 4. Compute Scores
-    const scoreFirepower = calculateFirepower(
-        adr, kpr, avgRating, 
-        safeDiv(stats.roundsWithKills, rounds) * 100,
-        safeDiv(stats.killsInWins, stats.roundsWon), 
-        safeDiv(stats.damageInWins, stats.roundsWon), // NEW PARAM
-        safeDiv(stats.multiKillRounds, rounds) * 100
-    );
+  // 4. Compute Scores
+  const scoreFirepower = calculateFirepower(
+    adr,
+    kpr,
+    avgRating,
+    safeDiv(stats.roundsWithKills, rounds) * 100,
+    safeDiv(stats.killsInWins, stats.roundsWon),
+    safeDiv(stats.damageInWins, stats.roundsWon), // NEW PARAM
+    safeDiv(stats.multiKillRounds, rounds) * 100,
+  );
 
-    const scoreEntry = calculateEntry(
-        stats.tradedDeaths, 
-        stats.entryDeaths,
-        stats.entryDeathsTraded,
-        stats.deaths, // NEW PARAM (Total Deaths for %)
-        stats.savedByTeammate,
-        stats.assists, 
-        stats.supportRounds,
-        rounds
-    );
+  const scoreEntry = calculateEntry(
+    stats.tradedDeaths,
+    stats.entryDeaths,
+    stats.entryDeathsTraded,
+    stats.deaths, // NEW PARAM (Total Deaths for %)
+    stats.savedByTeammate,
+    stats.assists,
+    stats.supportRounds,
+    rounds,
+  );
 
-    const scoreTrade = calculateTrade(
-        stats.tradeKills, 
-        stats.kills, 
-        stats.damage,
-        stats.teammatesSaved, 
-        stats.assists,
-        rounds
-    );
+  const scoreTrade = calculateTrade(
+    stats.tradeKills,
+    stats.kills,
+    stats.damage,
+    stats.teammatesSaved,
+    stats.assists,
+    rounds,
+  );
 
-    const scoreOpening = calculateOpening(
-        stats.entryKills, 
-        stats.entryDeaths, 
-        stats.roundsWonAfterEntry,
-        rounds
-    );
-    
-    const scoreClutch = calculateClutch(
-        stats.clutchPoints, 
-        stats.w1v1, stats.l1v1, 
-        stats.roundsLastAlive, 
-        stats.totalTimeAlive, 
-        stats.savesInLosses, 
-        stats.roundsLost, 
-        rounds
-    );
-    
-    const scoreSniper = calculateSniper(
-        stats.sniperKills, 
-        stats.kills, 
-        stats.roundsWithSniperKills, 
-        stats.sniperMultiKillRounds, 
-        stats.sniperOpeningKills, 
-        rounds
-    );
-    
-    const scoreUtility = calculateUtility(
-        stats.utilityDamage, 
-        stats.flashAssists, 
-        stats.utilityKills,
-        stats.flashesThrown,
-        stats.blindDuration, 
-        stats.enemiesBlinded, 
-        rounds
-    );
+  const scoreOpening = calculateOpening(
+    stats.entryKills,
+    stats.entryDeaths,
+    stats.roundsWonAfterEntry,
+    rounds,
+  );
 
-    const kastVal = safeDiv(stats.kastRounds, rounds) * 100;
-    const savesPerLoss = safeDiv(stats.savesInLosses, stats.roundsLost);
+  const scoreClutch = calculateClutch(
+    stats.clutchPoints,
+    stats.w1v1,
+    stats.l1v1,
+    stats.roundsLastAlive,
+    stats.totalTimeAlive,
+    stats.savesInLosses,
+    stats.roundsLost,
+    rounds,
+  );
 
-    // 5. Prepare Detailed Metrics
-    const details = {
-        // Firepower
-        kpr: kpr,
-        roundsWithKills: safeDiv(stats.roundsWithKills, rounds) * 100,
-        kprWin: safeDiv(stats.killsInWins, stats.roundsWon),
-        rating: avgRating,
-        dpr: adr,
-        multiKillRounds: safeDiv(stats.multiKillRounds, rounds) * 100,
-        dprWin: safeDiv(stats.damageInWins, stats.roundsWon),
-        pistolRating: safeDiv(stats.pistolRatingSum, stats.pistolRoundsPlayed),
+  const scoreSniper = calculateSniper(
+    stats.sniperKills,
+    stats.kills,
+    stats.roundsWithSniperKills,
+    stats.sniperMultiKillRounds,
+    stats.sniperOpeningKills,
+    rounds,
+  );
 
-        // Entry
-        savedByTeammatePerRound: safeDiv(stats.savedByTeammate, rounds),
-        tradedDeathsPerRound: safeDiv(stats.tradedDeaths, rounds),
-        tradedDeathsPct: safeDiv(stats.tradedDeaths, stats.deaths) * 100,
-        openingDeathsTradedPct: safeDiv(stats.entryDeathsTraded, stats.entryDeaths) * 100,
-        assistsPerRound: safeDiv(stats.assists, rounds),
-        supportRounds: stats.supportRounds,
+  const scoreUtility = calculateUtility(
+    stats.utilityDamage,
+    stats.flashAssists,
+    stats.utilityKills,
+    stats.flashesThrown,
+    stats.blindDuration,
+    stats.enemiesBlinded,
+    rounds,
+  );
 
-        // Trade
-        savedTeammatePerRound: safeDiv(stats.teammatesSaved, rounds),
-        tradeKillsPerRound: safeDiv(stats.tradeKills, rounds),
-        tradeKillsPct: safeDiv(stats.tradeKills, stats.kills) * 100,
-        assistPct: safeDiv(stats.assists, stats.kills) * 100, 
-        damagePerKill: safeDiv(stats.damage, stats.kills),
+  const kastVal = safeDiv(stats.kastRounds, rounds) * 100;
+  const savesPerLoss = safeDiv(stats.savesInLosses, stats.roundsLost);
 
-        // Opening
-        openingKillsPerRound: safeDiv(stats.entryKills, rounds),
-        openingDeathsPerRound: safeDiv(stats.entryDeaths, rounds),
-        openingAttempts: safeDiv(stats.entryKills + stats.entryDeaths, rounds) * 100,
-        openingSuccessPct: safeDiv(stats.entryKills, stats.entryKills + stats.entryDeaths) * 100,
-        winPctAfterOpening: safeDiv(stats.roundsWonAfterEntry, stats.entryKills) * 100,
-        attacksPerRound: safeDiv(stats.entryKills + stats.entryDeaths, rounds),
+  // 5. Prepare Detailed Metrics
+  const details = {
+    // Firepower
+    kpr: kpr,
+    roundsWithKills: safeDiv(stats.roundsWithKills, rounds) * 100,
+    kprWin: safeDiv(stats.killsInWins, stats.roundsWon),
+    rating: avgRating,
+    dpr: adr,
+    multiKillRounds: safeDiv(stats.multiKillRounds, rounds) * 100,
+    dprWin: safeDiv(stats.damageInWins, stats.roundsWon),
+    pistolRating: safeDiv(stats.pistolRatingSum, stats.pistolRoundsPlayed),
 
-        // Clutch
-        clutchPointsPerRound: safeDiv(stats.clutchPoints, rounds),
-        lastAlivePct: safeDiv(stats.roundsLastAlive, rounds) * 100,
-        win1v1Pct: (stats.w1v1 + stats.l1v1) > 0 ? safeDiv(stats.w1v1, stats.w1v1 + stats.l1v1) * 100 : null,
-        timeAlivePerRound: safeDiv(stats.totalTimeAlive, rounds),
-        savesPerLoss: savesPerLoss,
+    // Entry
+    savedByTeammatePerRound: safeDiv(stats.savedByTeammate, rounds),
+    tradedDeathsPerRound: safeDiv(stats.tradedDeaths, rounds),
+    tradedDeathsPct: safeDiv(stats.tradedDeaths, stats.deaths) * 100,
+    openingDeathsTradedPct:
+      safeDiv(stats.entryDeathsTraded, stats.entryDeaths) * 100,
+    assistsPerRound: safeDiv(stats.assists, rounds),
+    supportRounds: stats.supportRounds,
 
-        // Sniper
-        sniperKillsPerRound: safeDiv(stats.sniperKills, rounds),
-        sniperKillsPct: safeDiv(stats.sniperKills, stats.kills) * 100,
-        roundsWithSniperKillsPct: safeDiv(stats.roundsWithSniperKills, rounds) * 100,
-        sniperMultiKillRounds: stats.sniperMultiKillRounds,
-        sniperOpeningKillsPerRound: safeDiv(stats.sniperOpeningKills, rounds),
+    // Trade
+    savedTeammatePerRound: safeDiv(stats.teammatesSaved, rounds),
+    tradeKillsPerRound: safeDiv(stats.tradeKills, rounds),
+    tradeKillsPct: safeDiv(stats.tradeKills, stats.kills) * 100,
+    assistPct: safeDiv(stats.assists, stats.kills) * 100,
+    damagePerKill: safeDiv(stats.damage, stats.kills),
 
-        // Utility
-        utilDmgPerRound: safeDiv(stats.utilityDamage, rounds),
-        utilKillsPer100: safeDiv(stats.utilityKills, rounds) * 100,
-        flashesPerRound: safeDiv(stats.flashesThrown, rounds),
-        flashAssistsPerRound: safeDiv(stats.flashAssists, rounds),
-        blindTimePerRound: safeDiv(stats.blindDuration, rounds),
-        
-        // Raw Stats for Validation
-        totalFlashes: stats.flashesThrown,
-        totalBlinded: stats.enemiesBlinded,
-        totalFlashAssists: stats.flashAssists
-    };
+    // Opening
+    openingKillsPerRound: safeDiv(stats.entryKills, rounds),
+    openingDeathsPerRound: safeDiv(stats.entryDeaths, rounds),
+    openingAttempts:
+      safeDiv(stats.entryKills + stats.entryDeaths, rounds) * 100,
+    openingSuccessPct:
+      safeDiv(stats.entryKills, stats.entryKills + stats.entryDeaths) * 100,
+    winPctAfterOpening:
+      safeDiv(stats.roundsWonAfterEntry, stats.entryKills) * 100,
+    attacksPerRound: safeDiv(stats.entryKills + stats.entryDeaths, rounds),
 
-    return {
-        overall: {
-            rating: safeDiv(totalRating, totalRounds),
-            ctRating: safeDiv(ctRatingSum, ctRounds),
-            tRating: safeDiv(tRatingSum, tRounds),
-        },
-        filtered: {
-            adr: adr,
-            kdr: kdrWeightedAvg,
-            kpr: kpr,
-            dpr: safeDiv(stats.deaths, rounds),
-            kast: kastWeightedAvg,
-            impact: safeDiv(impactSum, rounds),
-            wpaSum: wpaSum,
-            wpaAvg: safeDiv(wpaSum, rounds),
-            multiKillRate: multiKillWeightedAvg,
-            headshotPct: safeDiv(stats.headshots, stats.kills) * 100,
-            survivalRate: safeDiv(stats.survivedRounds, rounds) * 100,
-            
-            scoreFirepower,
-            scoreEntry,
-            scoreTrade,
-            scoreOpening,
-            scoreClutch,
-            scoreSniper,
-            scoreUtility,
+    // Clutch
+    clutchPointsPerRound: safeDiv(stats.clutchPoints, rounds),
+    lastAlivePct: safeDiv(stats.roundsLastAlive, rounds) * 100,
+    win1v1Pct:
+      stats.w1v1 + stats.l1v1 > 0
+        ? safeDiv(stats.w1v1, stats.w1v1 + stats.l1v1) * 100
+        : null,
+    timeAlivePerRound: safeDiv(stats.totalTimeAlive, rounds),
+    savesPerLoss: savesPerLoss,
 
-            details: details
-        }
-    };
+    // Sniper
+    sniperKillsPerRound: safeDiv(stats.sniperKills, rounds),
+    sniperKillsPct: safeDiv(stats.sniperKills, stats.kills) * 100,
+    roundsWithSniperKillsPct:
+      safeDiv(stats.roundsWithSniperKills, rounds) * 100,
+    sniperMultiKillRounds: stats.sniperMultiKillRounds,
+    sniperOpeningKillsPerRound: safeDiv(stats.sniperOpeningKills, rounds),
+
+    // Utility
+    utilDmgPerRound: safeDiv(stats.utilityDamage, rounds),
+    utilKillsPer100: safeDiv(stats.utilityKills, rounds) * 100,
+    flashesPerRound: safeDiv(stats.flashesThrown, rounds),
+    flashAssistsPerRound: safeDiv(stats.flashAssists, rounds),
+    blindTimePerRound: safeDiv(stats.blindDuration, rounds),
+
+    // Raw Stats for Validation
+    totalFlashes: stats.flashesThrown,
+    totalBlinded: stats.enemiesBlinded,
+    totalFlashAssists: stats.flashAssists,
+  };
+
+  return {
+    overall: {
+      rating: safeDiv(totalRating, totalRounds),
+      ctRating: safeDiv(ctRatingSum, ctRounds),
+      tRating: safeDiv(tRatingSum, tRounds),
+    },
+    filtered: {
+      adr: adr,
+      kdr: kdrWeightedAvg,
+      kpr: kpr,
+      dpr: safeDiv(stats.deaths, rounds),
+      kast: kastWeightedAvg,
+      impact: safeDiv(impactSum, rounds),
+      wpaSum: wpaSum,
+      wpaAvg: safeDiv(wpaSum, rounds),
+      multiKillRate: multiKillWeightedAvg,
+      headshotPct: safeDiv(stats.headshots, stats.kills) * 100,
+      survivalRate: safeDiv(stats.survivedRounds, rounds) * 100,
+
+      scoreFirepower,
+      scoreEntry,
+      scoreTrade,
+      scoreOpening,
+      scoreClutch,
+      scoreSniper,
+      scoreUtility,
+
+      details: details,
+    },
+  };
 };

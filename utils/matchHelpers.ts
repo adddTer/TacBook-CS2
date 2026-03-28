@@ -1,4 +1,4 @@
-import { Match, PlayerMatchStats, MatchSeries, SeriesMatchRef } from '../types';
+import { Match, PlayerMatchStats, MatchBon } from '../types';
 import { ROSTER } from '../constants/roster';
 import { MAPS } from '../constants/maps';
 
@@ -214,4 +214,34 @@ export const calculateScoreFromRounds = (match: Match) => {
         ot_us: ot_us > 0 || ot_them > 0 ? ot_us : undefined,
         ot_them: ot_us > 0 || ot_them > 0 ? ot_them : undefined
     };
+};
+
+export const getBonResult = (bon: MatchBon, allMatches: Match[]): { us: number, them: number, result: 'WIN' | 'LOSS' | 'TIE' | 'PENDING' } => {
+    let usWins = 0;
+    let themWins = 0;
+
+    bon.matches.forEach(ref => {
+        const match = allMatches.find(m => m.id === ref.id);
+        if (match) {
+            if (match.result === 'WIN') usWins++;
+            else if (match.result === 'LOSS') themWins++;
+        }
+    });
+
+    let result: 'WIN' | 'LOSS' | 'TIE' | 'PENDING' = 'PENDING';
+    
+    // Simple logic: if anyone reaches majority, they win.
+    const majority = bon.type === 'BO5' ? 3 : bon.type === 'BO3' ? 2 : bon.type === 'BO2' ? 2 : 1;
+    
+    if (usWins >= majority) result = 'WIN';
+    else if (themWins >= majority) result = 'LOSS';
+    else if (bon.type === 'BO2' && usWins === 1 && themWins === 1) result = 'TIE';
+    // If all matches are played and no one reached majority (e.g. BO2 1-1 or incomplete)
+    else if (usWins + themWins === parseInt(bon.type.replace('BO', ''))) {
+        if (usWins > themWins) result = 'WIN';
+        else if (themWins > usWins) result = 'LOSS';
+        else result = 'TIE';
+    }
+
+    return { us: usWins, them: themWins, result };
 };

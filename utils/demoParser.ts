@@ -1264,7 +1264,7 @@ export const parseDemoJson = (data: DemoData): Match => {
         players: ourPlayers,
         enemyPlayers: enemyPlayers,
         rounds: matchRounds,
-        parserVersion: '1.1.0',
+        parserVersion: '1.1.2',
         rawDemoJson: data
     };
 };

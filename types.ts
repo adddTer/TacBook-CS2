@@ -105,8 +105,8 @@ export interface ContentGroup {
   tactics: Tactic[];
   utilities: Utility[];
   matches: Match[]; // Added Match support
-  series?: MatchSeries[]; // Added Series support
   tournaments?: Tournament[]; // Added Tournament support
+  bons?: MatchBon[]; // Restored Series as BON
 }
 
 export interface FilterState {
@@ -328,6 +328,23 @@ export interface MatchScore {
     ot_them?: number;
 }
 
+export interface BonMatchRef {
+    id: string;
+    order: number;
+}
+
+export interface MatchBon {
+    id: string;
+    groupId?: string;
+    tournamentId?: string;
+    title: string;
+    date: string;
+    type: 'BO1' | 'BO2' | 'BO3' | 'BO5';
+    matches: BonMatchRef[];
+    teamNameUs?: string;
+    teamNameThem?: string;
+}
+
 export interface Match {
     id: string;
     source: 'PWA' | 'Official' | 'Demo'; // Added Demo source
@@ -350,40 +367,18 @@ export interface Match {
     // NEW: Parser Metadata
     parserVersion?: string;
     rawDemoJson?: any;
-}
-
-// --- Series Support ---
-
-export interface SeriesMatchRef {
-    matchId: string;
-    swapSides: boolean; // If true, in this match, "Us/Team A" is actually "Them/Team B" data
-}
-
-export interface MatchSeries {
-    id: string;
-    title: string; // e.g. "IEM Cologne Final vs G2"
-    format: 'BO1' | 'BO2' | 'BO3' | 'BO5' | 'BO7';
-    matches: SeriesMatchRef[];
-    date: string;
-    groupId?: string;
+    
+    // NEW: Tournament Link
+    tournamentId?: string;
 }
 
 // --- Tournament Support ---
-
-export type TournamentStage = 'GROUP' | 'SWISS' | 'RO32' | 'RO16' | 'QUARTER_FINAL' | 'SEMI_FINAL' | 'FINAL' | 'UPPER_BRACKET' | 'LOWER_BRACKET' | 'SWISS_ROUND' | 'OTHER';
-
-export interface TournamentMatchRef {
-    matchId: string;
-    stage: TournamentStage;
-    customStageName?: string; // e.g., "Swiss Round 1 High"
-}
 
 export interface Tournament {
     id: string;
     title: string;
     startDate: string;
     endDate?: string;
-    matches: TournamentMatchRef[];
     groupId?: string;
 }
 

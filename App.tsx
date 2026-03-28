@@ -37,9 +37,9 @@ const App: React.FC = () => {
   // --- Data Management Hook ---
   const { 
       groups, setGroups, activeGroupIds, setActiveGroupIds, isDataLoaded,
-      allTactics, allUtilities, allMatches, allSeries, allTournaments, writableGroups, hasWritableGroups,
-      handleSaveTactic, handleSaveUtility, handleSaveMatch, handleSaveSeries, handleSaveTournament,
-      deleteTactic, deleteUtility, deleteMatch, deleteSeries, deleteTournament
+      allTactics, allUtilities, allMatches, allTournaments, allBons, writableGroups, hasWritableGroups,
+      handleSaveTactic, handleSaveUtility, handleSaveMatch, handleSaveTournament, handleSaveBon,
+      deleteTactic, deleteUtility, deleteMatch, deleteTournament, deleteBon
   } = useAppStorage();
 
   // --- UI Modal States ---
@@ -384,14 +384,14 @@ const App: React.FC = () => {
                 <div className="max-w-[1920px] mx-auto">
                     <ReviewView 
                         allMatches={allMatches}
-                        allSeries={allSeries}
                         allTournaments={allTournaments}
+                        allBons={allBons}
                         onSaveMatch={handleSaveMatch}
-                        onSaveSeries={handleSaveSeries}
                         onSaveTournament={handleSaveTournament}
+                        onSaveBon={handleSaveBon}
                         onDeleteMatch={deleteMatch}
-                        onDeleteSeries={deleteSeries}
                         onDeleteTournament={deleteTournament}
+                        onDeleteBon={deleteBon}
                         writableGroups={writableGroups}
                         isDebug={isDebug}
                     />

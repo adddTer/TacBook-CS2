@@ -1,12 +1,15 @@
+import { useState, useMemo } from "react";
+import { Tactic, Side, MapId, FilterState, Tag } from "../types";
+import { parseTime } from "../utils/timeHelper";
 
-import { useState, useMemo } from 'react';
-import { Tactic, Side, MapId, FilterState, Tag } from '../types';
-import { parseTime } from '../utils/timeHelper';
-
-export const useTactics = (currentMap: MapId, side: Side, allTactics: Tactic[]) => {
+export const useTactics = (
+  currentMap: MapId,
+  side: Side,
+  allTactics: Tactic[],
+) => {
   const [filter, setFilter] = useState<FilterState>({
-    searchQuery: '',
-    site: 'All',
+    searchQuery: "",
+    site: "All",
     selectedTags: [],
     timePhase: undefined,
     specificRole: undefined,
@@ -16,7 +19,7 @@ export const useTactics = (currentMap: MapId, side: Side, allTactics: Tactic[]) 
   // 1. Get Base Tactics for Map & Side
   const baseTactics = useMemo(() => {
     // Filter the passed allTactics array
-    return allTactics.filter(t => t.mapId === currentMap && t.side === side);
+    return allTactics.filter((t) => t.mapId === currentMap && t.side === side);
   }, [currentMap, side, allTactics]);
 
   // 2. Extract Available Tags & Roles for filters
@@ -24,36 +27,38 @@ export const useTactics = (currentMap: MapId, side: Side, allTactics: Tactic[]) 
     const tagsMap = new Map<string, Tag>();
     const rolesSet = new Set<string>();
 
-    baseTactics.forEach(t => {
-      t.tags.forEach(tag => tagsMap.set(tag.label, tag));
-      t.actions.forEach(a => rolesSet.add(a.who));
+    baseTactics.forEach((t) => {
+      t.tags.forEach((tag) => tagsMap.set(tag.label, tag));
+      t.actions.forEach((a) => rolesSet.add(a.who));
     });
 
     return {
       availableTags: Array.from(tagsMap.values()),
-      availableRoles: Array.from(rolesSet).sort()
+      availableRoles: Array.from(rolesSet).sort(),
     };
   }, [baseTactics]);
 
   // 3. Apply Filters
   const filteredTactics = useMemo(() => {
-    return baseTactics.filter(t => {
+    return baseTactics.filter((t) => {
       // Recommended Filter
       if (filter.onlyRecommended && !t.isRecommended) return false;
 
       // Site Filter
-      if (filter.site !== 'All' && t.site !== filter.site) return false;
+      if (filter.site !== "All" && t.site !== filter.site) return false;
 
       // Tag Filter (AND logic: must contain ALL selected tags)
       if (filter.selectedTags.length > 0) {
-        const tacticTagLabels = t.tags.map(tag => tag.label);
-        const hasAllTags = filter.selectedTags.every(st => tacticTagLabels.includes(st));
+        const tacticTagLabels = t.tags.map((tag) => tag.label);
+        const hasAllTags = filter.selectedTags.every((st) =>
+          tacticTagLabels.includes(st),
+        );
         if (!hasAllTags) return false;
       }
 
       // Role Filter (Does this tactic involve the specific role?)
       if (filter.specificRole) {
-        const hasRole = t.actions.some(a => a.who === filter.specificRole);
+        const hasRole = t.actions.some((a) => a.who === filter.specificRole);
         if (!hasRole) return false;
       }
 
@@ -61,12 +66,12 @@ export const useTactics = (currentMap: MapId, side: Side, allTactics: Tactic[]) 
       if (filter.timePhase) {
         // Logic: Check if tactic has meaningful action in this phase
         // Early: > 1:40, Mid: 1:40 - 0:40, Late: < 0:40
-        const hasPhaseAction = t.actions.some(a => {
-            const time = parseTime(a.time);
-            if (filter.timePhase === 'early') return time > 100; // > 1:40
-            if (filter.timePhase === 'mid') return time <= 100 && time > 40;
-            if (filter.timePhase === 'late') return time <= 40 && time >= 0;
-            return false;
+        const hasPhaseAction = t.actions.some((a) => {
+          const time = parseTime(a.time);
+          if (filter.timePhase === "early") return time > 100; // > 1:40
+          if (filter.timePhase === "mid") return time <= 100 && time > 40;
+          if (filter.timePhase === "late") return time <= 40 && time >= 0;
+          return false;
         });
         if (!hasPhaseAction) return false;
       }
@@ -75,10 +80,13 @@ export const useTactics = (currentMap: MapId, side: Side, allTactics: Tactic[]) 
       if (filter.searchQuery) {
         const q = filter.searchQuery.toLowerCase();
         const inTitle = t.title.toLowerCase().includes(q);
-        const inTags = t.tags.some(tag => tag.label.toLowerCase().includes(q));
-        const inActions = t.actions.some(a => 
-            a.content.toLowerCase().includes(q) || 
-            a.who.toLowerCase().includes(q)
+        const inTags = t.tags.some((tag) =>
+          tag.label.toLowerCase().includes(q),
+        );
+        const inActions = t.actions.some(
+          (a) =>
+            a.content.toLowerCase().includes(q) ||
+            a.who.toLowerCase().includes(q),
         );
         return inTitle || inTags || inActions;
       }
@@ -88,7 +96,7 @@ export const useTactics = (currentMap: MapId, side: Side, allTactics: Tactic[]) 
   }, [baseTactics, filter]);
 
   const updateFilter = (key: keyof FilterState, value: any) => {
-    setFilter(prev => ({ ...prev, [key]: value }));
+    setFilter((prev) => ({ ...prev, [key]: value }));
   };
 
   return {
@@ -96,6 +104,6 @@ export const useTactics = (currentMap: MapId, side: Side, allTactics: Tactic[]) 
     availableTags,
     availableRoles,
     filter,
-    updateFilter
+    updateFilter,
   };
 };
