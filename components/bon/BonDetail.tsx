@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MatchBon, Match, ContentGroup } from '../../types';
-import { getBonResult, getMapDisplayName, getTeamNames } from '../../utils/matchHelpers';
-import { MatchList } from '../review/MatchList';
+import { getBonResult, getMapDisplayName, getTeamNames, aggregateMatches } from '../../utils/matchHelpers';
+import { MatchDetail } from '../review/MatchDetail';
 
 interface BonDetailProps {
     bon: MatchBon;
@@ -28,6 +28,8 @@ export const BonDetail: React.FC<BonDetailProps> = ({
     const [editName, setEditName] = useState(bon.title);
     const [editType, setEditType] = useState(bon.type);
     const [isAddingMatch, setIsAddingMatch] = useState(false);
+    const [selectedMapId, setSelectedMapId] = useState<string>('all');
+    const [showEditView, setShowEditView] = useState(false);
 
     const bonMatches = useMemo(() => {
         return bon.matches
@@ -42,6 +44,27 @@ export const BonDetail: React.FC<BonDetailProps> = ({
     }, [allMatches, bon.matches]);
 
     const result = getBonResult(bon, allMatches);
+
+    const aggregatedMatch = useMemo(() => {
+        return aggregateMatches(bonMatches, bon.title, bon.id);
+    }, [bonMatches, bon.title, bon.id]);
+
+    const currentMatch = useMemo(() => {
+        if (selectedMapId === 'all') return aggregatedMatch;
+        return bonMatches.find(m => m.id === selectedMapId) || aggregatedMatch;
+    }, [selectedMapId, aggregatedMatch, bonMatches]);
+
+    const mapOptions = useMemo(() => {
+        const options = [{ id: 'all', label: '全部地图' }];
+        bonMatches.forEach(m => {
+            const score = m.score ? `${m.score.us}:${m.score.them}` : '';
+            options.push({
+                id: m.id,
+                label: `${getMapDisplayName(m.mapId)} ${score ? `(${score})` : ''}`
+            });
+        });
+        return options;
+    }, [bonMatches]);
 
     const handleSaveEdit = () => {
         if (!editName.trim()) return;
@@ -68,13 +91,63 @@ export const BonDetail: React.FC<BonDetailProps> = ({
         });
     };
 
+    if (!showEditView) {
+        if (!currentMatch || Object.keys(currentMatch).length === 0) {
+            return (
+                <div className="flex flex-col items-center justify-center py-20 text-neutral-400">
+                    <p>没有找到比赛数据</p>
+                    <button onClick={onBack} className="mt-4 text-blue-500 hover:underline">返回</button>
+                    <button onClick={() => setShowEditView(true)} className="mt-4 px-4 py-2 bg-neutral-100 dark:bg-neutral-800 rounded-lg text-sm font-medium">
+                        编辑 BON
+                    </button>
+                </div>
+            );
+        }
+
+        const headerContent = (
+            <div className="ml-4 flex items-center gap-2">
+                <select
+                    value={selectedMapId}
+                    onChange={(e) => setSelectedMapId(e.target.value)}
+                    className="px-3 py-1.5 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                >
+                    {mapOptions.map(opt => (
+                        <option key={opt.id} value={opt.id}>{opt.label}</option>
+                    ))}
+                </select>
+                <button 
+                    onClick={() => setShowEditView(true)}
+                    className="p-1.5 text-neutral-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                    title="编辑 BON"
+                >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                </button>
+            </div>
+        );
+
+        return (
+            <MatchDetail
+                match={currentMatch}
+                onBack={onBack}
+                onPlayerClick={() => {}}
+                onDelete={() => {
+                    if (window.confirm('确定要删除这个 BON 吗？')) {
+                        onDeleteBon();
+                    }
+                }}
+                onShare={() => {}}
+                headerContent={headerContent}
+            />
+        );
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Header */}
             <div className="flex items-center justify-between sticky top-[56px] z-30 bg-neutral-50/95 dark:bg-neutral-950/95 backdrop-blur-md py-3 -mx-4 px-4 border-b border-neutral-200 dark:border-neutral-800">
                 <div className="flex items-center gap-3">
                     <button 
-                        onClick={onBack}
+                        onClick={() => setShowEditView(false)}
                         className="p-2 -ml-2 text-neutral-500 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg transition-colors"
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>

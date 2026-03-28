@@ -245,3 +245,105 @@ export const getBonResult = (bon: MatchBon, allMatches: Match[]): { us: number, 
 
     return { us: usWins, them: themWins, result };
 };
+
+export const aggregateMatches = (matches: Match[], title: string, id: string): Match => {
+    if (matches.length === 0) return {} as Match;
+    if (matches.length === 1) return matches[0];
+
+    const base = matches[0];
+    const aggregated: Match = {
+        id: id,
+        mapId: 'All Maps' as any,
+        date: base.date,
+        duration: matches.reduce((sum, m) => sum + m.duration, 0),
+        result: 'TIE',
+        score: { us: 0, them: 0 },
+        players: [],
+        enemyPlayers: [],
+        rounds: [],
+        source: base.source,
+        serverName: title,
+        startingSide: base.startingSide,
+        teamNameUs: base.teamNameUs,
+        teamNameThem: base.teamNameThem
+    };
+
+    const playerMap = new Map<string, PlayerMatchStats>();
+    const enemyMap = new Map<string, PlayerMatchStats>();
+
+    const mergePlayer = (map: Map<string, PlayerMatchStats>, p: PlayerMatchStats) => {
+        const key = p.steamid || p.playerId;
+        if (!map.has(key)) {
+            map.set(key, { ...p, matchesPlayed: 1, r3_rounds_played: p.r3_rounds_played || 0 });
+        } else {
+            const existing = map.get(key)!;
+            existing.kills += p.kills;
+            existing.deaths += p.deaths;
+            existing.assists += p.assists;
+            existing.total_damage = (existing.total_damage || 0) + (p.total_damage || 0);
+            existing.entry_kills += p.entry_kills;
+            existing.entry_deaths += p.entry_deaths;
+            existing.matchesPlayed = (existing.matchesPlayed || 1) + 1;
+            
+            const totalRounds = (existing.r3_rounds_played || 0) + (p.r3_rounds_played || 0);
+            if (totalRounds > 0) {
+                existing.adr = ((existing.adr * (existing.r3_rounds_played || 0)) + (p.adr * (p.r3_rounds_played || 0))) / totalRounds;
+                existing.hsRate = ((existing.hsRate * (existing.r3_rounds_played || 0)) + (p.hsRate * (p.r3_rounds_played || 0))) / totalRounds;
+                existing.rating = ((existing.rating * (existing.r3_rounds_played || 0)) + (p.rating * (p.r3_rounds_played || 0))) / totalRounds;
+                existing.kast = ((existing.kast * (existing.r3_rounds_played || 0)) + (p.kast * (p.r3_rounds_played || 0))) / totalRounds;
+            }
+            existing.r3_rounds_played = totalRounds;
+
+            existing.multikills.k2 += p.multikills.k2;
+            existing.multikills.k3 += p.multikills.k3;
+            existing.multikills.k4 += p.multikills.k4;
+            existing.multikills.k5 += p.multikills.k5;
+
+            for (const k of ['1v1', '1v2', '1v3', '1v4', '1v5'] as const) {
+                existing.clutches[k].won += p.clutches[k].won;
+                existing.clutches[k].lost += p.clutches[k].lost;
+            }
+            existing.clutchHistory = [...(existing.clutchHistory || []), ...(p.clutchHistory || [])];
+
+            existing.utility.smokesThrown += p.utility.smokesThrown;
+            existing.utility.flashesThrown += p.utility.flashesThrown;
+            existing.utility.enemiesBlinded += p.utility.enemiesBlinded;
+            existing.utility.blindDuration += p.utility.blindDuration;
+            existing.utility.heThrown += p.utility.heThrown;
+            existing.utility.heDamage += p.utility.heDamage;
+            existing.utility.molotovsThrown += p.utility.molotovsThrown;
+            existing.utility.molotovDamage += p.utility.molotovDamage;
+        }
+    };
+
+    let usWins = 0;
+    let themWins = 0;
+
+    matches.forEach(m => {
+        m.players.forEach(p => mergePlayer(playerMap, p));
+        m.enemyPlayers.forEach(p => mergePlayer(enemyMap, p));
+        
+        if (m.result === 'WIN') usWins++;
+        else if (m.result === 'LOSS') themWins++;
+
+        const roundOffset = aggregated.rounds?.length || 0;
+        if (m.rounds) {
+            const adjustedRounds = m.rounds.map(r => ({
+                ...r,
+                roundNumber: r.roundNumber + roundOffset
+            }));
+            aggregated.rounds = [...(aggregated.rounds || []), ...adjustedRounds];
+        }
+    });
+
+    aggregated.players = Array.from(playerMap.values());
+    aggregated.enemyPlayers = Array.from(enemyMap.values());
+    
+    if (usWins > themWins) aggregated.result = 'WIN';
+    else if (themWins > usWins) aggregated.result = 'LOSS';
+    else aggregated.result = 'TIE';
+
+    aggregated.score = { us: usWins, them: themWins };
+
+    return aggregated;
+};

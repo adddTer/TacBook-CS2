@@ -21,13 +21,14 @@ interface MatchDetailProps {
     onPlayerClick: (id: string) => void;
     onDelete: (match: Match) => void;
     onShare: (match: Match) => void;
+    headerContent?: React.ReactNode;
 }
 
 type SideFilter = 'ALL' | 'CT' | 'T';
 
 // --- MAIN CONTAINER ---
 
-export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlayerClick, onDelete, onShare }) => {
+export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlayerClick, onDelete, onShare, headerContent }) => {
     const [detailTab, setDetailTab] = useState<'overview' | 'performance' | 'duels' | 'utility' | 'clutches' | 'timeline' | 'timeline_beta' | 'wpa'>('overview');
     const [sideFilter, setSideFilter] = useState<SideFilter>('ALL');
     const [showDefinitions, setShowDefinitions] = useState(false);
@@ -109,6 +110,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             说明
                         </button>
+                        {headerContent}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -163,13 +165,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                              </div>
                          </div>
                          
-                         <div className="mt-6 flex justify-center gap-4 text-xs font-sans tabular-nums font-bold bg-neutral-50 dark:bg-neutral-800 py-2 rounded-lg max-w-[320px] mx-auto text-neutral-500">
-                             <span>( <span className={half1ThemColor}>{displayScore.half1_them}</span>-<span className={half1UsColor}>{displayScore.half1_us}</span> )</span>
-                             <span>( <span className={half2ThemColor}>{displayScore.half2_them}</span>-<span className={half2UsColor}>{displayScore.half2_us}</span> )</span>
-                             {(displayScore.ot_us !== undefined || displayScore.ot_them !== undefined) && (
-                                 <span>( <span className="text-neutral-400">OT:</span> <span className="text-neutral-600 dark:text-neutral-300">{displayScore.ot_them || 0}</span>-<span className="text-neutral-600 dark:text-neutral-300">{displayScore.ot_us || 0}</span> )</span>
-                             )}
-                         </div>
+                         {displayScore.half1_us !== undefined && displayScore.half1_them !== undefined && (
+                             <div className="mt-6 flex justify-center gap-4 text-xs font-sans tabular-nums font-bold bg-neutral-50 dark:bg-neutral-800 py-2 rounded-lg max-w-[320px] mx-auto text-neutral-500">
+                                 <span>( <span className={half1ThemColor}>{displayScore.half1_them}</span>-<span className={half1UsColor}>{displayScore.half1_us}</span> )</span>
+                                 <span>( <span className={half2ThemColor}>{displayScore.half2_them}</span>-<span className={half2UsColor}>{displayScore.half2_us}</span> )</span>
+                                 {(displayScore.ot_us !== undefined || displayScore.ot_them !== undefined) && (
+                                     <span>( <span className="text-neutral-400">OT:</span> <span className="text-neutral-600 dark:text-neutral-300">{displayScore.ot_them || 0}</span>-<span className="text-neutral-600 dark:text-neutral-300">{displayScore.ot_us || 0}</span> )</span>
+                                 )}
+                             </div>
+                         )}
                     </div>
                 </div>
 
