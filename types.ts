@@ -255,6 +255,7 @@ export interface MatchTimelineEvent {
         eventUpdates: any[];
         timeProbDelta: number;
         eventProbDelta: number;
+        ratingUpdates?: { steamid: string, ratingDelta: number }[];
     };
 }
 

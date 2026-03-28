@@ -11,4 +11,10 @@ export default defineConfig({
   // IMPORTANT: This ensures assets are loaded relatively, 
   // preventing 404 errors on GitHub Pages (which serves from a /repo-name/ subpath).
   base: './', 
+  build: {
+    sourcemap: false,
+  },
+  css: {
+    devSourcemap: false,
+  }
 });

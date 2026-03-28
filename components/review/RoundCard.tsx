@@ -47,6 +47,23 @@ export const RoundCard: React.FC<RoundCardProps> = ({ round, isExpanded, onToggl
         return true;
     });
 
+    // Group assists with kills
+    const groupedEvents: { event: MatchTimelineEvent, assists: MatchTimelineEvent[] }[] = [];
+    const assistEvents = displayEvents.filter(ev => ev.type === 'assist' || ev.type === 'flash_assist');
+    const nonAssistEvents = displayEvents.filter(ev => ev.type !== 'assist' && ev.type !== 'flash_assist');
+
+    nonAssistEvents.forEach(ev => {
+        if (ev.type === 'kill') {
+            const assists = assistEvents.filter(a => 
+                a.target?.steamid === ev.target?.steamid &&
+                Math.abs(a.seconds - ev.seconds) < 5
+            );
+            groupedEvents.push({ event: ev, assists });
+        } else {
+            groupedEvents.push({ event: ev, assists: [] });
+        }
+    });
+
     // Summary data
     const killCount = sortedEvents.filter(e => e.type === 'kill').length;
     const damageEvents = sortedEvents.filter(e => e.type === 'damage');
@@ -152,8 +169,8 @@ export const RoundCard: React.FC<RoundCardProps> = ({ round, isExpanded, onToggl
                             {/* Vertical Line Container */}
                             <div className="absolute left-[34px] top-3 bottom-4 w-0.5 bg-neutral-200 dark:bg-neutral-800 -z-10"></div>
                             
-                            {displayEvents.map((ev, idx) => (
-                                <TimelineEventRow key={idx} event={ev} timeMode={timeMode} plantTime={plantTime} bombEndTime={bombEndTime} showWinProb={showWinProb} />
+                            {groupedEvents.map((item, idx) => (
+                                <TimelineEventRow key={idx} event={item.event} assists={item.assists} timeMode={timeMode} plantTime={plantTime} bombEndTime={bombEndTime} showWinProb={showWinProb} />
                             ))}
                         </div>
                     </div>

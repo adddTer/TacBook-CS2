@@ -102,6 +102,18 @@ export class RatingEngine {
         this.wpaEngine.handleDefuseStart(sid, hasKit);
     }
 
+    public getCurrentRatings(): Map<string, number> {
+        const ratings = new Map<string, number>();
+        this.roundStats.forEach((stats, sid) => {
+            const tempWpa = this.wpaEngine.getPlayerRoundWPA(sid);
+            const tempStats = { ...stats, wpa: tempWpa };
+            const startValue = this.inventory.getStartValue(sid);
+            const calcResult = calculateRoundRating(tempStats, startValue);
+            ratings.set(sid, calcResult.rating);
+        });
+        return ratings;
+    }
+
     public resetRoundState() {
         this.roundStats.clear();
         this.recentDeaths = [];
@@ -125,13 +137,15 @@ export class RatingEngine {
         aliveCTs: Set<string>,
         roundTs: Set<string>, // Incoming T players (might be empty in R1)
         roundCTs: Set<string> // Incoming CT players (might be empty in R1)
-    ): { timeUpdates: any[], eventUpdates: any[], timeProbDelta: number, eventProbDelta: number } | void {
+    ): { timeUpdates: any[], eventUpdates: any[], timeProbDelta: number, eventProbDelta: number, ratingUpdates: { steamid: string, ratingDelta: number }[] } | void {
         const type = event.event_name;
         const tick = event.tick || 0;
         const TICK_RATE = 64; 
         
         let eventUpdates: any[] = [];
         let timeUpdates: any[] = [];
+
+        const ratingsBefore = this.getCurrentRatings();
 
         // --- NEW: Detect Round Transition for Hard Inventory Reset (Fixes R13 Economy Inflation) ---
         if (currentRound > this.lastRoundProcessed) {
@@ -238,7 +252,7 @@ export class RatingEngine {
             this.damageGraph.clear();
             this.health.reset();
             this.firstKillHappened = false;
-            return { timeUpdates, eventUpdates, timeProbDelta: 0, eventProbDelta: 0 };
+            return { timeUpdates, eventUpdates, timeProbDelta: 0, eventProbDelta: 0, ratingUpdates: [] };
         }
 
         // FIX: Time Safety Valve
@@ -706,11 +720,22 @@ export class RatingEngine {
 
         const probAfterEvent = this.wpaEngine.getCurrentWinProb();
 
+        const ratingsAfter = this.getCurrentRatings();
+        const ratingUpdates: { steamid: string, ratingDelta: number }[] = [];
+        ratingsAfter.forEach((ratingAfter, sid) => {
+            const ratingBefore = ratingsBefore.get(sid) || 0;
+            const delta = ratingAfter - ratingBefore;
+            if (Math.abs(delta) > 0.001) {
+                ratingUpdates.push({ steamid: sid, ratingDelta: delta });
+            }
+        });
+
         return { 
             timeUpdates, 
             eventUpdates,
             timeProbDelta: probAfterTime - probBeforeTime,
-            eventProbDelta: probAfterEvent - probAfterTime
+            eventProbDelta: probAfterEvent - probAfterTime,
+            ratingUpdates
         };
     }
 

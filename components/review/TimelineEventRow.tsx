@@ -6,13 +6,14 @@ import { resolveName } from '../../utils/demo/helpers';
 
 interface TimelineEventRowProps {
     event: MatchTimelineEvent;
+    assists?: MatchTimelineEvent[];
     timeMode: 'elapsed' | 'countdown';
     plantTime?: number;
     bombEndTime?: number;
     showWinProb: boolean;
 }
 
-export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeMode, plantTime, bombEndTime, showWinProb }) => {
+export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assists = [], timeMode, plantTime, bombEndTime, showWinProb }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const timeStr = formatTime(event.seconds, timeMode, plantTime);
     
@@ -108,6 +109,19 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
                 <span className={`font-bold text-sm ${getPColor(event.target?.side)}`}>
                     {getName(event.target)}
                 </span>
+
+                {/* Assists */}
+                {assists.length > 0 && (
+                    <div className="flex items-center gap-1 ml-2">
+                        <span className="text-neutral-400 text-xs">+</span>
+                        {assists.map((assist, idx) => (
+                            <span key={idx} className={`text-xs font-medium ${getPColor(assist.subject?.side)} flex items-center gap-0.5`} title={assist.type === 'flash_assist' ? '闪光助攻' : '助攻'}>
+                                {assist.type === 'flash_assist' && <Icons.Blind className="w-3 h-3 text-neutral-400" />}
+                                {getName(assist.subject)}
+                            </span>
+                        ))}
+                    </div>
+                )}
             </div>
         );
     } else if (event.type === 'plant') {
@@ -271,6 +285,31 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, timeM
                                 </div>
                             </div>
                         </div>
+
+                        {/* Rating Updates */}
+                        {event.wpaUpdates?.ratingUpdates && event.wpaUpdates.ratingUpdates.length > 0 && (
+                            <div className="mb-3 pb-2 border-b border-neutral-200 dark:border-neutral-700">
+                                <div className="font-bold text-neutral-700 dark:text-neutral-300 mb-2 flex items-center gap-2">
+                                    <span>Rating 影响</span>
+                                    <span className="text-neutral-400 font-normal text-[10px]">(本回合 Rating 变化)</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {event.wpaUpdates.ratingUpdates.map((ru, idx) => {
+                                        const isPositive = ru.ratingDelta > 0;
+                                        return (
+                                            <div key={idx} className="flex items-center justify-between bg-white dark:bg-neutral-900 px-2 py-1 rounded shadow-sm border border-neutral-100 dark:border-neutral-800">
+                                                <span className="font-medium text-neutral-600 dark:text-neutral-300 truncate pr-2">
+                                                    {resolveName(ru.steamid)}
+                                                </span>
+                                                <span className={`font-mono font-bold ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                    {isPositive ? '+' : ''}{ru.ratingDelta.toFixed(3)}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 max-w-2xl">
                             <div>
