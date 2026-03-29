@@ -999,7 +999,8 @@ export const parseDemoJson = (data: DemoData): Match => {
                 isBlind: e.attackerblind,
                 isSmoke: e.thrusmoke,
                 winProb: ratingEngine.getRoundWinProb(),
-                wpaUpdates: wpaUpdates || undefined
+                wpaUpdates: wpaUpdates || undefined,
+                duelStats: wpaUpdates?.duelStats
             });
 
             if (att && roundClutchAttempts.has(att) && att !== vic && att !== "BOT") {

@@ -253,11 +253,11 @@ export const aggregateMatches = (matches: Match[], title: string, id: string): M
     const base = matches[0];
     const aggregated: Match = {
         id: id,
-        mapId: 'All Maps' as any,
+        mapId: '全部地图' as any,
         date: base.date,
-        duration: matches.reduce((sum, m) => sum + m.duration, 0),
+        rank: base.rank || 'Unknown',
         result: 'TIE',
-        score: { us: 0, them: 0 },
+        score: { us: 0, them: 0, half1_us: 0, half1_them: 0, half2_us: 0, half2_them: 0 },
         players: [],
         enemyPlayers: [],
         rounds: [],
@@ -271,10 +271,13 @@ export const aggregateMatches = (matches: Match[], title: string, id: string): M
     const playerMap = new Map<string, PlayerMatchStats>();
     const enemyMap = new Map<string, PlayerMatchStats>();
 
+    // Determine the core "Us" team based on the first match
+    const baseUsSteamIds = new Set(base.players.map(p => p.steamid || p.playerId));
+
     const mergePlayer = (map: Map<string, PlayerMatchStats>, p: PlayerMatchStats) => {
         const key = p.steamid || p.playerId;
         if (!map.has(key)) {
-            map.set(key, { ...p, matchesPlayed: 1, r3_rounds_played: p.r3_rounds_played || 0 });
+            map.set(key, JSON.parse(JSON.stringify({ ...p, matchesPlayed: 1, r3_rounds_played: p.r3_rounds_played || 0 })));
         } else {
             const existing = map.get(key)!;
             existing.kills += p.kills;
@@ -320,11 +323,30 @@ export const aggregateMatches = (matches: Match[], title: string, id: string): M
     let themWins = 0;
 
     matches.forEach(m => {
-        m.players.forEach(p => mergePlayer(playerMap, p));
-        m.enemyPlayers.forEach(p => mergePlayer(enemyMap, p));
+        // Check alignment with base match
+        let overlapWithUs = 0;
+        m.players.forEach(p => {
+            if (baseUsSteamIds.has(p.steamid || p.playerId)) overlapWithUs++;
+        });
+
+        // If m.players has less overlap with base.players than m.enemyPlayers would, swap them
+        const isSwapped = overlapWithUs < (m.players.length / 2) && m.players.length > 0;
+
+        const actualUsPlayers = isSwapped ? m.enemyPlayers : m.players;
+        const actualThemPlayers = isSwapped ? m.players : m.enemyPlayers;
+
+        actualUsPlayers.forEach(p => mergePlayer(playerMap, p));
+        actualThemPlayers.forEach(p => mergePlayer(enemyMap, p));
         
-        if (m.result === 'WIN') usWins++;
-        else if (m.result === 'LOSS') themWins++;
+        // Also swap match result if teams are swapped
+        let actualResult = m.result;
+        if (isSwapped) {
+            if (m.result === 'WIN') actualResult = 'LOSS';
+            else if (m.result === 'LOSS') actualResult = 'WIN';
+        }
+
+        if (actualResult === 'WIN') usWins++;
+        else if (actualResult === 'LOSS') themWins++;
 
         const roundOffset = aggregated.rounds?.length || 0;
         if (m.rounds) {
@@ -343,7 +365,7 @@ export const aggregateMatches = (matches: Match[], title: string, id: string): M
     else if (themWins > usWins) aggregated.result = 'LOSS';
     else aggregated.result = 'TIE';
 
-    aggregated.score = { us: usWins, them: themWins };
+    aggregated.score = { us: usWins, them: themWins, half1_us: 0, half1_them: 0, half2_us: 0, half2_them: 0 };
 
     return aggregated;
 };

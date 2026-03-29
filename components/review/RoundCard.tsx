@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { MatchRound, Match } from '../../types';
+import { MatchRound, Match, MatchTimelineEvent } from '../../types';
 import { TimelineEventRow } from './TimelineEventRow';
 import { RoundTeamStats } from './RoundTeamStats';
 import { getWinReasonText, formatTime, Icons } from './TimelineHelpers';

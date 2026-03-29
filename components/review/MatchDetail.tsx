@@ -46,7 +46,21 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
     const { teamA, teamB } = getTeamNames(match);
 
     // Calculate score from rounds to handle overtime correctly if parser missed it
-    const displayScore = React.useMemo(() => calculateScoreFromRounds(match), [match]);
+    const displayScore = React.useMemo(() => {
+        if (match.mapId === '全部地图' as any) {
+            return {
+                us: match.score.us,
+                them: match.score.them,
+                half1_us: undefined,
+                half1_them: undefined,
+                half2_us: undefined,
+                half2_them: undefined,
+                ot_us: undefined,
+                ot_them: undefined
+            };
+        }
+        return calculateScoreFromRounds(match);
+    }, [match]);
 
     // Stats for Export
     const aggregatedPlayers = useAggregatedStats(match, match.players, sideFilter);
@@ -179,7 +193,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
 
                 {/* Tab Navigation */}
                 <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl mb-6 sticky top-0 z-20 shadow-lg shadow-neutral-100/50 dark:shadow-black/20 overflow-x-auto">
-                      {['overview', 'performance', 'timeline', 'timeline_beta', 'duels', 'utility', 'clutches', 'wpa'].map((t) => (
+                      {['overview', 'performance', 'timeline', 'timeline_beta', 'duels', 'utility', 'clutches', 'wpa']
+                          .filter(t => match.mapId !== '全部地图' as any || (t !== 'timeline' && t !== 'timeline_beta'))
+                          .map((t) => (
                           <button
                             key={t}
                             onClick={() => setDetailTab(t as any)}

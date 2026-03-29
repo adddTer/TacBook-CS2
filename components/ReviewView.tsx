@@ -388,7 +388,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         setSelectedMatch(match);
     };
 
-    const handleTabChange = (tab: 'matches' | 'players' | 'leaderboard' | 'tournaments' | 'stats') => {
+    const handleTabChange = (tab: 'matches' | 'players' | 'leaderboard' | 'tournaments' | 'bons' | 'stats') => {
         setActiveTab(tab);
         setSelectedMatch(null);
         setSelectedPlayerId(null);
@@ -783,6 +783,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     onDeleteTournament={onDeleteTournament}
                     onSaveMatch={onSaveMatch}
                     onDeleteMatch={onDeleteMatch}
+                    onSaveBon={onSaveBon}
                 />
             )}
 

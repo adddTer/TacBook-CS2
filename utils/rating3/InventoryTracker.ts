@@ -162,6 +162,27 @@ export class InventoryTracker {
         }
     }
 
+    public getMostExpensiveWeapon(sid: string): string | undefined {
+        const items = this.inventory.get(String(sid));
+        if (!items) return undefined;
+
+        let maxWeaponValue = 0;
+        let maxWeapon: string | undefined = undefined;
+
+        items.forEach(item => {
+            if (['kevlar', 'assaultsuit', 'vest', 'vesthelm', 'defuser', 'taser'].includes(item)) {
+                return;
+            }
+            const itemValue = WEAPON_VALUES[item] || 0;
+            if (itemValue > maxWeaponValue) {
+                maxWeaponValue = itemValue;
+                maxWeapon = item;
+            }
+        });
+
+        return maxWeapon;
+    }
+
     public calculateValue(sid: string): number {
         const items = this.inventory.get(String(sid));
         if (!items) return 0; // No items = 0 value (default pistol doesn't count)

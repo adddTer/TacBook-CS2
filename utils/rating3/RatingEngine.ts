@@ -137,13 +137,14 @@ export class RatingEngine {
         aliveCTs: Set<string>,
         roundTs: Set<string>, // Incoming T players (might be empty in R1)
         roundCTs: Set<string> // Incoming CT players (might be empty in R1)
-    ): { timeUpdates: any[], eventUpdates: any[], timeProbDelta: number, eventProbDelta: number, ratingUpdates: { steamid: string, ratingDelta: number }[] } | void {
+    ): { timeUpdates: any[], eventUpdates: any[], timeProbDelta: number, eventProbDelta: number, ratingUpdates: { steamid: string, ratingDelta: number }[], duelStats?: any } | void {
         const type = event.event_name;
         const tick = event.tick || 0;
         const TICK_RATE = 64; 
         
         let eventUpdates: any[] = [];
         let timeUpdates: any[] = [];
+        let duelStats: any = undefined;
 
         const ratingsBefore = this.getCurrentRatings();
 
@@ -183,7 +184,7 @@ export class RatingEngine {
             this.wpaEngine.startNewRound();
             this.inventory.reset(); 
             this.roundStartTick = 0; // Reset timer anchor
-            return { timeUpdates, eventUpdates, timeProbDelta: 0, eventProbDelta: 0 };
+            return { timeUpdates, eventUpdates, timeProbDelta: 0, eventProbDelta: 0, ratingUpdates: [] };
         }
 
         // Logic for round start / freeze end
@@ -438,6 +439,14 @@ export class RatingEngine {
             const vicValue = this.inventory.getCurrentValue(vic);
             const attValue = this.inventory.getCurrentValue(att);
             const pExpVictim = getExpectedWinRate(vicValue, attValue, victimSide || 'T', !!isFriendlyKill, isWorldOrSuicide);
+            const pExpKiller = getExpectedWinRate(attValue, vicValue, attackerSide || 'CT', !!isFriendlyKill, isWorldOrSuicide);
+
+            duelStats = {
+                attackerWeapon: this.inventory.getMostExpensiveWeapon(att),
+                victimWeapon: this.inventory.getMostExpensiveWeapon(vic),
+                attackerWinProb: pExpKiller,
+                victimWinProb: pExpVictim
+            };
 
             this.inventory.handlePlayerDeath(vic);
             const vicStats = this.getRoundStats(vic);
@@ -581,7 +590,6 @@ export class RatingEngine {
                     const DAMAGE_SHARE = 0.4;
 
                     // --- Economy Modifier (Expected Win Rate) ---
-                    const pExpKiller = getExpectedWinRate(attValue, vicValue, attackerSide || 'CT', !!isFriendlyKill, isWorldOrSuicide);
                     let E = 0.5 / pExpKiller;
 
                     // NEW: Friendly Fire Penalty Multiplier
@@ -735,7 +743,8 @@ export class RatingEngine {
             eventUpdates,
             timeProbDelta: probAfterTime - probBeforeTime,
             eventProbDelta: probAfterEvent - probAfterTime,
-            ratingUpdates
+            ratingUpdates,
+            duelStats
         };
     }
 

@@ -286,27 +286,101 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
                             </div>
                         </div>
 
+                        {/* Duel Stats */}
+                        {event.duelStats && (
+                            <div className="mb-3 pb-2 border-b border-neutral-200 dark:border-neutral-700">
+                                <div className="font-bold text-neutral-700 dark:text-neutral-300 mb-2 flex items-center gap-2">
+                                    <Icons.Target className="w-3.5 h-3.5 text-neutral-400" />
+                                    <span>对决详情</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 max-w-2xl">
+                                    <div>
+                                        <div className="text-xs text-neutral-500 mb-1.5 font-medium">击杀方 ({getName(event.subject)})</div>
+                                        <ul className="space-y-1.5">
+                                            <li className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
+                                                <span className="text-neutral-500">武器</span>
+                                                <span className="font-medium text-neutral-700 dark:text-neutral-300">{event.duelStats.attackerWeapon ? getWeaponName(event.duelStats.attackerWeapon) : '未知'}</span>
+                                            </li>
+                                            <li className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
+                                                <span className="text-neutral-500">对决胜率</span>
+                                                <span className="font-mono text-[11px] text-blue-600 dark:text-blue-400">
+                                                    {event.duelStats.attackerWinProb !== undefined ? (event.duelStats.attackerWinProb * 100).toFixed(1) + '%' : '-'}
+                                                </span>
+                                            </li>
+                                            {event.wpaUpdates?.ratingUpdates?.find(ru => ru.steamid === event.subject?.steamid) && (
+                                                <li className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
+                                                    <span className="text-neutral-500">击杀奖励 (Rating)</span>
+                                                    <span className={`font-mono text-[11px] ${event.wpaUpdates.ratingUpdates.find(ru => ru.steamid === event.subject?.steamid)!.ratingDelta > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                        {event.wpaUpdates.ratingUpdates.find(ru => ru.steamid === event.subject?.steamid)!.ratingDelta > 0 ? '+' : ''}{event.wpaUpdates.ratingUpdates.find(ru => ru.steamid === event.subject?.steamid)!.ratingDelta.toFixed(3)}
+                                                    </span>
+                                                </li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-neutral-500 mb-1.5 font-medium">阵亡方 ({getName(event.target)})</div>
+                                        <ul className="space-y-1.5">
+                                            <li className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
+                                                <span className="text-neutral-500">武器</span>
+                                                <span className="font-medium text-neutral-700 dark:text-neutral-300">{event.duelStats.victimWeapon ? getWeaponName(event.duelStats.victimWeapon) : '未知'}</span>
+                                            </li>
+                                            <li className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
+                                                <span className="text-neutral-500">对决胜率</span>
+                                                <span className="font-mono text-[11px] text-blue-600 dark:text-blue-400">
+                                                    {event.duelStats.victimWinProb !== undefined ? (event.duelStats.victimWinProb * 100).toFixed(1) + '%' : '-'}
+                                                </span>
+                                            </li>
+                                            {event.wpaUpdates?.ratingUpdates?.find(ru => ru.steamid === event.target?.steamid) && (
+                                                <li className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
+                                                    <span className="text-neutral-500">死亡惩罚 (Rating)</span>
+                                                    <span className={`font-mono text-[11px] ${event.wpaUpdates.ratingUpdates.find(ru => ru.steamid === event.target?.steamid)!.ratingDelta > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                        {event.wpaUpdates.ratingUpdates.find(ru => ru.steamid === event.target?.steamid)!.ratingDelta > 0 ? '+' : ''}{event.wpaUpdates.ratingUpdates.find(ru => ru.steamid === event.target?.steamid)!.ratingDelta.toFixed(3)}
+                                                    </span>
+                                                </li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Rating Updates */}
                         {event.wpaUpdates?.ratingUpdates && event.wpaUpdates.ratingUpdates.length > 0 && (
                             <div className="mb-3 pb-2 border-b border-neutral-200 dark:border-neutral-700">
                                 <div className="font-bold text-neutral-700 dark:text-neutral-300 mb-2 flex items-center gap-2">
+                                    <Icons.Target className="w-3.5 h-3.5 text-neutral-400" />
                                     <span>Rating 影响</span>
                                     <span className="text-neutral-400 font-normal text-[10px]">(本回合 Rating 变化)</span>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {event.wpaUpdates.ratingUpdates.map((ru, idx) => {
-                                        const isPositive = ru.ratingDelta > 0;
-                                        return (
-                                            <div key={idx} className="flex items-center justify-between bg-white dark:bg-neutral-900 px-2 py-1 rounded shadow-sm border border-neutral-100 dark:border-neutral-800">
-                                                <span className="font-medium text-neutral-600 dark:text-neutral-300 truncate pr-2">
-                                                    {resolveName(ru.steamid)}
-                                                </span>
-                                                <span className={`font-mono font-bold ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                    {isPositive ? '+' : ''}{ru.ratingDelta.toFixed(3)}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 max-w-2xl">
+                                    <ul className="space-y-1.5">
+                                        {event.wpaUpdates.ratingUpdates.slice(0, Math.ceil(event.wpaUpdates.ratingUpdates.length / 2)).map((ru, idx) => {
+                                            const isPositive = ru.ratingDelta > 0;
+                                            const playerSide = event.wpaUpdates?.timeUpdates.find((u: any) => u.sid === ru.steamid)?.playerSide;
+                                            return (
+                                                <li key={idx} className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
+                                                    <span className={`font-medium ${getPColor(playerSide)}`}>{resolveName(ru.steamid)}</span>
+                                                    <span className={`font-mono text-[11px] ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                        {isPositive ? '+' : ''}{ru.ratingDelta.toFixed(3)}
+                                                    </span>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                    <ul className="space-y-1.5">
+                                        {event.wpaUpdates.ratingUpdates.slice(Math.ceil(event.wpaUpdates.ratingUpdates.length / 2)).map((ru, idx) => {
+                                            const isPositive = ru.ratingDelta > 0;
+                                            const playerSide = event.wpaUpdates?.timeUpdates.find((u: any) => u.sid === ru.steamid)?.playerSide;
+                                            return (
+                                                <li key={idx} className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
+                                                    <span className={`font-medium ${getPColor(playerSide)}`}>{resolveName(ru.steamid)}</span>
+                                                    <span className={`font-mono text-[11px] ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                        {isPositive ? '+' : ''}{ru.ratingDelta.toFixed(3)}
+                                                    </span>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
                                 </div>
                             </div>
                         )}

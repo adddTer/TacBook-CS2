@@ -257,6 +257,16 @@ export interface MatchTimelineEvent {
         eventProbDelta: number;
         ratingUpdates?: { steamid: string, ratingDelta: number }[];
     };
+
+    // Duel Stats (for kills)
+    duelStats?: {
+        attackerWeapon?: string;
+        victimWeapon?: string;
+        attackerWinProb?: number;
+        victimWinProb?: number;
+        attackerRatingImpact?: number;
+        victimRatingImpact?: number;
+    };
 }
 
 export interface MatchRound {

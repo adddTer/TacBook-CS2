@@ -28,7 +28,7 @@ export const TimelineBetaTab: React.FC<TimelineBetaTabProps> = ({ match }) => {
     const groupedEvents = useMemo(() => {
         if (!selectedRound) return [];
         const result: any[] = [];
-        const allEvents = selectedRound.events || [];
+        const allEvents = selectedRound.timeline || [];
         
         for (let i = 0; i < allEvents.length; i++) {
             const event = allEvents[i];
@@ -58,17 +58,17 @@ export const TimelineBetaTab: React.FC<TimelineBetaTabProps> = ({ match }) => {
             <div className="w-full md:w-64 shrink-0 flex flex-col gap-2 overflow-y-auto pr-2 custom-scrollbar">
                 {match.rounds.map((round) => {
                     const isSelected = round.roundNumber === selectedRoundNum;
-                    const isTWin = round.winner === 'T';
+                    const isTWin = round.winnerSide === 'T';
                     const winColor = isTWin ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600 dark:text-yellow-500' : 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-500';
                     const inactiveColor = 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:border-neutral-300 dark:hover:border-neutral-700';
                     
-                    const duration = round.events && round.events.length > 0 ? Math.floor(round.events[round.events.length - 1].seconds) : 0;
+                    const duration = round.timeline && round.timeline.length > 0 ? Math.floor(round.timeline[round.timeline.length - 1].seconds) : 0;
                     const mins = Math.floor(duration / 60);
                     const secs = duration % 60;
                     
                     let tKills = 0;
                     let ctKills = 0;
-                    round.events?.forEach(e => {
+                    round.timeline?.forEach(e => {
                         if (e.type === 'kill' && e.subject) {
                             if (e.subject.side === 'T') tKills++;
                             else if (e.subject.side === 'CT') ctKills++;
@@ -86,14 +86,14 @@ export const TimelineBetaTab: React.FC<TimelineBetaTabProps> = ({ match }) => {
                                     <div className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs ${isSelected ? (isTWin ? 'bg-yellow-500 text-white' : 'bg-blue-500 text-white') : 'bg-neutral-100 dark:bg-neutral-800'}`}>
                                         {round.roundNumber}
                                     </div>
-                                    <div className="font-bold text-sm">{round.winner} Win</div>
+                                    <div className="font-bold text-sm">{round.winnerSide} Win</div>
                                 </div>
                                 <div className="text-[10px] font-mono opacity-60">
                                     {mins}:{secs.toString().padStart(2, '0')}
                                 </div>
                             </div>
                             <div className="flex items-center justify-between w-full text-xs">
-                                <span className="opacity-70">{getWinReasonText(round.reason, round.winner)}</span>
+                                <span className="opacity-70">{getWinReasonText(round.winReason)}</span>
                                 <div className="flex items-center gap-1.5 font-mono">
                                     <span className="text-yellow-600 dark:text-yellow-500">{tKills}</span>
                                     <span className="opacity-30">-</span>
@@ -161,10 +161,8 @@ export const TimelineBetaTab: React.FC<TimelineBetaTabProps> = ({ match }) => {
                             <TimelineEventRow 
                                 key={index} 
                                 event={event} 
-                                match={match} 
                                 timeMode={timeMode} 
                                 showWinProb={showWinProb}
-                                isLast={index === groupedEvents.length - 1}
                                 assists={event.assists}
                             />
                         ))}
