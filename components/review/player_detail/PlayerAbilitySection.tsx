@@ -35,7 +35,7 @@ export const PlayerAbilitySection: React.FC<PlayerAbilitySectionProps> = ({
                     {/* 1. Radar Chart Area */}
                     <div className="flex justify-center items-center lg:w-1/3 min-h-[260px] relative">
                          {/* Optional background ring for decoration */}
-                         <div className="absolute inset-0 bg-gradient-to-b from-blue-50/50 to-transparent dark:from-blue-900/10 rounded-full blur-3xl opacity-50"></div>
+                         <div className="absolute inset-0 bg-gradient-to-b from-blue-50/50 to-blue-50/0 dark:from-blue-900/10 dark:to-blue-900/0 rounded-full blur-3xl opacity-50"></div>
                          <div className="relative z-10 w-full max-w-[280px]">
                             <RadarChart data={abilities} size={300} />
                          </div>

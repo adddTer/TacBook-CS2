@@ -812,7 +812,7 @@ export const parseDemoJson = (data: DemoData): Match => {
         if (currentFreezeEndTick && tick < currentFreezeEndTick) {
             // STRICT FILTER: Only allow item/econ events during freeze time.
             // Absolutely NO damage, kills, plants, or defuses allowed.
-            const allowedTypes = ['item_pickup', 'item_drop', 'item_purchase', 'player_spawn', 'player_team'];
+            const allowedTypes = ['item_pickup', 'item_drop', 'item_purchase', 'item_refund', 'player_spawn', 'player_team'];
             if (!allowedTypes.includes(type)) {
                  continue;
             }
@@ -1265,7 +1265,7 @@ export const parseDemoJson = (data: DemoData): Match => {
         players: ourPlayers,
         enemyPlayers: enemyPlayers,
         rounds: matchRounds,
-        parserVersion: '1.1.2',
+        parserVersion: '1.1.4',
         rawDemoJson: data
     };
 };

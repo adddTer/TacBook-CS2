@@ -51,7 +51,7 @@ const RatingArc = ({ rating, ctRating, tRating }: { rating: number, ctRating: nu
                     <div className="flex flex-col items-end relative">
                         <div className="text-2xl md:text-3xl font-black text-yellow-600 dark:text-yellow-500 leading-none relative">
                             {tRating.toFixed(2)}
-                            <div className="absolute top-1/2 left-[110%] w-[20px] md:w-[35px] h-[2px] bg-gradient-to-r from-yellow-500 to-transparent -translate-y-1/2 rounded-full"></div>
+                            <div className="absolute top-1/2 left-[110%] w-[20px] md:w-[35px] h-[2px] bg-gradient-to-r from-yellow-500 to-yellow-500/0 -translate-y-1/2 rounded-full"></div>
                         </div>
                         <div className="text-[9px] md:text-[10px] font-bold text-yellow-600/70 dark:text-yellow-500/70 uppercase tracking-widest mt-1">T RATING</div>
                     </div>
@@ -104,7 +104,7 @@ const RatingArc = ({ rating, ctRating, tRating }: { rating: number, ctRating: nu
                     <div className="flex flex-col items-start relative">
                         <div className="text-2xl md:text-3xl font-black text-blue-600 dark:text-blue-400 leading-none relative">
                             {ctRating.toFixed(2)}
-                            <div className="absolute top-1/2 right-[110%] w-[20px] md:w-[35px] h-[2px] bg-gradient-to-l from-blue-500 to-transparent -translate-y-1/2 rounded-full"></div>
+                            <div className="absolute top-1/2 right-[110%] w-[20px] md:w-[35px] h-[2px] bg-gradient-to-l from-blue-500 to-blue-500/0 -translate-y-1/2 rounded-full"></div>
                         </div>
                         <div className="text-[9px] md:text-[10px] font-bold text-blue-600/70 dark:text-blue-400/70 uppercase tracking-widest mt-1">CT RATING</div>
                     </div>

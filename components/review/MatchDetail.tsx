@@ -165,14 +165,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                          
                          <div className="flex items-center justify-center gap-8 md:gap-16 font-sans tabular-nums">
                              <div className="text-right">
-                                 <div className={`text-4xl md:text-5xl font-black ${isMine && match.result === 'WIN' ? 'text-green-600 dark:text-green-500' : 'text-neutral-900 dark:text-white'}`}>
+                                 <div className={`text-4xl md:text-5xl font-black ${isMine ? (match.result === 'WIN' ? 'text-green-500' : match.result === 'LOSS' ? 'text-red-500' : 'text-yellow-500') : 'text-neutral-900 dark:text-white'}`}>
                                     {displayScore.us}
                                  </div>
                                  <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">{teamA}</div>
                              </div>
                              <div className="text-2xl text-neutral-300 font-light opacity-50">:</div>
                              <div className="text-left">
-                                  <div className={`text-4xl md:text-5xl font-black ${isMine && match.result === 'LOSS' ? 'text-red-600 dark:text-red-500' : 'text-neutral-400'}`}>
+                                  <div className="text-4xl md:text-5xl font-black text-neutral-900 dark:text-white">
                                      {displayScore.them}
                                  </div>
                                  <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">{teamB}</div>
@@ -192,14 +192,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl mb-6 sticky top-0 z-20 shadow-lg shadow-neutral-100/50 dark:shadow-black/20 overflow-x-auto">
+                <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl mb-6 sticky top-0 z-20 shadow-lg shadow-neutral-100/50 dark:shadow-black/20 overflow-x-auto hide-scrollbar">
                       {['overview', 'performance', 'timeline', 'timeline_beta', 'duels', 'utility', 'clutches', 'wpa']
                           .filter(t => match.mapId !== '全部地图' as any || (t !== 'timeline' && t !== 'timeline_beta'))
                           .map((t) => (
                           <button
                             key={t}
                             onClick={() => setDetailTab(t as any)}
-                            className={`flex-1 py-2.5 px-2 rounded-lg text-xs font-bold transition-all capitalize whitespace-nowrap
+                            className={`shrink-0 py-2.5 px-3 rounded-lg text-xs font-bold transition-all capitalize whitespace-nowrap
                                 ${detailTab === t ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
                           >
                               {t === 'overview' ? '战报' : t === 'performance' ? '表现' : t === 'timeline' ? '时间轴' : t === 'timeline_beta' ? '时间轴(BETA)' : t === 'duels' ? '对位' : t === 'utility' ? '道具' : t === 'clutches' ? '残局' : 'WPA+'}

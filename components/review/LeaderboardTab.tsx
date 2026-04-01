@@ -173,7 +173,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
             {/* MVP/Leader Card */}
             {leader && (
                  <div className="mb-8 bg-neutral-900 dark:bg-black rounded-2xl p-6 text-white relative overflow-hidden shadow-xl border border-neutral-800">
-                     <div className="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-blue-900/20 to-transparent pointer-events-none"></div>
+                     <div className="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-blue-900/20 to-blue-900/0 pointer-events-none"></div>
                      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                          <div>
                              <div className="flex items-center gap-2 mb-2">

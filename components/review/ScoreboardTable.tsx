@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PlayerMatchStats, ClutchRecord, MultiKillBreakdown } from '../../types';
 import { ROSTER } from '../../constants/roster';
 import { getRatingColorClass } from './ReviewShared';
 import { resolveName } from '../../utils/demo/helpers';
+import { ArrowUp, ArrowDown } from 'lucide-react';
 
 interface DataPopupCellProps {
     value: number | string;
@@ -54,6 +55,8 @@ interface ScoreboardTableProps {
     colorClass?: string; // Optional override for title color
 }
 
+type SortKey = 'name' | 'matchesPlayed' | 'kills' | 'deaths' | 'assists' | 'kdDiff' | 'adr' | 'rating' | 'wpa';
+
 export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({ 
     players, 
     title, 
@@ -63,6 +66,7 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
     colorClass
 }) => {
     const [activePopup, setActivePopup] = useState<{ id: string, type: 'mk' | 'clutch' } | null>(null);
+    const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'rating', direction: 'desc' });
 
     const handlePopupClick = (e: React.MouseEvent, id: string, type: 'mk' | 'clutch') => {
         e.stopPropagation();
@@ -91,34 +95,69 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
     ];
 
     const getFilterStyle = (isEnemy: boolean) => {
-        if (filter === 'ALL') return isEnemy ? 'bg-red-50/50 dark:bg-red-900/10 text-red-500' : 'bg-blue-50/50 dark:bg-blue-900/10 text-blue-500';
-        if (filter === 'CT') return 'bg-blue-50/50 dark:bg-blue-900/10 text-blue-500';
-        if (filter === 'T') return 'bg-yellow-50/50 dark:bg-yellow-900/10 text-yellow-600';
+        if (filter === 'ALL') return isEnemy ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400';
+        if (filter === 'CT') return 'bg-blue-50 dark:bg-blue-950 text-blue-500';
+        if (filter === 'T') return 'bg-yellow-50 dark:bg-yellow-950 text-yellow-600';
         return '';
     };
 
-    // Sort players by Rating descending
-    const sortedPlayers = [...players].sort((a, b) => b.rating - a.rating);
+    const handleSort = (key: SortKey) => {
+        let direction: 'asc' | 'desc' = 'desc';
+        if (sortConfig.key === key && sortConfig.direction === 'desc') {
+            direction = 'asc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const SortIcon = ({ columnKey, isBetterLower = false }: { columnKey: SortKey, isBetterLower?: boolean }) => {
+        if (sortConfig.key !== columnKey) return null;
+        const isGood = (sortConfig.direction === 'desc' && !isBetterLower) || (sortConfig.direction === 'asc' && isBetterLower);
+        const color = isGood ? 'text-green-500' : 'text-red-500';
+        return sortConfig.direction === 'asc' ? <ArrowUp className={`inline w-3 h-3 ml-1 ${color}`} /> : <ArrowDown className={`inline w-3 h-3 ml-1 ${color}`} />;
+    };
+
+    const sortedPlayers = useMemo(() => {
+        const sortableItems = [...players];
+        sortableItems.sort((a, b) => {
+            let aValue: any = a[sortConfig.key as keyof PlayerMatchStats];
+            let bValue: any = b[sortConfig.key as keyof PlayerMatchStats];
+
+            if (sortConfig.key === 'name') {
+                aValue = a.steamid && resolveName(a.steamid) !== a.steamid ? resolveName(a.steamid) : resolveName(a.playerId);
+                bValue = b.steamid && resolveName(b.steamid) !== b.steamid ? resolveName(b.steamid) : resolveName(b.playerId);
+            } else if (sortConfig.key === 'kdDiff') {
+                aValue = a.kills - a.deaths;
+                bValue = b.kills - b.deaths;
+            }
+
+            if (aValue < bValue) {
+                return sortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (aValue > bValue) {
+                return sortConfig.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+        return sortableItems;
+    }, [players, sortConfig]);
 
     const showMatches = players.some(p => p.matchesPlayed !== undefined);
 
     return (
         <div className="overflow-x-auto pb-4" onClick={closePopup}> 
-                <table className="w-full text-xs sm:text-sm text-left whitespace-nowrap min-w-[600px] border-collapse font-sans">
-                <thead>
+                <table className="w-full max-w-4xl mx-auto text-[10px] sm:text-sm text-left whitespace-nowrap min-w-[320px] sm:min-w-[400px] border-collapse font-sans">
+                <thead className="sticky top-0 z-20 shadow-sm">
                     <tr className={`text-[9px] sm:text-[10px] uppercase font-bold border-b border-neutral-100 dark:border-neutral-800 ${getFilterStyle(isEnemy)}`}>
-                        <th className="px-2 sm:px-3 py-3 sticky left-0 z-10 bg-inherit w-24 sm:w-36">
+                        <th className="px-1.5 sm:px-3 py-2 sm:py-3 sticky left-0 z-30 bg-inherit w-24 sm:w-40 max-w-[96px] sm:max-w-[160px] cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" onClick={() => handleSort('name')}>
                             {title} {filter !== 'ALL' ? `(${filter})` : ''}
+                            <SortIcon columnKey="name" />
                         </th>
-                        {showMatches && <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12">地图数</th>}
-                        <th className="px-1 sm:px-2 py-3 text-center w-16 sm:w-20">K / D / A</th>
-                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12">+/-</th>
-                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12" title="平均每回合伤害">ADR</th>
-                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12" title="Rating 4.0">RTG</th>
-                        <th className="px-1 sm:px-2 py-3 text-center w-12 sm:w-14" title="Win Probability Added Avg per Round (Total Points)">WPA</th>
-                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12" title="首杀 (Entry Kills)">首杀</th>
-                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12" title="多杀 (Multi-Kills)">多杀</th>
-                        <th className="px-1 sm:px-2 py-3 text-center w-10 sm:w-12" title="残局获胜 (1vN Wins)">残局</th>
+                        {showMatches && <th className="px-0.5 sm:px-2 py-2 sm:py-3 text-center w-8 sm:w-12 bg-inherit cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" onClick={() => handleSort('matchesPlayed')}>地图数<SortIcon columnKey="matchesPlayed" /></th>}
+                        <th className="px-0.5 sm:px-2 py-2 sm:py-3 text-center w-14 sm:w-20 bg-inherit cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" onClick={() => handleSort('kills')}>K / D / A<SortIcon columnKey="kills" /></th>
+                        <th className="px-0.5 sm:px-2 py-2 sm:py-3 text-center w-8 sm:w-12 bg-inherit cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" onClick={() => handleSort('kdDiff')}>+/-<SortIcon columnKey="kdDiff" /></th>
+                        <th className="px-0.5 sm:px-2 py-2 sm:py-3 text-center w-8 sm:w-12 bg-inherit cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" title="平均每回合伤害" onClick={() => handleSort('adr')}>ADR<SortIcon columnKey="adr" /></th>
+                        <th className="px-0.5 sm:px-2 py-2 sm:py-3 text-center w-8 sm:w-12 bg-inherit cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" title="Rating 4.0" onClick={() => handleSort('rating')}>RTG<SortIcon columnKey="rating" /></th>
+                        <th className="px-0.5 sm:px-2 py-2 sm:py-3 text-center w-10 sm:w-14 bg-inherit cursor-pointer hover:bg-black/5 dark:hover:bg-white/5" title="Win Probability Added Avg per Round (Total Points)" onClick={() => handleSort('wpa')}>WPA<SortIcon columnKey="wpa" /></th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-50 dark:divide-neutral-800/50">
@@ -152,68 +191,37 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                                 className={`group transition-colors cursor-pointer ${isRosterMember ? 'hover:bg-blue-50/50 dark:hover:bg-blue-900/10' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/30'}`}
                                 onClick={() => onPlayerClick(isRosterMember ? rosterId : (p.steamid || p.playerId))}
                             >
-                                <td className={`px-2 sm:px-3 py-3 font-bold sticky left-0 z-10 bg-white dark:bg-neutral-900 border-r border-transparent group-hover:border-neutral-100 dark:group-hover:border-neutral-800 truncate flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm ${isRosterMember ? 'text-blue-600 dark:text-blue-400 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10' : 'text-neutral-800 dark:text-neutral-200 group-hover:bg-neutral-50 dark:group-hover:bg-neutral-800/30'}`}>
+                                <td className={`px-1.5 sm:px-3 py-2 sm:py-3 font-bold sticky left-0 z-10 bg-white dark:bg-neutral-900 border-r border-transparent group-hover:border-neutral-100 dark:group-hover:border-neutral-800 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm w-24 sm:w-40 max-w-[96px] sm:max-w-[160px] ${isRosterMember ? 'text-blue-600 dark:text-blue-400 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/10' : 'text-neutral-800 dark:text-neutral-200 group-hover:bg-neutral-50 dark:group-hover:bg-neutral-800/30'}`}>
                                     {isRosterMember && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>}
-                                    <span className="truncate">{displayName}</span>
+                                    <span className="truncate flex-1 min-w-0" style={{ fontSize: displayName.length > 12 ? '0.85em' : '1em' }}>{displayName}</span>
                                     {p.isMvp && <span className="ml-1 px-1 py-0.5 bg-yellow-500 text-white text-[8px] font-black rounded uppercase tracking-wider shrink-0">MVP</span>}
                                 </td>
                                 {showMatches && (
-                                    <td className="px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs font-bold text-neutral-500">
+                                    <td className="px-0.5 sm:px-2 py-2 sm:py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs font-bold text-neutral-500">
                                         {p.matchesPlayed}
                                     </td>
                                 )}
-                                <td className="px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs">
+                                <td className="px-0.5 sm:px-2 py-2 sm:py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs">
                                     <span className="text-neutral-900 dark:text-white font-bold">{p.kills}</span>
                                     <span className="text-neutral-300 mx-0.5">/</span>
                                     <span className="text-red-500">{p.deaths}</span>
                                     <span className="text-neutral-300 mx-0.5">/</span>
                                     <span className="text-neutral-500">{p.assists}</span>
                                 </td>
-                                <td className={`px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs font-bold ${kdDiff > 0 ? 'text-green-500' : kdDiff < 0 ? 'text-red-500' : 'text-neutral-300'}`}>
+                                <td className={`px-0.5 sm:px-2 py-2 sm:py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs font-bold ${kdDiff > 0 ? 'text-green-500' : kdDiff < 0 ? 'text-red-500' : 'text-neutral-300'}`}>
                                     {kdDiff > 0 ? `+${kdDiff}` : kdDiff}
                                 </td>
-                                <td className="px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs text-neutral-600 dark:text-neutral-400">
+                                <td className="px-0.5 sm:px-2 py-2 sm:py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs text-neutral-600 dark:text-neutral-400">
                                     {p.adr.toFixed(0)}
                                 </td>
-                                <td className="px-1 sm:px-2 py-3 text-center">
+                                <td className="px-0.5 sm:px-2 py-2 sm:py-3 text-center">
                                     <div className={`font-black text-center font-sans tabular-nums text-[11px] sm:text-sm ${ratingColor}`}>
                                         {p.rating.toFixed(2)}
                                     </div>
                                 </td>
 
-                                <td className={`px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs font-bold ${wpaVal > 0 ? 'text-green-500' : wpaVal < 0 ? 'text-red-500' : 'text-neutral-400'}`}>
+                                <td className={`px-0.5 sm:px-2 py-2 sm:py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs font-bold ${wpaVal > 0 ? 'text-green-500' : wpaVal < 0 ? 'text-red-500' : 'text-white'}`}>
                                     {wpaVal > 0 ? '+' : ''}{wpaDisplay}%
-                                </td>
-                                
-                                <td className="px-1 sm:px-2 py-3 text-center font-sans tabular-nums text-[10px] sm:text-xs text-neutral-600 dark:text-neutral-400">
-                                    {p.entry_kills || 0}
-                                </td>
-                                <td 
-                                    className="px-1 sm:px-2 py-3 text-center"
-                                    onClick={(e) => { e.stopPropagation(); closePopup(); }}
-                                >
-                                    <DataPopupCell 
-                                        value={totalMulti > 0 ? totalMulti : '-'}
-                                        title="多杀数据"
-                                        data={getMultiKillData(multiKills)}
-                                        isActive={activePopup?.id === p.playerId && activePopup?.type === 'mk'} 
-                                        onClick={(e) => handlePopupClick(e, p.playerId, 'mk')}
-                                        align={popupAlign}
-                                    />
-                                </td>
-                                <td 
-                                    className="px-1 sm:px-2 py-3 text-center"
-                                    onClick={(e) => { e.stopPropagation(); closePopup(); }}
-                                >
-                                    <DataPopupCell 
-                                        value={clutchWinCount > 0 ? clutchWinCount : '-'}
-                                        title="残局获胜"
-                                        data={getClutchData(clutches)}
-                                        isActive={activePopup?.id === p.playerId && activePopup?.type === 'clutch'}
-                                        onClick={(e) => handlePopupClick(e, p.playerId, 'clutch')}
-                                        align={popupAlign}
-                                        highlight={true}
-                                    />
                                 </td>
                             </tr>
                         );

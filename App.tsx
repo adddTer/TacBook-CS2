@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import './index.css';
 import { TacticCard } from './components/TacticCard';
 import { UtilityCard } from './components/UtilityCard';
 import { MapViewer } from './components/MapViewer';
@@ -114,7 +115,19 @@ const App: React.FC = () => {
     if (savedUtilMode) setUtilityViewMode(savedUtilMode);
     const savedTheme = safeStorage.getItem('tacbook_theme') as Theme;
     if (savedTheme) setTheme(savedTheme);
-    setIsDebug(true); // Always enable statistics interface
+    
+    // Auto-enable debug mode if API key is present in environment variables
+    let hasEnvApiKey = false;
+    try {
+        // Vite statically replaces these if they exist. If not, it might throw ReferenceError.
+        hasEnvApiKey = !!process.env.API_KEY || !!process.env.GEMINI_API_KEY;
+    } catch (e) {
+        // Ignore ReferenceError if process is not defined
+    }
+    if (!hasEnvApiKey) {
+        hasEnvApiKey = !!(import.meta as any).env?.VITE_API_KEY || !!(import.meta as any).env?.VITE_GEMINI_API_KEY;
+    }
+    setIsDebug(hasEnvApiKey);
   }, []);
 
   // Apply Theme
@@ -248,7 +261,7 @@ const App: React.FC = () => {
   const showSearchAndFilter = viewMode === 'tactics' || viewMode === 'utilities';
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700">
+    <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700">
       
       {/* Content Wrapper with Padding and Animation */}
       <div className="pt-[56px] animate-in fade-in duration-500">

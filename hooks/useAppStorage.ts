@@ -3,6 +3,7 @@ import { ContentGroup, Tactic, Utility, Match, Tournament, MatchBon } from "../t
 import { generateGroupId } from "../utils/idGenerator";
 import { loadGroupsFromDB, saveGroupsToDB } from "../utils/db";
 import { safeStorage } from "../utils/storage";
+import { permissionManager } from "../utils/permissionManager";
 
 export const useAppStorage = () => {
   const [groups, setGroups] = useState<ContentGroup[]>([]);
@@ -165,14 +166,22 @@ export const useAppStorage = () => {
         if (group.metadata.id === targetGroupId) {
           if (group.metadata.isReadOnly) return group;
 
+          const existsIndex = group.tactics.findIndex(
+            (t) => t.id === updatedTactic.id,
+          );
+          
+          permissionManager.enforce({
+            action: existsIndex >= 0 ? 'edit' : 'add',
+            dataType: 'tactic',
+            dataId: updatedTactic.id,
+            groupId: targetGroupId
+          });
+
           const newTactic = {
             ...updatedTactic,
             groupId: targetGroupId,
             _isTemp: false,
           };
-          const existsIndex = group.tactics.findIndex(
-            (t) => t.id === newTactic.id,
-          );
 
           let newTactics;
           if (existsIndex >= 0) {
@@ -205,14 +214,22 @@ export const useAppStorage = () => {
         if (group.metadata.id === targetGroupId) {
           if (group.metadata.isReadOnly) return group;
 
+          const existsIndex = group.utilities.findIndex(
+            (u) => u.id === updatedUtility.id,
+          );
+          
+          permissionManager.enforce({
+            action: existsIndex >= 0 ? 'edit' : 'add',
+            dataType: 'utility',
+            dataId: updatedUtility.id,
+            groupId: targetGroupId
+          });
+
           const newUtil = {
             ...updatedUtility,
             groupId: targetGroupId,
             _isTemp: false,
           };
-          const existsIndex = group.utilities.findIndex(
-            (u) => u.id === newUtil.id,
-          );
 
           let newUtils;
           if (existsIndex >= 0) {
@@ -242,11 +259,18 @@ export const useAppStorage = () => {
         if (group.metadata.id === targetGroupId) {
           if (group.metadata.isReadOnly) return group;
 
-          const matchToSave = { ...newMatch, groupId: targetGroupId };
           const existsIndex = (group.matches || []).findIndex(
-            (m) => m.id === matchToSave.id,
+            (m) => m.id === newMatch.id,
           );
+          
+          permissionManager.enforce({
+            action: existsIndex >= 0 ? 'edit' : 'add',
+            dataType: 'match',
+            dataId: newMatch.id,
+            groupId: targetGroupId
+          });
 
+          const matchToSave = { ...newMatch, groupId: targetGroupId };
           let newMatches = group.matches || [];
           if (existsIndex >= 0) {
             newMatches = [...newMatches];
@@ -279,11 +303,19 @@ export const useAppStorage = () => {
         if (group.metadata.id === targetGroupId) {
           if (group.metadata.isReadOnly) return group;
 
-          const tournamentToSave = { ...newTournament, groupId: targetGroupId };
           let newTournamentList = group.tournaments || [];
           const existsIndex = newTournamentList.findIndex(
-            (t) => t.id === tournamentToSave.id,
+            (t) => t.id === newTournament.id,
           );
+          
+          permissionManager.enforce({
+            action: existsIndex >= 0 ? 'edit' : 'add',
+            dataType: 'tournament',
+            dataId: newTournament.id,
+            groupId: targetGroupId
+          });
+
+          const tournamentToSave = { ...newTournament, groupId: targetGroupId };
 
           if (existsIndex >= 0) {
             newTournamentList = [...newTournamentList];
@@ -316,11 +348,19 @@ export const useAppStorage = () => {
         if (group.metadata.id === targetGroupId) {
           if (group.metadata.isReadOnly) return group;
 
-          const bonToSave = { ...newBon, groupId: targetGroupId };
           let newBonList = group.bons || [];
           const existsIndex = newBonList.findIndex(
-            (b) => b.id === bonToSave.id,
+            (b) => b.id === newBon.id,
           );
+          
+          permissionManager.enforce({
+            action: existsIndex >= 0 ? 'edit' : 'add',
+            dataType: 'bon',
+            dataId: newBon.id,
+            groupId: targetGroupId
+          });
+
+          const bonToSave = { ...newBon, groupId: targetGroupId };
 
           if (existsIndex >= 0) {
             newBonList = [...newBonList];
@@ -345,6 +385,12 @@ export const useAppStorage = () => {
   };
 
   const deleteTactic = (tactic: Tactic) => {
+    permissionManager.enforce({
+      action: 'delete',
+      dataType: 'tactic',
+      dataId: tactic.id,
+      groupId: tactic.groupId
+    });
     setGroups((prevGroups) =>
       prevGroups.map((g) => {
         if (g.metadata.id === tactic.groupId) {
@@ -360,6 +406,12 @@ export const useAppStorage = () => {
   };
 
   const deleteUtility = (utility: Utility) => {
+    permissionManager.enforce({
+      action: 'delete',
+      dataType: 'utility',
+      dataId: utility.id,
+      groupId: utility.groupId
+    });
     setGroups((prevGroups) =>
       prevGroups.map((g) => {
         if (g.metadata.id === utility.groupId) {
@@ -375,6 +427,12 @@ export const useAppStorage = () => {
   };
 
   const deleteMatch = (match: Match) => {
+    permissionManager.enforce({
+      action: 'delete',
+      dataType: 'match',
+      dataId: match.id,
+      groupId: match.groupId
+    });
     setGroups((prevGroups) =>
       prevGroups.map((g) => {
         if (g.metadata.id === match.groupId) {
@@ -390,6 +448,12 @@ export const useAppStorage = () => {
   };
 
   const deleteTournament = (tournament: Tournament) => {
+    permissionManager.enforce({
+      action: 'delete',
+      dataType: 'tournament',
+      dataId: tournament.id,
+      groupId: tournament.groupId
+    });
     setGroups((prevGroups) =>
       prevGroups.map((g) => {
         if (g.metadata.id === tournament.groupId) {
@@ -407,6 +471,12 @@ export const useAppStorage = () => {
   };
 
   const deleteBon = (bon: MatchBon) => {
+    permissionManager.enforce({
+      action: 'delete',
+      dataType: 'bon',
+      dataId: bon.id,
+      groupId: bon.groupId
+    });
     setGroups((prevGroups) =>
       prevGroups.map((g) => {
         if (g.metadata.id === bon.groupId) {

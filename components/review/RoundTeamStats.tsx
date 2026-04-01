@@ -5,7 +5,7 @@ import { getRatingColorClass } from './ReviewShared';
 export const RoundTeamStats = ({ teamName, players, color }: { teamName: string, players: any[], color: string }) => {
     return (
         <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-100 dark:border-neutral-800 overflow-hidden">
-            <h5 className={`text-[10px] font-black uppercase px-3 py-2 ${color} bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-100 dark:border-neutral-800`}>
+            <h5 className="text-[10px] font-black uppercase px-3 py-2 text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-100 dark:border-neutral-800">
                 {teamName}
             </h5>
             <div className="p-1">

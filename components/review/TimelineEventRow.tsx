@@ -11,15 +11,22 @@ interface TimelineEventRowProps {
     plantTime?: number;
     bombEndTime?: number;
     showWinProb: boolean;
+    playerNameMap?: Record<string, string>;
+    isCard?: boolean;
 }
 
-export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assists = [], timeMode, plantTime, bombEndTime, showWinProb }) => {
+export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assists = [], timeMode, plantTime, bombEndTime, showWinProb, playerNameMap = {}, isCard = false }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const timeStr = formatTime(event.seconds, timeMode, plantTime);
     
     const getName = (subject?: { steamid: string, name: string }) => {
         if (!subject) return undefined;
         if (subject.name === 'World' || subject.name === 'BOT' || subject.name === 'Round Start' || subject.name === 'Round Start (Est)' || subject.name === 'Round Start (Auto-Fix)') return subject.name;
+        
+        if (subject.steamid && playerNameMap[subject.steamid]) {
+            return playerNameMap[subject.steamid];
+        }
+        
         return subject.steamid && resolveName(subject.steamid) !== subject.steamid ? resolveName(subject.steamid) : subject.name;
     };
 
@@ -30,7 +37,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
 
     if (isRoundStart) {
         return (
-            <div className="flex gap-4 relative group items-center my-6 opacity-60 hover:opacity-100 transition-opacity">
+            <div className={`flex gap-4 relative group items-center opacity-60 hover:opacity-100 transition-opacity ${isCard ? '' : 'my-6'}`}>
                  <div className="w-12 text-right shrink-0">
                      <span className="font-mono text-xs font-bold text-neutral-300 dark:text-neutral-600">{timeStr}</span>
                  </div>
@@ -199,7 +206,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
     }
  else if (event.type === 'round_end') {
         return (
-            <div className="flex gap-4 relative group items-center my-6 opacity-60 hover:opacity-100 transition-opacity">
+            <div className={`flex gap-4 relative group items-center opacity-60 hover:opacity-100 transition-opacity ${isCard ? '' : 'my-6'}`}>
                  <div className="w-12 text-right shrink-0">
                      <span className={`font-mono text-xs font-bold ${isBombActive ? 'text-red-500' : 'text-neutral-300 dark:text-neutral-600'}`}>{timeStr}</span>
                  </div>
@@ -242,7 +249,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
             </div>
 
             {/* Details Content Column */}
-            <div className="flex-1 pb-4 pt-0.5">
+            <div className={`flex-1 pt-0.5 ${isCard ? '' : 'pb-4'}`}>
                 <div className="transition-all duration-200 group-hover:translate-x-0.5">
                     {content}
                 </div>
@@ -250,7 +257,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
                 {/* Win Probability Bar */}
                 {showWinProb && event.winProb !== undefined && (
                     <div className="mt-2.5 mb-1 flex items-center gap-2 max-w-[220px] bg-neutral-100/50 dark:bg-neutral-800/30 p-1 rounded-full border border-neutral-200/50 dark:border-neutral-700/50">
-                        <span className="text-[9px] font-black text-blue-500 w-9 text-right tabular-nums">{(100 - event.winProb * 100).toFixed(0)}%</span>
+                        <span className="text-[9px] font-black text-blue-500 dark:text-blue-400 w-9 text-right tabular-nums">{(100 - event.winProb * 100).toFixed(0)}%</span>
                         <div className="h-1.5 flex-1 bg-blue-100 dark:bg-blue-900/20 rounded-full overflow-hidden flex ring-1 ring-inset ring-black/5 dark:ring-white/5">
                             {/* T Win Prob Bar (Yellow) */}
                             <div 
@@ -258,7 +265,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
                                 style={{ width: `${event.winProb * 100}%`, marginLeft: 'auto' }} 
                             ></div>
                         </div>
-                        <span className="text-[9px] font-black text-amber-600 dark:text-amber-500 w-9 tabular-nums">{(event.winProb * 100).toFixed(0)}%</span>
+                        <span className="text-[9px] font-black text-yellow-500 dark:text-yellow-400 w-9 tabular-nums">{(event.winProb * 100).toFixed(0)}%</span>
                     </div>
                 )}
 
@@ -303,7 +310,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
                                             </li>
                                             <li className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
                                                 <span className="text-neutral-500">对决胜率</span>
-                                                <span className="font-mono text-[11px] text-blue-600 dark:text-blue-400">
+                                                <span className="font-mono text-[11px] text-neutral-900 dark:text-white">
                                                     {event.duelStats.attackerWinProb !== undefined ? (event.duelStats.attackerWinProb * 100).toFixed(1) + '%' : '-'}
                                                 </span>
                                             </li>
@@ -326,7 +333,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
                                             </li>
                                             <li className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
                                                 <span className="text-neutral-500">对决胜率</span>
-                                                <span className="font-mono text-[11px] text-blue-600 dark:text-blue-400">
+                                                <span className="font-mono text-[11px] text-neutral-900 dark:text-white">
                                                     {event.duelStats.victimWinProb !== undefined ? (event.duelStats.victimWinProb * 100).toFixed(1) + '%' : '-'}
                                                 </span>
                                             </li>
@@ -356,10 +363,23 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
                                     <ul className="space-y-1.5">
                                         {event.wpaUpdates.ratingUpdates.slice(0, Math.ceil(event.wpaUpdates.ratingUpdates.length / 2)).map((ru, idx) => {
                                             const isPositive = ru.ratingDelta > 0;
-                                            const playerSide = event.wpaUpdates?.timeUpdates.find((u: any) => u.sid === ru.steamid)?.playerSide;
+                                            
+                                            // Robustly determine player side
+                                            let playerSide = event.wpaUpdates?.timeUpdates?.find((u: any) => u.sid === ru.steamid)?.playerSide || 
+                                                             event.wpaUpdates?.eventUpdates?.find((u: any) => u.sid === ru.steamid)?.playerSide;
+                                            
+                                            if (!playerSide) {
+                                                if (event.subject?.steamid === ru.steamid) playerSide = event.subject.side;
+                                                else if (event.target?.steamid === ru.steamid) playerSide = event.target.side;
+                                                else if (assists?.some(a => a.subject?.steamid === ru.steamid)) {
+                                                    playerSide = assists.find(a => a.subject?.steamid === ru.steamid)?.subject?.side;
+                                                }
+                                            }
+
+                                            const displayName = (playerNameMap && playerNameMap[ru.steamid]) || resolveName(ru.steamid);
                                             return (
                                                 <li key={idx} className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
-                                                    <span className={`font-medium ${getPColor(playerSide)}`}>{resolveName(ru.steamid)}</span>
+                                                    <span className={`font-medium ${getPColor(playerSide)}`}>{displayName}</span>
                                                     <span className={`font-mono text-[11px] ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                                                         {isPositive ? '+' : ''}{ru.ratingDelta.toFixed(3)}
                                                     </span>
@@ -370,10 +390,23 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
                                     <ul className="space-y-1.5">
                                         {event.wpaUpdates.ratingUpdates.slice(Math.ceil(event.wpaUpdates.ratingUpdates.length / 2)).map((ru, idx) => {
                                             const isPositive = ru.ratingDelta > 0;
-                                            const playerSide = event.wpaUpdates?.timeUpdates.find((u: any) => u.sid === ru.steamid)?.playerSide;
+                                            
+                                            // Robustly determine player side
+                                            let playerSide = event.wpaUpdates?.timeUpdates?.find((u: any) => u.sid === ru.steamid)?.playerSide || 
+                                                             event.wpaUpdates?.eventUpdates?.find((u: any) => u.sid === ru.steamid)?.playerSide;
+                                            
+                                            if (!playerSide) {
+                                                if (event.subject?.steamid === ru.steamid) playerSide = event.subject.side;
+                                                else if (event.target?.steamid === ru.steamid) playerSide = event.target.side;
+                                                else if (assists?.some(a => a.subject?.steamid === ru.steamid)) {
+                                                    playerSide = assists.find(a => a.subject?.steamid === ru.steamid)?.subject?.side;
+                                                }
+                                            }
+
+                                            const displayName = (playerNameMap && playerNameMap[ru.steamid]) || resolveName(ru.steamid);
                                             return (
                                                 <li key={idx} className="flex justify-between items-center bg-white dark:bg-neutral-900/50 px-2.5 py-1.5 rounded border border-neutral-100 dark:border-neutral-800">
-                                                    <span className={`font-medium ${getPColor(playerSide)}`}>{resolveName(ru.steamid)}</span>
+                                                    <span className={`font-medium ${getPColor(playerSide)}`}>{displayName}</span>
                                                     <span className={`font-mono text-[11px] ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                                                         {isPositive ? '+' : ''}{ru.ratingDelta.toFixed(3)}
                                                     </span>

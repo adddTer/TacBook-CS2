@@ -174,7 +174,7 @@ export class RatingEngine {
         this.knownRoundCTs.forEach(id => allRoundPlayers.add(id));
         teammateSteamIds.forEach(id => allRoundPlayers.add(id)); 
 
-        if (['item_pickup', 'item_drop', 'item_purchase'].includes(type)) {
+        if (['item_pickup', 'item_drop', 'item_purchase', 'item_refund'].includes(type)) {
             this.inventory.handleItemEvent(event);
         }
 

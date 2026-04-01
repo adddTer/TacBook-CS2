@@ -156,7 +156,7 @@ export class InventoryTracker {
                 items.push(item);
             }
 
-        } else if (event.event_name === "item_drop") {
+        } else if (event.event_name === "item_drop" || event.event_name === "item_refund") {
             const idx = items.indexOf(item);
             if (idx > -1) items.splice(idx, 1);
         }

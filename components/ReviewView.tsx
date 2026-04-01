@@ -75,7 +75,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     // Check for parser updates
     useEffect(() => {
-        const CURRENT_PARSER_VERSION = '1.1.2';
+        const CURRENT_PARSER_VERSION = '1.1.4';
         const autoUpdate = safeStorage.getItem('autoUpdateMatches') !== 'false';
         
         if (!autoUpdate || isUpdatingRef.current) return;
@@ -678,14 +678,12 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     >
                         排行榜
                     </button>
-                    {isDebug && (
-                        <button
-                            onClick={() => handleTabChange('stats')}
-                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'stats' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
-                        >
-                            统计
-                        </button>
-                    )}
+                    <button
+                        onClick={() => handleTabChange('stats')}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'stats' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
+                    >
+                        统计
+                    </button>
                 </div>
 
                 <div className="flex gap-2">

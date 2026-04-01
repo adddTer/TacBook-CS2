@@ -24,8 +24,8 @@ export const MapSelector: React.FC<MapSelectorProps> = ({ currentMap, onChange }
   return (
     <div className="flex-1 w-full min-w-0 relative group mx-2">
         {/* Fading Edges to indicate scroll */}
-        <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-white dark:from-neutral-950 to-transparent z-10 pointer-events-none"></div>
-        <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white dark:from-neutral-950 to-transparent z-10 pointer-events-none"></div>
+        <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-white dark:from-neutral-950 to-white/0 dark:to-neutral-950/0 z-10 pointer-events-none"></div>
+        <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white dark:from-neutral-950 to-white/0 dark:to-neutral-950/0 z-10 pointer-events-none"></div>
 
         <div 
             ref={scrollRef}

@@ -249,7 +249,7 @@ export const MatchList: React.FC<MatchListProps> = ({
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
                                         <SourceBadge source={match.source} />
-                                        {match.source === 'Demo' && match.parserVersion !== '1.1.2' && (
+                                        {match.source === 'Demo' && match.parserVersion !== '1.1.4' && (
                                             <span className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-[10px] font-bold rounded uppercase tracking-wider">
                                                 数据过期
                                             </span>
