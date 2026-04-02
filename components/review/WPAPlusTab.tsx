@@ -10,13 +10,13 @@ export const WPAPlusTab: React.FC = () => {
             </div>
 
             <div className="relative z-10 max-w-2xl mx-auto">
-                <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mb-6 shadow-lg shadow-blue-500/30">
+                <div className="inline-flex items-center justify-center p-3 bg-linear-to-br from-blue-500 to-purple-600 rounded-2xl mb-6 shadow-lg shadow-blue-500/30">
                     <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                 </div>
                 
-                <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 mb-4 tracking-tight">
+                <h2 className="text-3xl md:text-4xl font-black text-gradient-clip bg-gradient-wpa mb-4 tracking-tight">
                     WPA+ 胜率评估模型
                 </h2>
                 

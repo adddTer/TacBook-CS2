@@ -11,7 +11,7 @@ export const TIER_STYLES: Record<EvaluationTier, EvaluationData> = {
   OUTSTANDING: {
     text: "杰出",
     color: "text-purple-500 dark:text-purple-400",
-    bg: "bg-gradient-to-r from-purple-500 to-fuchsia-500",
+    bg: "bg-gradient-outstanding",
     hex: "#a855f7",
   },
   EXCELLENT: {

@@ -146,7 +146,7 @@ export const TBTVView: React.FC = () => {
           <span className={`
             text-[9px] font-black px-1.5 py-0.5 rounded border
             ${isGold 
-                ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-black border-yellow-600 shadow-sm shadow-yellow-500/30' 
+                ? 'bg-linear-to-br from-yellow-300 to-yellow-500 text-black border-yellow-600 shadow-sm shadow-yellow-500/30' 
                 : 'bg-neutral-100 text-neutral-500 border-neutral-200 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400'}
           `}>
               {displayRank}
@@ -275,7 +275,7 @@ export const TBTVView: React.FC = () => {
                    <div className="relative z-10">
                        <div className="flex justify-between items-start mb-6">
                            <div className="flex items-center gap-4">
-                               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-2xl font-black text-white shadow-lg shadow-blue-500/20">
+                               <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-2xl font-black text-white shadow-lg shadow-blue-500/20">
                                    {profile.id[0]}
                                </div>
                                <div>

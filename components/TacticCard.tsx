@@ -26,7 +26,7 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick, onEdit,
         className={`
             mb-4 rounded-3xl overflow-hidden transition-all duration-300 border shadow-sm active:scale-[0.98] cursor-pointer group relative
             ${tactic.isRecommended 
-                ? 'bg-gradient-to-br from-yellow-50/50 to-orange-50/50 dark:from-yellow-900/5 dark:to-orange-900/5 border-yellow-400/30 hover:border-yellow-500/50' 
+                ? 'bg-linear-to-br from-yellow-50/50 to-orange-50/50 dark:from-yellow-900/5 dark:to-orange-900/5 border-yellow-400/30 hover:border-yellow-500/50' 
                 : 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 hover:border-blue-500/30'}
         `}
     >

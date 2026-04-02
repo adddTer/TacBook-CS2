@@ -121,7 +121,7 @@ export const RosterTimelineView: React.FC = () => {
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* Timeline Visualization */}
-            <div className="bg-neutral-900/50 dark:bg-neutral-900/80 border border-neutral-800 rounded-2xl p-6 overflow-x-auto">
+            <div className="bg-neutral-50 dark:bg-neutral-900/80 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 overflow-x-auto">
                 <div className="min-w-[600px]">
                     {/* Timeline Header */}
                     <div className="flex mb-4 relative h-6">

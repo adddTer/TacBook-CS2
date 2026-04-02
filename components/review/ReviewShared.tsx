@@ -34,7 +34,7 @@ export const RankBadge = ({ rank }: { rank: string }) => {
         <span className={`
           text-[10px] font-black px-1.5 py-0.5 rounded border font-sans tabular-nums
           ${isGold 
-              ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-black border-yellow-600 shadow-sm' 
+              ? 'bg-linear-to-br from-yellow-300 to-yellow-500 text-black border-yellow-600 shadow-sm' 
               : 'bg-neutral-100 text-neutral-500 border-neutral-200 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400'}
         `}>
             {displayRank}

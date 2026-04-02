@@ -261,7 +261,7 @@ const App: React.FC = () => {
   const showSearchAndFilter = viewMode === 'tactics' || viewMode === 'utilities';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700">
+    <div className="min-h-screen bg-linear-to-br from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900 text-neutral-900 dark:text-neutral-200 font-sans selection:bg-neutral-200 dark:selection:bg-neutral-700">
       
       {/* Content Wrapper with Padding and Animation */}
       <div className="pt-[56px] animate-in fade-in duration-500">

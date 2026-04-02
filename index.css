@@ -1,10 +1,24 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
+/* Fallback for older browsers that don't support @property */
+* {
+  --tw-gradient-from-position: 0%;
+  --tw-gradient-via-position: 50%;
+  --tw-gradient-to-position: 100%;
+}
+
 @theme {
   --color-neutral-850: #1f1f1f;
   --color-neutral-925: #101010;
   --color-neutral-950: #0a0a0a;
   --font-sans: "PingFang SC", "Microsoft YaHei", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --animate-flowGradient: flowGradient 8s linear infinite;
+  @keyframes flowGradient {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
 }
 
 /* Disable tap highlight on mobile for cleaner app-like feel */
@@ -13,8 +27,12 @@
 }
 
 body, html {
-  background-color: #0a0a0a; /* Fix white flash on startup */
-  height: 100%;
+  min-height: 100%;
+  background-color: #fafafa !important; /* neutral-50 */
+}
+
+html.dark, html.dark body {
+  background-color: #0a0a0a !important; /* neutral-950 */
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
@@ -25,4 +43,26 @@ body, html {
 .no-scrollbar {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
+}
+
+/* Custom Gradients for older browser compatibility (Safari < 16.4) */
+.bg-gradient-wpa {
+    background-image: linear-gradient(to right, var(--color-blue-600), var(--color-purple-600));
+}
+.dark .bg-gradient-wpa {
+    background-image: linear-gradient(to right, var(--color-blue-400), var(--color-purple-400));
+}
+
+.bg-gradient-avatar {
+    background-image: linear-gradient(to bottom right, var(--color-blue-600), var(--color-indigo-700));
+}
+
+.bg-gradient-outstanding {
+    background-image: linear-gradient(to right, var(--color-fuchsia-600), var(--color-pink-400), var(--color-fuchsia-600));
+}
+
+.text-gradient-clip {
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
 }

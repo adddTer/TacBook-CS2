@@ -291,7 +291,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                     取消
                 </button>
                 
-                {/* Center: Copilot Button (Visible & Centered on Mobile) */}
+                {/* Center: Copilot Button (Visible & Centered on Mobile) - Temporarily Removed for Global Copilot Update
                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                      <button 
                         onClick={() => { setIsAiOpen(!isAiOpen); setIsAiMaximized(false); }} 
@@ -301,6 +301,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                         <span>Copilot</span>
                     </button>
                 </div>
+                */}
 
                 <div className="flex items-center gap-2">
                     <button onClick={() => setShowShareModal(true)} className="text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white p-2 rounded-lg transition-colors">

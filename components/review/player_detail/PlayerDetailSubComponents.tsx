@@ -258,7 +258,7 @@ export const DetailCard = ({ type, data, score, highPrecision }: { type: Ability
     return (
         <div className="bg-white dark:bg-neutral-800/50 rounded-2xl p-5 border border-neutral-200 dark:border-neutral-800 h-full flex flex-col relative overflow-hidden">
             {/* Background Decoration */}
-            <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-transparent to-current opacity-5 rounded-bl-full pointer-events-none ${evalTextClass}`}></div>
+            <div className={`absolute top-0 right-0 w-24 h-24 bg-linear-to-br from-transparent to-current opacity-5 rounded-bl-full pointer-events-none ${evalTextClass}`}></div>
 
             <div className="flex justify-between items-start mb-2 relative z-10">
                 <div>

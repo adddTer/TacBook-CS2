@@ -172,35 +172,35 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
 
             {/* MVP/Leader Card */}
             {leader && (
-                 <div className="mb-8 bg-neutral-900 dark:bg-black rounded-2xl p-6 text-white relative overflow-hidden shadow-xl border border-neutral-800">
-                     <div className="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-blue-900/20 to-blue-900/0 pointer-events-none"></div>
+                 <div className="mb-8 bg-neutral-50 dark:bg-black rounded-2xl p-6 text-neutral-900 dark:text-white relative overflow-hidden shadow-xl border border-neutral-200 dark:border-neutral-800">
+                     <div className="absolute right-0 top-0 h-full w-1/3 bg-linear-to-l from-blue-500/10 dark:from-blue-900/20 to-transparent pointer-events-none"></div>
                      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                          <div>
                              <div className="flex items-center gap-2 mb-2">
-                                 <span className="bg-green-500/20 text-green-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border border-green-500/20">
+                                 <span className="bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border border-green-200 dark:border-green-500/20">
                                      榜首
                                  </span>
-                                 <span className="text-neutral-400 text-xs">{getSortLabel(sortField)}</span>
+                                 <span className="text-neutral-500 dark:text-neutral-400 text-xs">{getSortLabel(sortField)}</span>
                              </div>
-                             <h2 className="text-4xl font-black tracking-tight text-white mb-1">{leader.name}</h2>
-                             <p className="text-sm text-neutral-400 font-medium">{leader.role}</p>
+                             <h2 className="text-4xl font-black tracking-tight text-neutral-900 dark:text-white mb-1">{leader.name}</h2>
+                             <p className="text-sm text-neutral-500 dark:text-neutral-400 font-medium">{leader.role}</p>
                          </div>
 
-                         <div className="flex items-center gap-8 bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-white/10">
+                         <div className="flex items-center gap-8 bg-white dark:bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-neutral-200 dark:border-white/10 shadow-sm dark:shadow-none">
                              <div className="text-center">
-                                 <div className="text-[10px] text-neutral-400 uppercase font-bold mb-1">Rating</div>
+                                 <div className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-bold mb-1">Rating</div>
                                  <div className="text-2xl font-black tabular-nums">{leader.rating.toFixed(2)}</div>
                              </div>
-                             <div className="w-px h-8 bg-white/10"></div>
+                             <div className="w-px h-8 bg-neutral-200 dark:bg-white/10"></div>
                              <div className="text-center">
-                                 <div className="text-[10px] text-neutral-400 uppercase font-bold mb-1">{sortField === 'rating' ? 'ADR' : getSortLabel(sortField)}</div>
-                                 <div className="text-2xl font-black tabular-nums text-green-400">
+                                 <div className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-bold mb-1">{sortField === 'rating' ? 'ADR' : getSortLabel(sortField)}</div>
+                                 <div className="text-2xl font-black tabular-nums text-green-600 dark:text-green-400">
                                      {sortField === 'rating' ? leader.adr.toFixed(1) : getMvpValueDisplay(sortField, leader[sortField])}
                                  </div>
                              </div>
-                             <div className="w-px h-8 bg-white/10"></div>
+                             <div className="w-px h-8 bg-neutral-200 dark:bg-white/10"></div>
                              <div className="text-center">
-                                 <div className="text-[10px] text-neutral-400 uppercase font-bold mb-1">场次</div>
+                                 <div className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-bold mb-1">场次</div>
                                  <div className="text-2xl font-black tabular-nums">{leader.matches}</div>
                              </div>
                          </div>

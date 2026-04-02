@@ -22,7 +22,7 @@ export const PlayerAbilitySection: React.FC<PlayerAbilitySectionProps> = ({
     
     return (
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl p-1 shadow-sm">
-            <div className="bg-gradient-to-b from-neutral-50 to-white dark:from-neutral-950 dark:to-neutral-900 rounded-[20px] p-4 md:p-6">
+            <div className="bg-linear-to-b from-neutral-50 to-white dark:from-neutral-950 dark:to-neutral-900 rounded-[20px] p-4 md:p-6">
                 
                 <div className="flex justify-between items-center mb-6 px-1">
                     <h3 className="text-sm font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2">
@@ -35,7 +35,7 @@ export const PlayerAbilitySection: React.FC<PlayerAbilitySectionProps> = ({
                     {/* 1. Radar Chart Area */}
                     <div className="flex justify-center items-center lg:w-1/3 min-h-[260px] relative">
                          {/* Optional background ring for decoration */}
-                         <div className="absolute inset-0 bg-gradient-to-b from-blue-50/50 to-blue-50/0 dark:from-blue-900/10 dark:to-blue-900/0 rounded-full blur-3xl opacity-50"></div>
+                         <div className="absolute inset-0 bg-linear-to-b from-blue-50/50 to-blue-50/0 dark:from-blue-900/10 dark:to-blue-900/0 rounded-full blur-3xl opacity-50"></div>
                          <div className="relative z-10 w-full max-w-[280px]">
                             <RadarChart data={abilities} size={300} />
                          </div>

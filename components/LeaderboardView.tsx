@@ -223,13 +223,13 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                     </div>
 
                     {/* 1st Place (MVP) */}
-                    <div className="bg-gradient-to-br from-neutral-900 to-black text-white rounded-2xl p-8 relative overflow-hidden shadow-xl shadow-black/20 order-1 md:order-2 transform md:-translate-y-4 border border-neutral-700/50">
+                    <div className="bg-linear-to-br from-neutral-900 to-black text-white rounded-2xl p-8 relative overflow-hidden shadow-xl shadow-black/20 order-1 md:order-2 transform md:-translate-y-4 border border-neutral-700/50">
                         <div className="absolute top-0 right-0 p-6 opacity-10">
                             <Trophy className="w-32 h-32" />
                         </div>
                         <div className="relative z-10">
                             <div className="flex items-center gap-5 mb-6">
-                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-3xl font-black text-black shadow-lg shadow-orange-500/20">
+                                <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-3xl font-black text-black shadow-lg shadow-orange-500/20">
                                     {processedData[0].id[0]}
                                 </div>
                                 <div>

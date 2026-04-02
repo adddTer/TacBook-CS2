@@ -8,10 +8,10 @@ import { GLOBAL_STATS, getEvaluationTier, TIER_STYLES, EvaluationTier } from './
 
 export const TIER_CLASSES = {
     OUTSTANDING: {
-        text: 'text-flow-pink font-black drop-shadow-sm',
-        bg: 'bg-flow-pink text-white border-fuchsia-400 shadow-md shadow-fuchsia-500/30',
+        text: 'text-gradient-clip bg-gradient-outstanding font-black drop-shadow-sm bg-[length:200%_auto] animate-flowGradient',
+        bg: 'bg-gradient-outstanding text-white border-fuchsia-400 shadow-md shadow-fuchsia-500/30 bg-[length:200%_auto] animate-flowGradient',
         fill: TIER_STYLES.OUTSTANDING.hex,
-        bar: 'bg-flow-pink'
+        bar: 'bg-gradient-outstanding bg-[length:200%_auto] animate-flowGradient'
     },
     EXCELLENT: {
         text: TIER_STYLES.EXCELLENT.color + ' font-bold',

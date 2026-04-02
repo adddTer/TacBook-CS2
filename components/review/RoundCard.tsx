@@ -24,8 +24,8 @@ export const RoundCard: React.FC<RoundCardProps> = ({ round, isExpanded, onToggl
     const cardBorderColor = isCTWin ? 'border-blue-500' : 'border-amber-500';
     const winTextColor = isCTWin ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400';
     const gradientBg = isCTWin 
-        ? 'bg-gradient-to-r from-blue-50/50 to-blue-50/0 dark:from-blue-900/10 dark:to-blue-900/0' 
-        : 'bg-gradient-to-r from-amber-50/50 to-amber-50/0 dark:from-amber-900/10 dark:to-amber-900/0';
+        ? 'bg-linear-to-r from-blue-50/50 to-blue-50/0 dark:from-blue-900/10 dark:to-blue-900/0' 
+        : 'bg-linear-to-r from-amber-50/50 to-amber-50/0 dark:from-amber-900/10 dark:to-amber-900/0';
     
     // Sort events by time
     const sortedEvents = [...round.timeline].sort((a,b) => a.seconds - b.seconds);

@@ -51,7 +51,7 @@ export const TournamentList: React.FC<TournamentListProps> = ({
             className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden flex flex-col"
             onClick={() => onSelectTournament(tournament)}
           >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-500 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+            <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-blue-500 to-purple-500 opacity-50 group-hover:opacity-100 transition-opacity"></div>
 
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-lg font-black text-neutral-900 dark:text-white leading-tight line-clamp-2">

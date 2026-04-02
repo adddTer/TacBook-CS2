@@ -22,7 +22,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({ playerStats, onSelectPla
                         className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 flex items-center justify-between cursor-pointer hover:border-blue-500/50 hover:shadow-md transition-all group active:scale-[0.99]"
                     >
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center text-xl font-black text-neutral-400 group-hover:text-blue-500 group-hover:from-blue-50 group-hover:to-indigo-50 dark:group-hover:from-blue-900/20 dark:group-hover:to-indigo-900/20 transition-colors">
+                            <div className="w-12 h-12 rounded-xl bg-linear-to-br from-neutral-100 to-neutral-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center text-xl font-black text-neutral-400 group-hover:text-blue-500 group-hover:from-blue-50 group-hover:to-indigo-50 dark:group-hover:from-blue-900/20 dark:group-hover:to-indigo-900/20 transition-colors">
                                 {player.id[0]}
                             </div>
                             <div>

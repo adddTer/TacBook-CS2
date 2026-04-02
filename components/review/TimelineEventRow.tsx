@@ -261,7 +261,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
                         <div className="h-1.5 flex-1 bg-blue-100 dark:bg-blue-900/20 rounded-full overflow-hidden flex ring-1 ring-inset ring-black/5 dark:ring-white/5">
                             {/* T Win Prob Bar (Yellow) */}
                             <div 
-                                className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 dark:from-yellow-600 dark:to-amber-700 transition-all duration-700 ease-out shadow-[0_0_8px_rgba(245,158,11,0.3)]" 
+                                className="h-full bg-linear-to-r from-yellow-400 to-amber-500 dark:from-yellow-600 dark:to-amber-700 transition-all duration-700 ease-out shadow-[0_0_8px_rgba(245,158,11,0.3)]" 
                                 style={{ width: `${event.winProb * 100}%`, marginLeft: 'auto' }} 
                             ></div>
                         </div>

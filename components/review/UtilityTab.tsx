@@ -70,7 +70,7 @@ export const UtilityTab: React.FC<UtilityTabProps> = ({ players, enemyPlayers, t
                                             
                                             {/* Progress Bar */}
                                             <div className="h-1.5 w-full bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
-                                                <div className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full" style={{ width: `${dmgPercent}%` }}></div>
+                                                <div className="h-full bg-linear-to-r from-orange-500 to-red-500 rounded-full" style={{ width: `${dmgPercent}%` }}></div>
                                             </div>
 
                                             {/* Damage Breakdown Badges */}

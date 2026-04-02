@@ -166,11 +166,11 @@ const ContinuousDistributionChart = ({ title, data, colors, isBetterHigher = tru
     const percentiles = [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95];
 
     return (
-        <div className="bg-neutral-900/50 p-5 rounded-2xl border border-neutral-800 shadow-sm flex flex-col h-full">
-            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-4">{title}</h3>
+        <div className="bg-neutral-50 dark:bg-neutral-900/50 p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm flex flex-col h-full">
+            <h3 className="text-xs font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-4">{title}</h3>
             <div className="flex flex-1 gap-4">
                 {/* Left: Y-axis (Count) */}
-                <div className="flex flex-col justify-between text-[9px] text-neutral-500 h-24 pb-1">
+                <div className="flex flex-col justify-between text-[9px] text-neutral-400 dark:text-neutral-500 h-24 pb-1">
                     <span>{maxFreq}</span>
                     <span>{Math.floor(maxFreq / 2)}</span>
                     <span>0</span>

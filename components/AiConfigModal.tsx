@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { getAIConfig, saveAIConfig, getApiKey } from '../services/ai/config';
+import { getAIConfig, saveAIConfig, getApiKey, hasEnvApiKey, isUsingEnvApiKey, setUseEnvApiKey, getEnvApiKey } from '../services/ai/config';
 import { testConnection, fetchOpenAIModels } from '../services/ai/providers';
 import { AIProvider } from '../services/ai/types';
 import { PRESET_MODELS } from '../services/ai/models';
+import { safeStorage } from '../utils/storage';
 
 interface AiConfigModalProps {
     onClose: () => void;
@@ -22,6 +23,8 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
     const [baseUrl, setBaseUrl] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [model, setModel] = useState('');
+    const [useEnvKey, setUseEnvKey] = useState(false);
+    const hasEnvKey = hasEnvApiKey();
     
     const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -32,8 +35,10 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
         const config = getAIConfig();
         setProvider(config.provider);
         setBaseUrl(config.baseUrl);
-        setApiKey(config.apiKey);
+        // If using env key, don't show it in the input field, keep the local one
+        setApiKey(safeStorage.getItem('tacbook_gemini_api_key') || '');
         setModel(config.model);
+        setUseEnvKey(isUsingEnvApiKey());
         
         setAvailableModels(PRESET_MODELS[config.provider] || []);
     }, []);
@@ -57,7 +62,8 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
     };
 
     const handleFetchModels = async () => {
-        if (!baseUrl || !apiKey) {
+        const keyToUse = useEnvKey ? getEnvApiKey() : apiKey;
+        if (!baseUrl || !keyToUse) {
             setStatusMsg('需要 Base URL 和 API Key 才能获取模型列表');
             return;
         }
@@ -66,7 +72,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
         setStatusMsg('正在获取模型列表...');
         
         try {
-            const fetched = await fetchOpenAIModels(baseUrl, apiKey);
+            const fetched = await fetchOpenAIModels(baseUrl, keyToUse);
             if (fetched.length > 0) {
                 setAvailableModels(fetched);
                 setStatusMsg(`成功获取 ${fetched.length} 个模型`);
@@ -83,25 +89,28 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
     };
 
     const handleTest = async () => {
-        if (!apiKey) {
+        const keyToTest = useEnvKey ? getEnvApiKey() : apiKey;
+        if (!keyToTest) {
             setStatusMsg('请先输入 API Key');
             return;
         }
         setIsLoading(true);
         setStatusMsg('正在测试连接...');
         try {
-            await testConnection({ provider, baseUrl, apiKey, model });
+            await testConnection({ provider, baseUrl, apiKey: keyToTest, model });
             setStatusMsg('连接成功！API 可用。');
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            setStatusMsg('连接失败。请检查 Key、代理或模型名称。');
+            setStatusMsg(`连接失败: ${e.message || '请检查 Key、代理或模型名称。'}`);
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleSave = () => {
-        if (apiKey && model) {
+        const finalApiKey = useEnvKey ? getEnvApiKey() : apiKey;
+        if (finalApiKey && model) {
+            setUseEnvApiKey(useEnvKey);
             saveAIConfig({ provider, baseUrl, apiKey, model });
             onSave();
         }
@@ -112,7 +121,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
             <div className="bg-white dark:bg-neutral-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl flex flex-col gap-4">
                 
                 <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-neutral-900 dark:text-white">配置 AI Copilot</h3>
+                    <h3 className="text-lg font-bold text-neutral-900 dark:text-white">API 管理器</h3>
                 </div>
 
                 <div className="space-y-4">
@@ -146,13 +155,27 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
 
                     {/* API Key */}
                     <div>
-                        <label className="block text-xs font-bold text-neutral-500 uppercase mb-1">API Key</label>
+                        <div className="flex justify-between items-center mb-1">
+                            <label className="block text-xs font-bold text-neutral-500 uppercase">API Key</label>
+                            {hasEnvKey && (
+                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={useEnvKey} 
+                                        onChange={(e) => setUseEnvKey(e.target.checked)}
+                                        className="w-3 h-3 rounded border-neutral-300 text-purple-600 focus:ring-purple-500"
+                                    />
+                                    <span className="text-[10px] text-neutral-500">使用环境变量</span>
+                                </label>
+                            )}
+                        </div>
                         <input 
                             type="password"
-                            value={apiKey}
+                            value={useEnvKey ? '••••••••••••••••••••••••' : apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
+                            disabled={useEnvKey}
                             placeholder="sk-..."
-                            className="w-full bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none text-neutral-900 dark:text-neutral-100"
+                            className={`w-full bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none text-neutral-900 dark:text-neutral-100 ${useEnvKey ? 'opacity-50 cursor-not-allowed' : ''}`}
                         />
                     </div>
 

@@ -66,30 +66,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
         </div>
 
-        {/* Theme Selector */}
-        <div className="space-y-3">
-            <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">外观模式</label>
-            <div className="grid grid-cols-3 gap-2 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl">
-                {(['light', 'system', 'dark'] as const).map(theme => (
+        {/* Appearance */}
+        <div className="space-y-4">
+            <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-wider border-b border-neutral-100 dark:border-neutral-800 pb-2">外观与显示</h4>
+            
+            <div className="space-y-3">
+                <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300">外观模式</label>
+                <div className="grid grid-cols-3 gap-2 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl">
+                    {(['light', 'system', 'dark'] as const).map(theme => (
+                        <button
+                            key={theme}
+                            onClick={() => onThemeChange(theme)}
+                            className={`
+                                py-2 rounded-lg text-xs font-bold transition-all capitalize
+                                ${currentTheme === theme 
+                                    ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm' 
+                                    : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}
+                            `}
+                        >
+                            {theme === 'system' ? '系统' : theme === 'light' ? '浅色' : '深色'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300">道具浏览方式</label>
+                <div className="grid grid-cols-2 gap-2 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl">
                     <button
-                        key={theme}
-                        onClick={() => onThemeChange(theme)}
+                        onClick={() => onUtilityViewModeChange('detail')}
                         className={`
-                            py-2 rounded-lg text-xs font-bold transition-all capitalize
-                            ${currentTheme === theme 
+                            py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1
+                            ${utilityViewMode === 'detail' 
                                 ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm' 
                                 : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}
                         `}
                     >
-                        {theme === 'system' ? '系统' : theme === 'light' ? '浅色' : '深色'}
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" /></svg>
+                        详情页
                     </button>
-                ))}
+                    <button
+                        onClick={() => onUtilityViewModeChange('accordion')}
+                        className={`
+                            py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1
+                            ${utilityViewMode === 'accordion' 
+                                ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm' 
+                                : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}
+                        `}
+                    >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        折叠展开
+                    </button>
+                </div>
             </div>
         </div>
 
-        {/* Data Management */}
-        <div className="space-y-3">
-            <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">数据管理</label>
+        {/* Data & API */}
+        <div className="space-y-4">
+            <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-wider border-b border-neutral-100 dark:border-neutral-800 pb-2">数据与 AI</h4>
+            
             <div className="grid grid-cols-2 gap-2">
                 <button 
                     onClick={onOpenGroupManager}
@@ -103,62 +138,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="py-3 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-xl text-xs font-bold text-neutral-700 dark:text-neutral-300 transition-colors flex flex-col items-center justify-center gap-1"
                 >
                     <svg className="w-5 h-5 mb-0.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    API 设置
+                    API 管理器
+                </button>
+            </div>
+
+            <div className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-800/50 p-3 rounded-xl">
+                <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300">自动更新比赛解析数据</label>
+                <button 
+                    onClick={() => handleAutoUpdateChange(!autoUpdate)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoUpdate ? 'bg-blue-500' : 'bg-neutral-300 dark:bg-neutral-600'}`}
+                >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoUpdate ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
             </div>
         </div>
 
-        {/* Auto Update */}
-        <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">自动更新比赛解析数据</label>
-            <button 
-                onClick={() => handleAutoUpdateChange(!autoUpdate)}
-                className={`w-10 h-5 rounded-full transition-colors ${autoUpdate ? 'bg-blue-500' : 'bg-neutral-300 dark:bg-neutral-700'}`}
-            >
-                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${autoUpdate ? 'translate-x-5' : 'translate-x-1'}`} />
-            </button>
-        </div>
-
-        {/* Default Author */}
-        <div className="space-y-3">
-            <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">默认作者 (自动填充)</label>
-            <input 
-                type="text"
-                value={defaultAuthor}
-                onChange={(e) => handleAuthorChange(e.target.value)}
-                placeholder="你的昵称..."
-                className="w-full bg-neutral-100 dark:bg-neutral-800 border border-transparent focus:border-blue-500 rounded-xl p-3 text-sm dark:text-white outline-none font-bold"
-            />
-        </div>
-
-        {/* Utility View Mode */}
-        <div className="space-y-3">
-            <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">道具浏览方式</label>
-            <div className="grid grid-cols-2 gap-2 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl">
-                <button
-                    onClick={() => onUtilityViewModeChange('detail')}
-                    className={`
-                        py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1
-                        ${utilityViewMode === 'detail' 
-                            ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm' 
-                            : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}
-                    `}
-                >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" /></svg>
-                    详情页
-                </button>
-                <button
-                    onClick={() => onUtilityViewModeChange('accordion')}
-                    className={`
-                        py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1
-                        ${utilityViewMode === 'accordion' 
-                            ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm' 
-                            : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}
-                    `}
-                >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    折叠展开
-                </button>
+        {/* Personalization */}
+        <div className="space-y-4">
+            <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-wider border-b border-neutral-100 dark:border-neutral-800 pb-2">个性化</h4>
+            
+            <div className="space-y-3">
+                <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300">默认作者 (自动填充)</label>
+                <input 
+                    type="text"
+                    value={defaultAuthor}
+                    onChange={(e) => handleAuthorChange(e.target.value)}
+                    placeholder="你的昵称..."
+                    className="w-full bg-neutral-100 dark:bg-neutral-800 border border-transparent focus:border-blue-500 rounded-xl p-3 text-sm dark:text-white outline-none font-bold transition-colors"
+                />
             </div>
         </div>
 
