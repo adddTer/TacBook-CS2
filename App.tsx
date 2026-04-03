@@ -20,6 +20,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { GroupManagerModal } from './components/GroupManagerModal'; 
 import { ConfirmModal } from './components/ConfirmModal';
 import { AiConfigModal } from './components/AiConfigModal';
+import { GlobalCopilot } from './components/ai/GlobalCopilot';
 import { useTactics } from './hooks/useTactics';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useAppStorage } from './hooks/useAppStorage'; 
@@ -494,6 +495,14 @@ const App: React.FC = () => {
       />
       <InstallPrompt isOpen={showPrompt} onClose={closePrompt} onInstall={handleInstall} isIos={isIos} isStandalone={isStandalone} />
       
+      <GlobalCopilot 
+        allTactics={allTactics}
+        allUtilities={allUtilities}
+        allMatches={allMatches}
+        allTournaments={allTournaments}
+        allBons={allBons}
+      />
+
       <BottomNav currentMode={viewMode} onChange={setViewMode} />
     </div>
   );
