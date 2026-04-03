@@ -146,9 +146,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300">自动更新比赛解析数据</label>
                 <button 
                     onClick={() => handleAutoUpdateChange(!autoUpdate)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoUpdate ? 'bg-blue-500' : 'bg-neutral-300 dark:bg-neutral-600'}`}
+                    className={`relative w-10 h-6 rounded-full transition-colors ${autoUpdate ? 'bg-blue-500' : 'bg-neutral-300 dark:bg-neutral-600'}`}
                 >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoUpdate ? 'translate-x-6' : 'translate-x-1'}`} />
+                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${autoUpdate ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
             </div>
         </div>
