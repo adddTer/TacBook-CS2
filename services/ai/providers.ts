@@ -111,9 +111,8 @@ const callGoogleGemini = async (
 
     // Add Thinking config for models that might support it (Gemini 3.0 / Thinking models)
     if (config.model.includes('gemini-3') || config.model.includes('thinking')) {
-        // Use loose typing to avoid TS errors if ThinkingLevel enum isn't available
         modelConfig.thinkingConfig = {
-            thinkingLevel: "HIGH", // Or import ThinkingLevel.HIGH if available
+            thinkingLevel: config.thinkingLevel || "HIGH",
             includeThoughts: true 
         };
     }

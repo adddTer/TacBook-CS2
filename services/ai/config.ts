@@ -6,6 +6,7 @@ const LS_KEY_PROVIDER = "tacbook_ai_provider";
 const LS_KEY_BASE_URL = "tacbook_ai_base_url";
 const LS_KEY_API_KEY = "tacbook_gemini_api_key";
 const LS_KEY_MODEL = "tacbook_gemini_model";
+const LS_KEY_THINKING_LEVEL = "tacbook_gemini_thinking_level";
 const LS_KEY_USE_ENV_KEY = "tacbook_use_env_api_key";
 
 export const getEnvApiKey = (): string => {
@@ -43,7 +44,8 @@ export const getAIConfig = (): AIConfig => {
         provider: (safeStorage.getItem(LS_KEY_PROVIDER) as AIProvider) || 'google',
         baseUrl: safeStorage.getItem(LS_KEY_BASE_URL) || '',
         apiKey: useEnv ? getEnvApiKey() : (safeStorage.getItem(LS_KEY_API_KEY) || ''),
-        model: safeStorage.getItem(LS_KEY_MODEL) || 'gemini-3.1-pro-preview'
+        model: safeStorage.getItem(LS_KEY_MODEL) || 'gemini-3.1-pro-preview',
+        thinkingLevel: (safeStorage.getItem(LS_KEY_THINKING_LEVEL) as any) || 'HIGH'
     };
 };
 
@@ -55,7 +57,11 @@ export const saveAIConfig = (config: AIConfig) => {
         safeStorage.setItem(LS_KEY_API_KEY, config.apiKey);
     }
     safeStorage.setItem(LS_KEY_MODEL, config.model);
+    if (config.thinkingLevel) {
+        safeStorage.setItem(LS_KEY_THINKING_LEVEL, config.thinkingLevel);
+    }
 };
 
 export const getApiKey = () => getAIConfig().apiKey;
 export const getSelectedModel = () => getAIConfig().model;
+export const getThinkingLevel = () => getAIConfig().thinkingLevel;

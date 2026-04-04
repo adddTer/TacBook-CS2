@@ -22,7 +22,7 @@ const HITGROUP_MAP: Record<string, number> = {
     'gear': 10
 };
 
-export const parseDemoJson = (data: DemoData): Match => {
+export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
     const events = Array.isArray(data) ? data : (data.events || []);
     const meta = (!Array.isArray(data) && data.meta) ? data.meta : { map_name: 'Unknown', server_name: '' };
     
@@ -1248,7 +1248,7 @@ export const parseDemoJson = (data: DemoData): Match => {
     return {
         id: generateId('demo'),
         source: 'Demo',
-        date: new Date().toISOString(),
+        date: fileDate ? new Date(fileDate).toISOString() : new Date().toISOString(),
         mapId: meta.map_name || 'Unknown',
         serverName: meta.server_name, 
         rank: 'N/A',

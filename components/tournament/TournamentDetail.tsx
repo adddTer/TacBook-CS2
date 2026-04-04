@@ -52,7 +52,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
       try {
         const text = await file.text();
         const json = JSON.parse(text);
-        const match = parseDemoJson(json);
+        const match = parseDemoJson(json, file.lastModified);
 
         // Link to tournament
         match.tournamentId = tournament.id;
@@ -86,6 +86,7 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
       try {
         const updatedMatch = parseDemoJson(match.rawDemoJson);
         updatedMatch.id = match.id; // Keep original ID
+        updatedMatch.date = match.date; // Keep original date
         updatedMatch.tournamentId = tournament.id;
 
         onSaveMatch(

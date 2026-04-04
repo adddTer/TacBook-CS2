@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAIConfig, saveAIConfig, getApiKey, hasEnvApiKey, isUsingEnvApiKey, setUseEnvApiKey, getEnvApiKey } from '../services/ai/config';
 import { testConnection, fetchOpenAIModels } from '../services/ai/providers';
-import { AIProvider } from '../services/ai/types';
+import { AIProvider, ThinkingLevel, isThinkingLevelSupported } from '../services/ai/types';
 import { PRESET_MODELS } from '../services/ai/models';
 import { safeStorage } from '../utils/storage';
 
@@ -18,11 +18,19 @@ const PROVIDERS: { id: AIProvider, name: string, defaultBaseUrl: string }[] = [
     { id: 'custom', name: 'Custom / Proxy', defaultBaseUrl: '' },
 ];
 
+const THINKING_LEVELS: { id: ThinkingLevel, name: string, desc: string }[] = [
+    { id: 'LOW', name: '低', desc: '最小化延迟与成本' },
+    { id: 'MEDIUM', name: '中', desc: '平衡速度与逻辑深度' },
+    { id: 'HIGH', name: '高', desc: '允许深度推理 (默认)' },
+    { id: 'MINIMAL', name: '极简', desc: '极速响应' },
+];
+
 export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave }) => {
     const [provider, setProvider] = useState<AIProvider>('google');
     const [baseUrl, setBaseUrl] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [model, setModel] = useState('');
+    const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>('HIGH');
     const [useEnvKey, setUseEnvKey] = useState(false);
     const hasEnvKey = hasEnvApiKey();
     
@@ -38,10 +46,17 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
         // If using env key, don't show it in the input field, keep the local one
         setApiKey(safeStorage.getItem('tacbook_gemini_api_key') || '');
         setModel(config.model);
+        setThinkingLevel(config.thinkingLevel || 'HIGH');
         setUseEnvKey(isUsingEnvApiKey());
         
         setAvailableModels(PRESET_MODELS[config.provider] || []);
     }, []);
+
+    useEffect(() => {
+        if (model.includes('pro') && thinkingLevel === 'MINIMAL') {
+            setThinkingLevel('LOW');
+        }
+    }, [model]);
 
     const handleProviderChange = (newProvider: AIProvider) => {
         setProvider(newProvider);
@@ -63,8 +78,8 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
 
     const handleFetchModels = async () => {
         const keyToUse = useEnvKey ? getEnvApiKey() : apiKey;
-        if (!baseUrl || !keyToUse) {
-            setStatusMsg('需要 Base URL 和 API Key 才能获取模型列表');
+        if (!keyToUse) {
+            setStatusMsg('需要 API Key 才能获取模型列表');
             return;
         }
 
@@ -97,7 +112,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
         setIsLoading(true);
         setStatusMsg('正在测试连接...');
         try {
-            await testConnection({ provider, baseUrl, apiKey: keyToTest, model });
+            await testConnection({ provider, baseUrl, apiKey: keyToTest, model, thinkingLevel });
             setStatusMsg('连接成功！API 可用。');
         } catch (e: any) {
             console.error(e);
@@ -111,14 +126,18 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
         const finalApiKey = useEnvKey ? getEnvApiKey() : apiKey;
         if (finalApiKey && model) {
             setUseEnvApiKey(useEnvKey);
-            saveAIConfig({ provider, baseUrl, apiKey, model });
+            let finalThinkingLevel = thinkingLevel;
+            if (model.includes('pro') && finalThinkingLevel === 'MINIMAL') {
+                finalThinkingLevel = 'LOW';
+            }
+            saveAIConfig({ provider, baseUrl, apiKey, model, thinkingLevel: finalThinkingLevel });
             onSave();
         }
     };
 
     return (
         <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white dark:bg-neutral-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl flex flex-col gap-4">
+            <div className="bg-white dark:bg-neutral-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
                 
                 <div className="flex items-center justify-between">
                     <h3 className="text-lg font-bold text-neutral-900 dark:text-white">API 管理器</h3>
@@ -186,7 +205,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
                             {provider !== 'google' && (
                                 <button 
                                     onClick={handleFetchModels}
-                                    disabled={isFetchingModels || !apiKey}
+                                    disabled={isFetchingModels || (!useEnvKey && !apiKey)}
                                     className="text-[10px] text-blue-500 hover:text-blue-600 disabled:opacity-50 flex items-center gap-1"
                                 >
                                     {isFetchingModels ? '获取中...' : '刷新列表'}
@@ -207,12 +226,18 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
                             <select 
                                 onChange={(e) => setModel(e.target.value)}
                                 value=""
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white"
                                 disabled={availableModels.length === 0}
                             >
-                                <option value="" disabled>选择模型...</option>
-                                {availableModels.map(m => (
-                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                <option value="" disabled className="text-neutral-500">选择模型...</option>
+                                {availableModels.map((m, index) => (
+                                    <option 
+                                        key={`${m.id}-${index}`} 
+                                        value={m.id} 
+                                        className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white"
+                                    >
+                                        {m.name}
+                                    </option>
                                 ))}
                             </select>
 
@@ -220,18 +245,45 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                             </div>
                         </div>
-                        
-                        {availableModels.length > 0 && (
-                            <p className="text-[10px] text-neutral-400 mt-1 ml-1">
-                                可直接输入，或点击下拉箭头选择。
-                            </p>
-                        )}
                     </div>
+
+                    {/* Thinking Level (Only for Google) */}
+                    {provider === 'google' && (
+                        <div className="animate-in slide-in-from-top-2">
+                            <label className="block text-xs font-bold text-neutral-500 uppercase mb-1">推理强度</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {THINKING_LEVELS.filter(l => !(model.includes('pro') && l.id === 'MINIMAL')).map(level => {
+                                    const supported = isThinkingLevelSupported(model, level.id as ThinkingLevel);
+                                    return (
+                                        <button
+                                            key={level.id}
+                                            disabled={!supported}
+                                            onClick={() => setThinkingLevel(level.id as ThinkingLevel)}
+                                            className={`p-2 rounded-xl border text-left transition-all ${
+                                                thinkingLevel === level.id
+                                                    ? 'border-neutral-500 bg-neutral-100 dark:bg-neutral-800 ring-1 ring-neutral-500'
+                                                    : supported
+                                                        ? 'border-neutral-200 dark:border-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700'
+                                                        : 'border-neutral-200 dark:border-neutral-800 opacity-50 cursor-not-allowed'
+                                            }`}
+                                        >
+                                            <div className={`text-[10px] font-black uppercase tracking-wider ${thinkingLevel === level.id ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-400'}`}>
+                                                {level.name}
+                                            </div>
+                                            <div className="text-[9px] text-neutral-500 leading-tight mt-0.5">
+                                                {level.desc}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Test Button */}
                     <button 
                         onClick={handleTest}
-                        disabled={isLoading || !apiKey}
+                        disabled={isLoading || (!useEnvKey && !apiKey)}
                         className="w-full py-2 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
                         {isLoading ? (
@@ -258,7 +310,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
                     </button>
                     <button 
                         onClick={handleSave}
-                        disabled={!apiKey || !model}
+                        disabled={(!useEnvKey && !apiKey) || !model}
                         className="px-4 py-2 text-sm font-bold bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         保存并启用

@@ -20,7 +20,16 @@ export interface CopilotMessage {
     toolCalls?: ToolCall[];
     toolResults?: ToolResult[];
     timestamp: number;
+    startTime?: number;
+    endTime?: number;
+    runningTime?: number; // Accumulated running time in milliseconds
+    modelName?: string;
+    thinkingLevel?: string;
     status?: 'pending' | 'streaming' | 'completed' | 'error'; // 用于 UI 状态展示
+    errorType?: 'retryable' | 'fatal';
+    errorMessage?: string;
+    rawParts?: any[]; // Store exact parts returned by the model to preserve thought signatures
+    apiSequence?: any[]; // Store the exact sequence of Content objects generated during this message
 }
 
 export interface CopilotThread {

@@ -82,19 +82,11 @@ export const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: "query_tournaments",
-        description: "查询赛事列表。",
-        parameters: {
-            type: Type.OBJECT,
-            properties: {}
-        }
+        description: "查询赛事列表。"
     },
     {
         name: "query_series",
-        description: "查询系列赛 (BO1/BO3/BO5) 列表。",
-        parameters: {
-            type: Type.OBJECT,
-            properties: {}
-        }
+        description: "查询系列赛 (BO1/BO3/BO5) 列表。"
     },
     {
         name: "query_team_stats",
@@ -168,8 +160,9 @@ export const createToolHandlers = (context: {
         get_match_details: async ({ matchId }: { matchId: string }) => {
             const match = context.allMatches.find(m => m.id === matchId);
             if (!match) return { error: "未找到该比赛数据" };
-            // Return full match data
-            return match;
+            // Return full match data but omit rawDemoJson to prevent token explosion
+            const { rawDemoJson, ...safeMatch } = match;
+            return safeMatch;
         },
         query_player_stats: async ({ playerId, steamid }: { playerId?: string, steamid?: string }) => {
             // Aggregate stats for a player across all matches

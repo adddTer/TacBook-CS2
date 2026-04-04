@@ -108,6 +108,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     // Keep the original ID to overwrite, or delete old and save new.
                     // Overwriting is better to keep references in series/tournaments.
                     updatedMatch.id = match.id; 
+                    updatedMatch.date = match.date; // Keep original date
                     updatedMatch.parserVersion = CURRENT_PARSER_VERSION;
                     
                     // Improve performance by deleting the raw demo JSON after re-parsing
@@ -499,7 +500,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                 // Fix precision loss for large numbers like steamid
                 const fixedContent = content.replace(/"(steamid|attacker_steamid|user_steamid|assister_steamid|userid)"\s*:\s*(\d{16,20})/g, '"$1":"$2"');
                 const json = JSON.parse(fixedContent);
-                let match = parseDemoJson(json);
+                let match = parseDemoJson(json, file.lastModified);
                 
                 // Save
                 setLoadingState(prev => ({ ...prev, message: '正在保存数据...', subMessage: `${match.mapId} - ${match.date}` }));

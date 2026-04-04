@@ -3,12 +3,25 @@ import { Tactic } from "../../types";
 
 export type AIProvider = 'google' | 'deepseek' | 'openai' | 'custom';
 
+export type ThinkingLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'MINIMAL';
+
 export interface AIConfig {
     provider: AIProvider;
     baseUrl: string;
     apiKey: string;
     model: string;
+    thinkingLevel?: ThinkingLevel;
 }
+
+export const isThinkingLevelSupported = (model: string, level: ThinkingLevel): boolean => {
+    if (level === 'MINIMAL') {
+        return model.includes('flash-lite') || model.includes('flash-preview');
+    }
+    if (level === 'LOW' && model.includes('pro')) {
+        return true;
+    }
+    return true; // Other levels generally supported
+};
 
 export interface ChatMessage {
     role: 'user' | 'model' | 'system';
