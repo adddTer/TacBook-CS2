@@ -46,20 +46,10 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         return pA - pB;
     });
 
-    // --- PHASE 1-4: Identify Players & Teams (Extracted) ---
-    const { 
-        teammateSteamIds, 
-        steamIdToName, 
-        activeSteamIds, 
-        allSteamIds 
-    } = determineTeammates(data, events);
-
-    // --- PHASE 5: Determine Starting Side (Extracted) ---
-    const initialRosterSide = determineStartingSide(events, teammateSteamIds);
-
     // --- PHASE 5.5: Pre-Analyze Round Results (Retrospective Logic) ---
     const roundResults = new Map<number, { winner: 'T' | 'CT', reason: number, endTick: number, defuserSid?: string, defuseTick?: number }>();
     const roundFreezeEnds = new Map<number, number>(); // Store freeze end ticks for filtering
+    const roundStarts = new Map<number, number>(); // Store round start ticks
     {
         let tempRound = 1;
         let tempMatchStarted = false;
@@ -80,6 +70,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                 tempRound = 1;
                 roundResults.clear();
                 roundFreezeEnds.clear();
+                roundStarts.clear();
                 tempRoundStartTick = 0;
                 tempFreezeEndTick = 0;
                 tempDefuser = undefined;
@@ -90,14 +81,9 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
 
             if (e.event_name === 'round_start') {
                 // IMPLICIT ROUND END CHECK: Match Phase 6 logic
-                // If we see a new round_start while already in a round (and haven't seen round_end),
-                // it means the previous round ended implicitly.
-                // We must increment tempRound to keep indices aligned with the main loop.
                 if (tempRoundStartTick > 0) {
-                    // FIX: Infer result for implicit round end
-                    // If we have a defuser, it's a CT win. If exploded, it's a T win.
                     let implicitWinner: 'T' | 'CT' | null = null;
-                    let implicitReason = 0;
+                    let implicitReason = 1; // Default to TargetBombed/CTWin approx
                     
                     if (tempDefuser) {
                         implicitWinner = 'CT';
@@ -105,27 +91,40 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                     } else if (tempExploded) {
                         implicitWinner = 'T';
                         implicitReason = 1; // TargetBombed
+                    } else {
+                        implicitWinner = 'CT'; // Fallback
                     }
                     
-                    // If we can't infer from bomb, check if we have any result stored for this round? No.
-                    // Just save what we have.
+                    const endTick = e.tick;
+                    const tickRate = 64;
+                    const checkAnchor = tempFreezeEndTick || tempRoundStartTick;
+                    const checkDuration = Math.max(0, (endTick - checkAnchor) / tickRate);
                     
-                    if (implicitWinner) {
-                         roundResults.set(tempRound, { 
-                             winner: implicitWinner, 
-                             reason: implicitReason, 
-                             endTick: e.tick, // Use current tick as end tick
-                             defuserSid: tempDefuser,
-                             defuseTick: tempDefuseTick
-                         });
-                    }
-                    
-                    if (tempFreezeEndTick > 0) {
-                         roundFreezeEnds.set(tempRound, tempFreezeEndTick);
+                    let isWarmup = false;
+                    if (tempRound === 1) {
+                        if (checkDuration < 15) isWarmup = true;
+                        // For implicit ends, we don't usually have reason 7 unless defused, but keep logic consistent
+                        if (implicitReason === 7 && (checkDuration < 114 || checkDuration > 116)) isWarmup = true;
                     }
 
-                    tempRound++;
-                    // Reset state for new round
+                    if (!isWarmup) {
+                        if (implicitWinner) {
+                             roundResults.set(tempRound, { 
+                                 winner: implicitWinner, 
+                                 reason: implicitReason, 
+                                 endTick: e.tick, // Use current tick as end tick
+                                 defuserSid: tempDefuser,
+                                 defuseTick: tempDefuseTick
+                             });
+                        }
+                        
+                        if (tempFreezeEndTick > 0) {
+                             roundFreezeEnds.set(tempRound, tempFreezeEndTick);
+                        }
+
+                        tempRound++;
+                    }
+                    
                     tempFreezeEndTick = 0;
                     tempDefuser = undefined;
                     tempDefuseTick = undefined;
@@ -133,6 +132,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                 }
                 
                 tempRoundStartTick = e.tick;
+                roundStarts.set(tempRound, e.tick);
                 tempDefuser = undefined;
                 tempDefuseTick = undefined;
                 tempExploded = false;
@@ -147,6 +147,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                  if (type === 'player_death' || type === 'player_hurt' || type === 'bomb_planted' || type.includes('grenade')) {
                      tempFreezeEndTick = e.tick;
                      tempRoundStartTick = e.tick; // Implicit start
+                     roundStarts.set(tempRound, e.tick);
                  }
             }
 
@@ -164,18 +165,15 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                 const anyE = e as any;
                 let winner: 'T' | 'CT' | null = null;
                 
-                // 1. Try standard winner field
                 if (anyE.winner == 2 || String(anyE.winner) === '2') winner = 'T';
                 else if (anyE.winner == 3 || String(anyE.winner) === '3') winner = 'CT';
                 
-                // 2. Fallback text check
                 if (!winner && anyE.winner) {
                      const w = String(anyE.winner).toLowerCase();
                      if (w === 't' || w.includes('terrorist')) winner = 'T';
                      if (w === 'ct' || w.includes('counter')) winner = 'CT';
                 }
 
-                // 3. PRIORITY OVERRIDE: Reason-based determination
                 if (anyE.reason !== undefined) {
                      const r = Number(anyE.reason);
                      if (r === 1 || r === 12) winner = 'T';
@@ -189,7 +187,6 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                     const reason = Number(anyE.reason);
                     const endTick = e.tick;
                     
-                    // --- WARMUP CHECK REPLICATION ---
                     const tickRate = 64; // Assume 64 for check
                     const checkAnchor = tempFreezeEndTick || tempRoundStartTick;
                     const checkDuration = Math.max(0, (endTick - checkAnchor) / tickRate);
@@ -201,24 +198,19 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                     }
 
                     if (!isWarmup) {
-                        // console.log(`[Parser] Phase 5.5: Found Round ${tempRound} Result: Winner=${winner}, Reason=${reason}, EndTick=${endTick}`);
                         roundResults.set(tempRound, { winner, reason, endTick, defuserSid: tempDefuser, defuseTick: tempDefuseTick });
                         if (tempFreezeEndTick > 0) {
                             roundFreezeEnds.set(tempRound, tempFreezeEndTick);
                         }
                         
-                        // IMPORTANT: Phase 2 increments round AFTER processing round_end
                         tempRound++;
                         
-                        // Reset state
                         tempRoundStartTick = 0;
                         tempFreezeEndTick = 0;
                         tempDefuser = undefined;
                         tempDefuseTick = undefined;
                         tempExploded = false;
                     } else {
-                        // If warmup, we don't increment tempRound, effectively discarding it
-                        // Reset state just like main loop
                         tempRoundStartTick = 0;
                         tempFreezeEndTick = 0;
                         tempDefuser = undefined;
@@ -230,6 +222,21 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         });
         console.log(`[Parser] Phase 5.5 Complete. Found ${roundResults.size} rounds.`);
     }
+
+    // Filter events for team logic to exclude warmup
+    const firstValidRoundStartTick = roundStarts.get(1) || 0;
+    const teamLogicEvents = events.filter(e => (e.tick || 0) >= firstValidRoundStartTick);
+
+    // --- PHASE 1-4: Identify Players & Teams (Extracted) ---
+    const { 
+        teammateSteamIds, 
+        steamIdToName, 
+        activeSteamIds, 
+        allSteamIds 
+    } = determineTeammates(data, teamLogicEvents);
+
+    // --- PHASE 5: Determine Starting Side (Extracted) ---
+    const initialRosterSide = determineStartingSide(teamLogicEvents, teammateSteamIds);
 
     // --- PHASE 6: CALCULATE STATS (Engine Loop) ---
     // Note: The rest of this function is largely preserved to ensure exact metric behavior

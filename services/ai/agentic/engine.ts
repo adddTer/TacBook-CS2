@@ -1,6 +1,8 @@
 import { GoogleGenAI, GenerateContentResponse, Type, Content, Part, ThinkingLevel } from "@google/genai";
 import { CopilotMessage, CopilotThread, ToolCall, ToolResult } from "./types";
 import { toolDeclarations, createToolHandlers } from "./tools";
+import { convertGeminiToolsToOpenAI, convertGeminiHistoryToOpenAI } from "./openai_adapter";
+import { getAIConfig } from "../config";
 
 export class AgenticEngine {
     private ai: GoogleGenAI;
@@ -8,8 +10,10 @@ export class AgenticEngine {
     private handlers: any;
     private modelName: string;
     private thinkingLevel: string;
+    private apiKey: string;
 
     constructor(apiKey: string, thread: CopilotThread, context: any, modelName: string = "gemini-3.1-pro-preview", thinkingLevel: string = "HIGH") {
+        this.apiKey = apiKey;
         this.ai = new GoogleGenAI({ apiKey });
         this.thread = thread;
         this.modelName = modelName;
@@ -58,7 +62,8 @@ export class AgenticEngine {
     async process(
         onUpdate: (message: Partial<CopilotMessage>) => void,
         onThreadUpdate: (thread: Partial<CopilotThread>) => void,
-        resumeMessageId?: string
+        resumeMessageId?: string,
+        abortSignal?: AbortSignal
     ) {
         const startTime = Date.now();
         let loopCount = 0;
@@ -130,7 +135,12 @@ export class AgenticEngine {
         }
 
         while (loopCount < MAX_LOOPS) {
+            if (abortSignal?.aborted) {
+                throw new DOMException('Aborted', 'AbortError');
+            }
+            
             loopCount++;
+            const loopStartTime = Date.now();
             
             if (apiHistory.length === 0) {
                 currentResponseMsg.runningTime = (currentResponseMsg.runningTime || 0) + (Date.now() - startTime);
@@ -141,10 +151,10 @@ export class AgenticEngine {
             try {
                 let response;
                 let retryCount = 0;
-                const MAX_RETRIES = 3;
+                const MAX_RETRIES = 1;
                 
                 const modelConfig: any = {
-                    systemInstruction: "你是一个专业的 CS2 战术助手。你可以通过调用工具来查询战术、道具、比赛数据或记录记忆。请尽量通过工具获取真实数据后再回答用户。如果需要多次调用工具才能完成任务，请分步进行。你的回答应该专业、简洁且富有洞察力。",
+                    systemInstruction: "你是一个专业的 CS2 战术助手。你可以通过调用工具来查询战术、道具、比赛数据或记录记忆。请尽量通过工具获取真实数据后再回答用户。数据来源是用户自行上传的demo。对于不包含注册玩家的比赛，不返回比赛结果。如果需要多次调用工具才能完成任务，请分步进行。你的回答应该专业、简洁且富有洞察力。\n\n**绝对重要：不要在没有调用 finish 工具的情况下结束你的回答！当你完成了用户的请求，或者已经给出了最终回复，你必须（MUST）调用 finish 工具，并将最终回复作为 message 参数传入。否则对话将永远卡住！**",
                     tools: [{ functionDeclarations: toolDeclarations }],
                 };
 
@@ -159,11 +169,83 @@ export class AgenticEngine {
 
                 while (retryCount < MAX_RETRIES) {
                     try {
-                        response = await this.ai.models.generateContent({
-                            model: this.modelName,
-                            contents: apiHistory,
-                            config: modelConfig
-                        });
+                        const aiConfig = getAIConfig();
+                        if (aiConfig.provider !== 'google') {
+                            // OpenAI / DeepSeek / Custom API integration
+                            if (!this.apiKey) throw new Error(`${aiConfig.provider} API key is not configured.`);
+                            
+                            const messages = convertGeminiHistoryToOpenAI(apiHistory);
+                            
+                            // Add system instruction
+                            if (modelConfig.systemInstruction) {
+                                messages.unshift({
+                                    role: 'system',
+                                    content: modelConfig.systemInstruction
+                                });
+                            }
+
+                            const tools = convertGeminiToolsToOpenAI(toolDeclarations);
+                            const baseUrl = aiConfig.baseUrl.replace(/\/$/, "") + "/chat/completions";
+
+                            const res = await fetch(baseUrl, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${this.apiKey}`
+                                },
+                                body: JSON.stringify({
+                                    model: this.modelName,
+                                    messages: messages,
+                                    tools: tools,
+                                    temperature: modelConfig.temperature,
+                                    max_tokens: modelConfig.maxOutputTokens,
+                                }),
+                                signal: abortSignal
+                            });
+
+                            if (!res.ok) {
+                                const errorData = await res.json().catch(() => ({}));
+                                throw new Error(errorData.error?.message || `${aiConfig.provider} API Error: ${res.status}`);
+                            }
+
+                            const data = await res.json();
+                            const message = data.choices[0].message;
+                            
+                            const parts: Part[] = [];
+                            let textContent = message.content || "";
+                            if (message.reasoning_content) {
+                                textContent = `<think>\n${message.reasoning_content}\n</think>\n\n` + textContent;
+                            }
+                            if (textContent) {
+                                parts.push({ text: textContent });
+                            }
+                            if (message.tool_calls) {
+                                for (const tc of message.tool_calls) {
+                                    parts.push({
+                                        functionCall: {
+                                            id: tc.id,
+                                            name: tc.function.name,
+                                            args: JSON.parse(tc.function.arguments)
+                                        }
+                                    });
+                                }
+                            }
+                            
+                            response = {
+                                candidates: [{
+                                    content: {
+                                        role: 'model',
+                                        parts: parts
+                                    }
+                                }]
+                            };
+                        } else {
+                            response = await this.ai.models.generateContent({
+                                model: this.modelName,
+                                contents: apiHistory,
+                                config: modelConfig
+                            });
+                        }
                         break;
                     } catch (e: any) {
                         const isRetryable = e.message?.includes('429') || e.message?.includes('500') || e.message?.includes('503');
@@ -172,6 +254,12 @@ export class AgenticEngine {
                             await new Promise(r => setTimeout(r, 1000 * retryCount));
                             continue;
                         }
+                        
+                        // If it's an API key error, make it fatal
+                        if (e.message?.includes('API key is not configured')) {
+                            throw new Error(e.message);
+                        }
+                        
                         throw e;
                     }
                 }
@@ -192,20 +280,66 @@ export class AgenticEngine {
                 // 1. Handle Text Response
                 const textParts = parts.filter(p => p.text).map(p => p.text).join('\n\n');
                 if (textParts) {
-                    currentResponseMsg.text += (currentResponseMsg.text ? '\n\n' : '') + textParts;
+                    let currentText = textParts;
+                    
+                    // Extract reasoning content
+                    const thinkMatch = currentText.match(/<think>([\s\S]*?)<\/think>/);
+                    let extractedReasoning = '';
+                    if (thinkMatch) {
+                        extractedReasoning = thinkMatch[1].trim();
+                        currentResponseMsg.reasoningContent = (currentResponseMsg.reasoningContent ? currentResponseMsg.reasoningContent + '\n\n' : '') + extractedReasoning;
+                        currentText = currentText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+                    }
+                    
+                    if (currentText) {
+                        currentResponseMsg.text = (currentResponseMsg.text ? currentResponseMsg.text + '\n\n' : '') + currentText;
+                    }
+                    
+                    // Add step for reasoning
+                    if (extractedReasoning) {
+                        currentResponseMsg.steps = [...(currentResponseMsg.steps || []), {
+                            id: `step_${Date.now()}_think`,
+                            type: 'think',
+                            content: extractedReasoning,
+                            duration: Date.now() - loopStartTime
+                        }];
+                    }
+                    
+                    // Add step for reply text if any remains
+                    if (currentText) {
+                        currentResponseMsg.steps = [...(currentResponseMsg.steps || []), {
+                            id: `step_${Date.now()}_reply`,
+                            type: 'reply',
+                            content: currentText
+                        }];
+                    }
+                    
                     onUpdate({ ...currentResponseMsg });
                 }
 
                 // 2. Handle Tool Calls
                 const toolCallParts = parts.filter(p => p.functionCall);
                 if (toolCallParts.length > 0) {
-                    const newToolCalls: ToolCall[] = toolCallParts.map(p => ({
-                        id: p.functionCall!.id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                        name: p.functionCall!.name,
-                        args: p.functionCall!.args as Record<string, any>
-                    }));
+                    const newToolCalls: ToolCall[] = toolCallParts.map(p => {
+                        const id = p.functionCall!.id || `call_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                        // Inject ID back into functionCall so it's preserved in apiSequence
+                        p.functionCall!.id = id;
+                        return {
+                            id,
+                            name: p.functionCall!.name,
+                            args: p.functionCall!.args as Record<string, any>
+                        };
+                    });
 
                     currentResponseMsg.toolCalls = [...(currentResponseMsg.toolCalls || []), ...newToolCalls];
+                    
+                    const actionStep: any = {
+                        id: `step_${Date.now()}_action`,
+                        type: 'action',
+                        toolCalls: newToolCalls,
+                        toolResults: []
+                    };
+                    currentResponseMsg.steps = [...(currentResponseMsg.steps || []), actionStep];
                     onUpdate({ ...currentResponseMsg });
 
                     const toolResponseParts: Part[] = [];
@@ -215,6 +349,7 @@ export class AgenticEngine {
                         const handler = this.handlers[call.name];
                         const result = await this.executeTool(call, handler);
                         newToolResults.push(result);
+                        actionStep.toolResults.push(result);
                         
                         let responseObj = result.result || { error: result.error };
                         if (typeof responseObj !== 'object' || responseObj === null || Array.isArray(responseObj)) {
@@ -223,10 +358,11 @@ export class AgenticEngine {
                         // Sanitize responseObj to remove undefined values
                         responseObj = JSON.parse(JSON.stringify(responseObj));
 
-                        const functionResponse: any = { name: call.name, response: responseObj };
-                        if (call.id && !call.id.startsWith('call_')) {
-                            functionResponse.id = call.id;
-                        }
+                        const functionResponse: any = { 
+                            name: call.name, 
+                            response: responseObj,
+                            id: call.id // Always include ID for OpenAI compatibility
+                        };
 
                         toolResponseParts.push({
                             functionResponse
@@ -234,6 +370,8 @@ export class AgenticEngine {
                     }
 
                     currentResponseMsg.toolResults = [...(currentResponseMsg.toolResults || []), ...newToolResults];
+                    // Update the step with results
+                    currentResponseMsg.steps = [...currentResponseMsg.steps!];
                     onUpdate({ ...currentResponseMsg });
 
                     const userContent: Content = {
@@ -244,10 +382,22 @@ export class AgenticEngine {
                     currentResponseMsg.apiSequence = [...(currentResponseMsg.apiSequence || []), userContent];
 
                     onThreadUpdate({ memory: this.thread.memory });
+                    
+                    // If finish tool was called, we can break the loop after sending the result, or wait for the model's final text?
+                    // Actually, if finish is called, the model might still want to say something. Let's just continue and let the model output text.
                     continue;
                 }
 
-                currentResponseMsg.status = 'completed';
+                const hasFinishTool = currentResponseMsg.toolCalls?.some(tc => tc.name === 'finish');
+                
+                if (!hasFinishTool) {
+                    currentResponseMsg.status = 'error';
+                    currentResponseMsg.errorType = 'retryable';
+                    currentResponseMsg.errorMessage = 'Copilot 未调用完成工具，可能意外中断。';
+                } else {
+                    currentResponseMsg.status = 'completed';
+                }
+                
                 currentResponseMsg.endTime = Date.now();
                 currentResponseMsg.runningTime = (currentResponseMsg.runningTime || 0) + (Date.now() - startTime);
                 onUpdate({ ...currentResponseMsg });
@@ -255,13 +405,31 @@ export class AgenticEngine {
 
             } catch (error: any) {
                 console.error("Agentic Engine Error:", error);
-                const isRetryable = error.message?.includes('429') || error.message?.includes('500') || error.message?.includes('503');
+                
+                let errorMessage = error.message || "未知错误";
+                let isRetryable = errorMessage.includes('429') || errorMessage.includes('500') || errorMessage.includes('503');
+                
+                // Translate common errors to Chinese
+                if (errorMessage.includes('Token count exceeds maximum') || errorMessage.includes('context_length_exceeded')) {
+                    errorMessage = "上下文长度超出模型限制 (Token 爆炸)。请尝试开启新对话，或减少查询的数据量。";
+                    isRetryable = false; // Usually requires user action to fix
+                } else if (errorMessage.includes('API key not valid') || errorMessage.includes('invalid_api_key')) {
+                    errorMessage = "API Key 无效或未配置，请在设置中检查您的 API Key。";
+                    isRetryable = false;
+                } else if (errorMessage.includes('429') || errorMessage.includes('Too Many Requests')) {
+                    errorMessage = "请求过于频繁 (触发限流)，请稍后再试。";
+                    isRetryable = true;
+                } else if (errorMessage.includes('fetch failed') || errorMessage.includes('Network Error')) {
+                    errorMessage = "网络请求失败，请检查您的网络连接或代理设置。";
+                    isRetryable = true;
+                }
+
                 currentResponseMsg.runningTime = (currentResponseMsg.runningTime || 0) + (Date.now() - startTime);
                 onUpdate({ 
                     ...currentResponseMsg, 
                     status: 'error', 
                     errorType: isRetryable ? 'retryable' : 'fatal',
-                    errorMessage: error.message,
+                    errorMessage: errorMessage,
                     endTime: Date.now()
                 });
                 break;
@@ -315,15 +483,17 @@ export class AgenticEngine {
                 if (msg.apiSequence && msg.apiSequence.length > 0) {
                     // Truncate old tool results in the sequence to save tokens
                     const sequence = JSON.parse(JSON.stringify(msg.apiSequence));
-                    if (!isLastMessage) {
-                        for (const content of sequence) {
-                            if (content.role === 'user') {
-                                for (const part of content.parts) {
-                                    if (part.functionResponse && part.functionResponse.response) {
-                                        const jsonStr = JSON.stringify(part.functionResponse.response);
-                                        if (jsonStr.length > 2000) {
-                                            part.functionResponse.response = { _truncated: "Data omitted to save tokens. Please query again if needed." };
-                                        }
+                    for (const content of sequence) {
+                        if (content.role === 'user') {
+                            for (const part of content.parts) {
+                                if (part.functionResponse && part.functionResponse.response) {
+                                    const jsonStr = JSON.stringify(part.functionResponse.response);
+                                    const limit = isLastMessage ? 50000 : 500;
+                                    if (jsonStr.length > limit) {
+                                        part.functionResponse.response = { 
+                                            _truncated: `Data omitted to save tokens (exceeded ${limit} chars). Please query again with more specific filters if needed.`,
+                                            _preview: jsonStr.substring(0, limit) + '...'
+                                        };
                                     }
                                 }
                             }

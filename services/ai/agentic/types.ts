@@ -13,12 +13,23 @@ export interface ToolResult {
     error?: string;
 }
 
+export interface ActionStep {
+    id: string;
+    type: 'think' | 'action' | 'reply';
+    content?: string; // reasoning text or reply text
+    toolCalls?: ToolCall[];
+    toolResults?: ToolResult[];
+    duration?: number;
+}
+
 export interface CopilotMessage {
     id: string;
     role: Role;
     text?: string;
+    reasoningContent?: string;
     toolCalls?: ToolCall[];
     toolResults?: ToolResult[];
+    steps?: ActionStep[];
     timestamp: number;
     startTime?: number;
     endTime?: number;

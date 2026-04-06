@@ -5,6 +5,7 @@ import { AgenticEngine } from '../../services/ai/agentic/engine';
 import { getApiKey, getSelectedModel, getThinkingLevel } from '../../services/ai/config';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { AiConfigModal } from '../AiConfigModal';
 
 interface GlobalCopilotProps {
@@ -28,12 +29,14 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
     const [editTitle, setEditTitle] = useState('');
     const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
     const [showActionHistory, setShowActionHistory] = useState<Record<string, boolean>>({});
+    const [showReasoningContent, setShowReasoningContent] = useState<Record<string, boolean>>({});
     const [currentModelName, setCurrentModelName] = useState<string>('');
     const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [isInputExpanded, setIsInputExpanded] = useState(false);
     const [showExpandButton, setShowExpandButton] = useState(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setInputText(e.target.value);
@@ -67,9 +70,7 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                 const lastThread = loadedThreads[0];
                 setCurrentThreadId(lastThread.id);
             } else {
-                const newThread = await createThread();
-                setThreads([newThread]);
-                setCurrentThreadId(newThread.id);
+                setCurrentThreadId(null);
             }
         };
         initThreads();
@@ -94,8 +95,17 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
             return;
         }
 
+        let targetThreadId = currentThreadId;
+
         if (!resumeId) {
-            if (!inputText.trim() || !currentThreadId) return;
+            if (!inputText.trim()) return;
+
+            if (!targetThreadId) {
+                const newThread = await createThread();
+                targetThreadId = newThread.id;
+                setCurrentThreadId(targetThreadId);
+                setThreads(await getThreads());
+            }
 
             const userMsg: CopilotMessage = {
                 id: `msg_${Date.now()}`,
@@ -105,15 +115,17 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                 status: 'completed'
             };
 
-            await addMessageToThread(currentThreadId, userMsg);
+            await addMessageToThread(targetThreadId, userMsg);
             setThreads(await getThreads());
             setInputText('');
         }
 
+        if (!targetThreadId) return;
+
         setIsThinking(true);
 
         // Get fresh thread data
-        const freshThread = await getThread(currentThreadId!);
+        const freshThread = await getThread(targetThreadId);
         if (!freshThread) {
             setIsThinking(false);
             return;
@@ -131,9 +143,10 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
 
         // Process Loop
         try {
+            abortControllerRef.current = new AbortController();
             await engine.process(
                 async (msgUpdate) => {
-                    const thread = await getThread(currentThreadId!);
+                    const thread = await getThread(targetThreadId!);
                     if (thread) {
                         const existingMsgIndex = thread.messages.findIndex(m => m.id === msgUpdate.id);
                         let newMessages;
@@ -156,31 +169,48 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                             newMessages = [...thread.messages, newMsg];
                         }
 
-                        await updateThread(currentThreadId!, { messages: newMessages });
+                        await updateThread(targetThreadId!, { messages: newMessages });
                         setThreads(await getThreads());
                     }
                 },
                 async (threadUpdate) => {
-                    await updateThread(currentThreadId!, threadUpdate);
+                    await updateThread(targetThreadId!, threadUpdate);
                     setThreads(await getThreads());
                 },
-                resumeId
+                resumeId,
+                abortControllerRef.current.signal
             );
-        } catch (e) {
-            console.error("Copilot Error:", e);
+        } catch (e: any) {
+            if (e.name === 'AbortError') {
+                console.log('Copilot aborted by user');
+            } else {
+                console.error("Copilot Error:", e);
+            }
         } finally {
             setIsThinking(false);
+            abortControllerRef.current = null;
         }
     };
 
-    const handleRetry = (msgId: string) => {
+    const handleRetry = async (msgId: string) => {
+        if (!currentThreadId) return;
+        const thread = await getThread(currentThreadId);
+        if (!thread) return;
+
+        const messageIndex = thread.messages.findIndex(m => m.id === msgId);
+        if (messageIndex === -1) return;
+
+        // Only allow retry if it's the last message in the thread
+        if (messageIndex !== thread.messages.length - 1) {
+            console.warn("Can only retry the latest message.");
+            return;
+        }
+
         handleSend(msgId);
     };
 
     const handleNewChat = async () => {
-        const newThread = await createThread();
-        setThreads(await getThreads());
-        setCurrentThreadId(newThread.id);
+        setCurrentThreadId(null);
     };
 
     const handleDeleteThread = async (id: string) => {
@@ -251,7 +281,7 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                             <div className="flex items-center gap-1.5">
                                 <span className={`w-1.5 h-1.5 rounded-full ${isThinking ? 'bg-blue-500 animate-ping' : 'bg-green-500'}`}></span>
                                 <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
-                                    {isThinking ? 'Thinking...' : `${currentModelName} ${currentThinkingLevel ? `· ${currentThinkingLevel}` : ''}`}
+                                    {isThinking ? 'Thinking...' : `${currentModelName} ${currentModelName.includes('gemini-3') && currentThinkingLevel ? `· ${currentThinkingLevel}` : ''}`}
                                 </p>
                             </div>
                         </div>
@@ -271,7 +301,7 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                         <button onClick={() => setShowConfig(true)} className="p-2 text-neutral-400 hover:text-purple-600 dark:hover:text-purple-400 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all" title="API 设置">
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                         </button>
-                        <button onClick={handleNewChat} className="p-2 text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" title="新对话">
+                        <button onClick={handleNewChat} disabled={isThinking} className="p-2 text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed" title="新对话">
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                         </button>
                         <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-2 text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all hidden md:block">
@@ -314,18 +344,13 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                                 <button onClick={handleSaveRename} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest">保存</button>
                                             </div>
                                         </div>
-                                    ) : deletingThreadId === thread.id ? (
-                                        <div className="px-4 py-3 rounded-2xl bg-red-50 dark:bg-red-900/20 mb-2 border border-red-200 dark:border-red-800">
-                                            <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2 text-center">确定删除吗？</p>
-                                            <div className="flex justify-center gap-4">
-                                                <button onClick={() => setDeletingThreadId(null)} className="text-[10px] font-bold text-neutral-400 hover:text-neutral-600 uppercase tracking-widest">取消</button>
-                                                <button onClick={() => handleDeleteThread(thread.id)} className="text-[10px] font-bold text-red-600 hover:text-red-700 uppercase tracking-widest">删除</button>
-                                            </div>
-                                        </div>
                                     ) : (
                                         <>
                                             <button
-                                                onClick={() => setCurrentThreadId(thread.id)}
+                                                onClick={() => {
+                                                    if (!isThinking) setCurrentThreadId(thread.id);
+                                                }}
+                                                disabled={isThinking}
                                                 className={`w-full text-left px-4 py-3 rounded-2xl text-sm mb-2 group transition-all ${
                                                     currentThreadId === thread.id 
                                                         ? 'bg-blue-600 text-white font-bold shadow-lg shadow-blue-600/20' 
@@ -375,7 +400,9 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                 </div>
                             )}
                             
-                            {currentThread?.messages.map((msg) => (
+                            {currentThread?.messages.map((msg, index) => {
+                                const isLastMessage = index === currentThread.messages.length - 1;
+                                return (
                                 <motion.div 
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -387,7 +414,7 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">
-                                                        {msg.modelName || 'AI Model'} {msg.thinkingLevel ? `· ${msg.thinkingLevel}` : ''}
+                                                        {msg.modelName || 'AI Model'} {msg.modelName?.includes('gemini-3') && msg.thinkingLevel ? `· ${msg.thinkingLevel}` : ''}
                                                     </span>
                                                     {(msg.runningTime !== undefined || (msg.startTime && msg.endTime)) && (
                                                         <span className="text-[10px] font-bold text-neutral-400">
@@ -395,23 +422,10 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                                         </span>
                                                     )}
                                                 </div>
-                                                {msg.status === 'error' && (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`text-[9px] font-black uppercase tracking-widest ${msg.errorType === 'retryable' ? 'text-orange-500' : 'text-red-500'}`}>
-                                                            {msg.errorType === 'retryable' ? '可重试错误' : '致命错误'}
-                                                        </span>
-                                                        <button 
-                                                            onClick={() => handleRetry(msg.id)}
-                                                            className="px-2 py-1 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-md hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
-                                                        >
-                                                            重试
-                                                        </button>
-                                                    </div>
-                                                )}
                                             </div>
 
                                             {/* Action History Summary */}
-                                            {(msg.toolCalls && msg.toolCalls.length > 0) && (
+                                            {((msg.steps && msg.steps.length > 0) || (msg.toolCalls && msg.toolCalls.length > 0) || msg.reasoningContent) && (
                                                 <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-100 dark:border-neutral-800 overflow-hidden shadow-sm">
                                                     <button 
                                                         onClick={() => setShowActionHistory(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
@@ -422,9 +436,9 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                                                 <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                                                             </div>
                                                             <div className="text-left">
-                                                                <p className="text-xs font-black text-neutral-900 dark:text-white uppercase tracking-widest">行动历史</p>
-                                                                <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">
-                                                                    Copilot 采取了 {msg.toolCalls.length} 项关键措施
+                                                                <p className="text-xs font-black text-neutral-900 dark:text-white tracking-widest">行动历史</p>
+                                                                <p className="text-[10px] text-neutral-400 font-bold tracking-widest">
+                                                                    {msg.steps ? `Copilot 执行了 ${msg.steps.length} 个步骤` : (msg.toolCalls && msg.toolCalls.length > 0 ? `Copilot 采取了 ${msg.toolCalls.length} 项关键措施` : 'Copilot 进行了深度思考')}
                                                                 </p>
                                                             </div>
                                                         </div>
@@ -439,28 +453,155 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                                                 exit={{ height: 0, opacity: 0 }}
                                                                 className="border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950/50 px-4 py-3 space-y-3"
                                                             >
-                                                                {msg.toolCalls.map(tc => {
-                                                                    const result = msg.toolResults?.find(tr => tr.id === tc.id);
-                                                                    return (
-                                                                        <div key={tc.id} className="flex flex-col gap-1.5">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <div className={`w-1.5 h-1.5 rounded-full ${result ? (result.error ? 'bg-red-500' : 'bg-green-500') : 'bg-blue-500 animate-pulse'}`} />
-                                                                                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-widest">{tc.name}</span>
-                                                                                {result?.error && (
-                                                                                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest ml-auto">失败</span>
-                                                                                )}
+                                                                {msg.steps ? (
+                                                                    msg.steps.map((step, stepIdx) => {
+                                                                        if (step.type === 'think') {
+                                                                            return (
+                                                                                <div key={step.id} className="flex flex-col gap-1.5">
+                                                                                    <button 
+                                                                                        onClick={() => setShowReasoningContent(prev => ({ ...prev, [step.id]: !prev[step.id] }))}
+                                                                                        className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left"
+                                                                                    >
+                                                                                        <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                                                                                        <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest flex items-center gap-1">
+                                                                                            思考 {step.duration ? Math.round(step.duration / 1000) : 0}s
+                                                                                            <svg className={`w-3 h-3 transition-transform duration-300 ${showReasoningContent[step.id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                                                        </span>
+                                                                                    </button>
+                                                                                    <AnimatePresence>
+                                                                                        {showReasoningContent[step.id] && (
+                                                                                            <motion.div
+                                                                                                initial={{ height: 0, opacity: 0 }}
+                                                                                                animate={{ height: 'auto', opacity: 1 }}
+                                                                                                exit={{ height: 0, opacity: 0 }}
+                                                                                                className="pl-3.5 border-l-2 border-purple-100 dark:border-purple-900/30 overflow-hidden"
+                                                                                            >
+                                                                                                <div className="text-xs text-neutral-500 dark:text-neutral-400 italic py-1 prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-1 prose-pre:p-2 prose-pre:bg-neutral-100 dark:prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-200 dark:prose-pre:border-neutral-800 prose-table:border-collapse prose-td:border prose-td:border-neutral-200 dark:prose-td:border-neutral-800 prose-td:p-2 prose-th:border prose-th:border-neutral-200 dark:prose-th:border-neutral-800 prose-th:p-2 prose-th:bg-neutral-100 dark:prose-th:bg-neutral-800">
+                                                                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{step.content || ''}</ReactMarkdown>
+                                                                                                </div>
+                                                                                            </motion.div>
+                                                                                        )}
+                                                                                    </AnimatePresence>
+                                                                                </div>
+                                                                            );
+                                                                        } else if (step.type === 'action' && step.toolCalls) {
+                                                                            return step.toolCalls.map((tc, tcIdx) => {
+                                                                                const result = step.toolResults?.find(tr => tr.id === tc.id);
+                                                                                let actionText = tc.name;
+                                                                                if (tc.name === 'memory_save') actionText = `记录了新的记忆`;
+                                                                                else if (tc.name === 'memory_retrieve') actionText = `检索了相关的记忆`;
+                                                                                else if (tc.name === 'query_tactics') actionText = `查询了战术列表`;
+                                                                                else if (tc.name === 'query_utilities') actionText = `查询了道具列表`;
+                                                                                else if (tc.name === 'query_matches') actionText = `查询了比赛记录`;
+                                                                                else if (tc.name === 'get_match_details') actionText = `获取了比赛详细信息 (${tc.args?.matchId || '未知'})`;
+                                                                                else if (tc.name === 'get_match_rounds') actionText = `获取了比赛回合数据 (${tc.args?.matchId || '未知'})`;
+                                                                                else if (tc.name === 'get_match_players') actionText = `获取了比赛选手数据 (${tc.args?.matchId || '未知'})`;
+                                                                                else if (tc.name === 'query_player_stats') actionText = `查询了玩家统计数据 (${tc.args?.playerId || tc.args?.steamid || '未知'})`;
+                                                                                else if (tc.name === 'query_tournaments') actionText = `查询了赛事列表`;
+                                                                                else if (tc.name === 'query_series') actionText = `查询了系列赛信息`;
+                                                                                else if (tc.name === 'query_team_stats') actionText = `查询了队伍统计数据 (${tc.args?.teamName || '未知'})`;
+                                                                                else if (tc.name === 'query_economy_data') actionText = `查询了经济数据`;
+                                                                                else if (tc.name === 'aggregate_player_stats') actionText = `聚合了玩家统计数据`;
+                                                                                else if (tc.name === 'finish') actionText = `标记对话完成`;
+
+                                                                                return (
+                                                                                    <div key={`${step.id}_${tc.id || tcIdx}`} className="flex flex-col gap-1.5">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <div className={`w-1.5 h-1.5 rounded-full ${result ? (result.error ? 'bg-red-500' : 'bg-green-500') : 'bg-blue-500 animate-pulse'}`} />
+                                                                                            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest">{actionText}</span>
+                                                                                            {result?.error && (
+                                                                                                <span className="text-[9px] font-black text-red-500 tracking-widest ml-auto">失败</span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        {result?.error && (
+                                                                                            <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5">
+                                                                                                <p className="text-[9px] text-red-500 mt-1 font-medium">{result.error}</p>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                );
+                                                                            });
+                                                                        } else if (step.type === 'reply') {
+                                                                            return (
+                                                                                <div key={step.id} className="flex items-center gap-2">
+                                                                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                                                                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest">回复</span>
+                                                                                </div>
+                                                                            );
+                                                                        }
+                                                                        return null;
+                                                                    })
+                                                                ) : (
+                                                                    /* Fallback for old messages without steps */
+                                                                    <>
+                                                                        {msg.reasoningContent && (
+                                                                            <div className="flex flex-col gap-1.5">
+                                                                                <button 
+                                                                                    onClick={() => setShowReasoningContent(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
+                                                                                    className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left"
+                                                                                >
+                                                                                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                                                                                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest flex items-center gap-1">
+                                                                                        思考 {Math.round((msg.runningTime || (msg.endTime && msg.startTime ? msg.endTime - msg.startTime : 0)) / 1000)}s
+                                                                                        <svg className={`w-3 h-3 transition-transform duration-300 ${showReasoningContent[msg.id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                                                    </span>
+                                                                                </button>
+                                                                                <AnimatePresence>
+                                                                                    {showReasoningContent[msg.id] && (
+                                                                                        <motion.div
+                                                                                            initial={{ height: 0, opacity: 0 }}
+                                                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                                                            exit={{ height: 0, opacity: 0 }}
+                                                                                            className="pl-3.5 border-l-2 border-purple-100 dark:border-purple-900/30 overflow-hidden"
+                                                                                        >
+                                                                                            <div className="text-xs text-neutral-500 dark:text-neutral-400 italic py-1 prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-1 prose-pre:p-2 prose-pre:bg-neutral-100 dark:prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-200 dark:prose-pre:border-neutral-800 prose-table:border-collapse prose-td:border prose-td:border-neutral-200 dark:prose-td:border-neutral-800 prose-td:p-2 prose-th:border prose-th:border-neutral-200 dark:prose-th:border-neutral-800 prose-th:p-2 prose-th:bg-neutral-100 dark:prose-th:bg-neutral-800">
+                                                                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.reasoningContent}</ReactMarkdown>
+                                                                                            </div>
+                                                                                        </motion.div>
+                                                                                    )}
+                                                                                </AnimatePresence>
                                                                             </div>
-                                                                            <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5">
-                                                                                <pre className="text-[9px] text-neutral-400 font-mono overflow-x-auto whitespace-pre-wrap">
-                                                                                    {JSON.stringify(tc.args, null, 2)}
-                                                                                </pre>
-                                                                                {result?.error && (
-                                                                                    <p className="text-[9px] text-red-500 mt-1 font-medium">{result.error}</p>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
+                                                                        )}
+                                                                        {msg.toolCalls?.map(tc => {
+                                                                            const result = msg.toolResults?.find(tr => tr.id === tc.id);
+                                                                            
+                                                                            // Convert tool call to natural language
+                                                                            let actionText = tc.name;
+                                                                            if (tc.name === 'memory_save') actionText = `记录了新的记忆`;
+                                                                            else if (tc.name === 'memory_retrieve') actionText = `检索了相关的记忆`;
+                                                                            else if (tc.name === 'query_tactics') actionText = `查询了战术列表`;
+                                                                            else if (tc.name === 'query_utilities') actionText = `查询了道具列表`;
+                                                                            else if (tc.name === 'query_matches') actionText = `查询了比赛记录`;
+                                                                            else if (tc.name === 'get_match_details') actionText = `获取了比赛详细信息 (${tc.args?.matchId || '未知'})`;
+                                                                            else if (tc.name === 'get_match_rounds') actionText = `获取了比赛回合数据 (${tc.args?.matchId || '未知'})`;
+                                                                            else if (tc.name === 'get_match_players') actionText = `获取了比赛选手数据 (${tc.args?.matchId || '未知'})`;
+                                                                            else if (tc.name === 'query_player_stats') actionText = `查询了玩家统计数据 (${tc.args?.playerId || tc.args?.steamid || '未知'})`;
+                                                                            else if (tc.name === 'query_tournaments') actionText = `查询了赛事列表`;
+                                                                            else if (tc.name === 'query_series') actionText = `查询了系列赛信息`;
+                                                                            else if (tc.name === 'query_team_stats') actionText = `查询了队伍统计数据 (${tc.args?.teamName || '未知'})`;
+                                                                            else if (tc.name === 'query_economy_data') actionText = `查询了经济数据`;
+                                                                            else if (tc.name === 'aggregate_player_stats') actionText = `聚合了玩家统计数据`;
+                                                                            else if (tc.name === 'finish') actionText = `标记对话完成`;
+
+                                                                            return (
+                                                                                <div key={tc.id} className="flex flex-col gap-1.5">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <div className={`w-1.5 h-1.5 rounded-full ${result ? (result.error ? 'bg-red-500' : 'bg-green-500') : 'bg-blue-500 animate-pulse'}`} />
+                                                                                        <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest">{actionText}</span>
+                                                                                        {result?.error && (
+                                                                                            <span className="text-[9px] font-black text-red-500 tracking-widest ml-auto">失败</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    {result?.error && (
+                                                                                        <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5">
+                                                                                            <p className="text-[9px] text-red-500 mt-1 font-medium">{result.error}</p>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </>
+                                                                )}
                                                             </motion.div>
                                                         )}
                                                     </AnimatePresence>
@@ -475,8 +616,10 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                                 ? 'bg-blue-50/50 dark:bg-blue-900/10 border-l-4 border-blue-600 pl-4 py-3' 
                                                 : 'text-neutral-900 dark:text-neutral-100'
                                         }`}>
-                                            <div className="prose prose-sm dark:prose-invert max-w-none">
-                                                <ReactMarkdown>{msg.text}</ReactMarkdown>
+                                            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-1 prose-pre:p-2 prose-pre:bg-neutral-100 dark:prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-200 dark:prose-pre:border-neutral-800 prose-table:border-collapse prose-td:border prose-td:border-neutral-200 dark:prose-td:border-neutral-800 prose-td:p-2 prose-th:border prose-th:border-neutral-200 dark:prose-th:border-neutral-800 prose-th:p-2 prose-th:bg-neutral-100 dark:prose-th:bg-neutral-800">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                    {msg.text}
+                                                </ReactMarkdown>
                                             </div>
                                         </div>
                                     )}
@@ -489,14 +632,78 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                                     <div className="w-5 h-5 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                                                         <svg className="w-3 h-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                                     </div>
-                                                    <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">工具结果: {tr.name}</span>
+                                                    <span className="text-[10px] font-black text-neutral-500 tracking-widest">工具结果: {tr.name}</span>
                                                 </div>
                                             ))}
                                         </div>
                                     )}
+
+                                    {msg.status === 'error' && (
+                                        <div className={`w-full mt-2 p-3 border rounded-xl flex flex-col gap-2 ${
+                                            msg.errorType === 'retryable' 
+                                                ? 'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/30' 
+                                                : 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30'
+                                        }`}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    {msg.errorType === 'retryable' ? (
+                                                        <svg className="w-4 h-4 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                                    ) : (
+                                                        <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                    )}
+                                                    <span className={`text-[10px] font-black uppercase tracking-widest ${
+                                                        msg.errorType === 'retryable' ? 'text-yellow-600 dark:text-yellow-500' : 'text-red-600 dark:text-red-400'
+                                                    }`}>
+                                                        {msg.errorType === 'retryable' ? '可重试错误' : '致命错误'}
+                                                    </span>
+                                                </div>
+                                                {isLastMessage && (
+                                                    <button 
+                                                        onClick={() => handleRetry(msg.id)}
+                                                        className={`px-3 py-1 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all shadow-sm ${
+                                                            msg.errorType === 'retryable' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-600 hover:bg-red-700'
+                                                        }`}
+                                                    >
+                                                        重试
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {msg.errorMessage && (
+                                                <span className={`text-xs font-medium break-all ${
+                                                    msg.errorType === 'retryable' ? 'text-yellow-700/80 dark:text-yellow-500/80' : 'text-red-600/80 dark:text-red-400/80'
+                                                }`}>
+                                                    {msg.errorMessage}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {msg.role !== 'user' && <div className="w-full border-b border-neutral-100 dark:border-neutral-800/50 my-2" />}
                                 </motion.div>
-                            ))}
+                                );
+                            })}
+                            
+                            {(() => {
+                                const lastMsg = currentThread?.messages[currentThread.messages.length - 1];
+                                if (!isThinking && lastMsg && lastMsg.role === 'model' && lastMsg.status !== 'error') {
+                                    const hasFinish = lastMsg.apiSequence?.some(s => s.role === 'model' && s.toolCalls?.some(tc => tc.name === 'finish'));
+                                    if (!hasFinish) {
+                                        return (
+                                            <div className="flex justify-center mt-2 mb-4">
+                                                <button 
+                                                    onClick={() => handleRetry(lastMsg.id)}
+                                                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                                    继续运行
+                                                </button>
+                                            </div>
+                                        );
+                                    }
+                                }
+                                return null;
+                            })()}
+
                             <div ref={messagesEndRef} />
                         </div>
 
@@ -528,17 +735,23 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                         </svg>
                                     </button>
                                 )}
-                                <button 
-                                    onClick={() => handleSend()}
-                                    disabled={!inputText.trim() || isThinking}
-                                    className="w-11 h-11 shrink-0 bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-200 dark:disabled:bg-neutral-800 text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-blue-600/20 active:scale-95"
-                                >
-                                    {isThinking ? (
-                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    ) : (
+                                {isThinking ? (
+                                    <button 
+                                        onClick={() => abortControllerRef.current?.abort()}
+                                        className="w-11 h-11 shrink-0 bg-red-500 hover:bg-red-600 text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-red-500/20 active:scale-95"
+                                        title="停止生成"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={() => handleSend()}
+                                        disabled={!inputText.trim()}
+                                        className="w-11 h-11 shrink-0 bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-200 dark:disabled:bg-neutral-800 text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+                                    >
                                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                                    )}
-                                </button>
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -553,6 +766,34 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                         updateConfigStates();
                     }} 
                 />
+            )}
+
+            {deletingThreadId && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="bg-white dark:bg-neutral-900 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4 border border-neutral-200 dark:border-neutral-800"
+                    >
+                        <h3 className="text-lg font-bold text-neutral-900 dark:text-white mb-2">删除对话</h3>
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-6">确定要删除这个对话吗？此操作无法撤销。</p>
+                        <div className="flex justify-end gap-3">
+                            <button 
+                                onClick={() => setDeletingThreadId(null)}
+                                className="px-4 py-2 rounded-xl text-sm font-bold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                            >
+                                取消
+                            </button>
+                            <button 
+                                onClick={() => handleDeleteThread(deletingThreadId)}
+                                className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-colors"
+                            >
+                                确定删除
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
             )}
         </AnimatePresence>
     );

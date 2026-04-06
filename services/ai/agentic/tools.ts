@@ -2,6 +2,17 @@ import { FunctionDeclaration, Type } from "@google/genai";
 
 export const toolDeclarations: FunctionDeclaration[] = [
     {
+        name: "finish",
+        description: "当你完成了用户的请求，并且不需要再调用任何工具时，调用此工具以结束当前回合。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                message: { type: Type.STRING, description: "最终回复给用户的消息" }
+            },
+            required: ["message"]
+        }
+    },
+    {
         name: "memory_save",
         description: "记录下有价值的推理结果或用户信息，以便后续对话使用。",
         parameters: {
@@ -60,7 +71,29 @@ export const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: "get_match_details",
-        description: "获取指定比赛的详细数据，包括每一轮的详情、选手统计、经济情况等。",
+        description: "获取指定比赛的详细数据（不包含具体回合和选手数据，请使用专门的工具获取）。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                matchId: { type: Type.STRING, description: "比赛ID" }
+            },
+            required: ["matchId"]
+        }
+    },
+    {
+        name: "get_match_rounds",
+        description: "获取指定比赛的每一轮详细数据（击杀、胜负、比分等）。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                matchId: { type: Type.STRING, description: "比赛ID" }
+            },
+            required: ["matchId"]
+        }
+    },
+    {
+        name: "get_match_players",
+        description: "获取指定比赛中所有选手的详细统计数据（击杀、死亡、Rating等）。",
         parameters: {
             type: Type.OBJECT,
             properties: {
@@ -108,6 +141,19 @@ export const toolDeclarations: FunctionDeclaration[] = [
             },
             required: ["matchId"]
         }
+    },
+    {
+        name: "aggregate_player_stats",
+        description: "使用通用聚合器聚合所有或经过筛选的比赛中的选手数据，返回所有选手的聚合统计信息和角色定位。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                mapId: { type: Type.STRING, description: "按地图过滤" },
+                result: { type: Type.STRING, description: "按比赛结果过滤 (WIN, LOSS, TIE)" },
+                startDate: { type: Type.STRING, description: "起始日期 (YYYY-MM-DD)" },
+                endDate: { type: Type.STRING, description: "结束日期 (YYYY-MM-DD)" }
+            }
+        }
     }
 ];
 
@@ -129,6 +175,9 @@ export const createToolHandlers = (context: {
     };
 
     return {
+        finish: async ({ message }: { message: string }) => {
+            return { status: "success", message: "对话已完成" };
+        },
         memory_save: async ({ key, value }: { key: string, value: any }) => {
             checkPermission("保存记忆");
             context.updateMemory(key, value);
@@ -160,9 +209,19 @@ export const createToolHandlers = (context: {
         get_match_details: async ({ matchId }: { matchId: string }) => {
             const match = context.allMatches.find(m => m.id === matchId);
             if (!match) return { error: "未找到该比赛数据" };
-            // Return full match data but omit rawDemoJson to prevent token explosion
-            const { rawDemoJson, ...safeMatch } = match;
+            // Return full match data but omit rawDemoJson, rounds, and players to prevent token explosion
+            const { rawDemoJson, rounds, players, ...safeMatch } = match;
             return safeMatch;
+        },
+        get_match_rounds: async ({ matchId }: { matchId: string }) => {
+            const match = context.allMatches.find(m => m.id === matchId);
+            if (!match) return { error: "未找到该比赛数据" };
+            return match.rounds || [];
+        },
+        get_match_players: async ({ matchId }: { matchId: string }) => {
+            const match = context.allMatches.find(m => m.id === matchId);
+            if (!match) return { error: "未找到该比赛数据" };
+            return match.players || [];
         },
         query_player_stats: async ({ playerId, steamid }: { playerId?: string, steamid?: string }) => {
             // Aggregate stats for a player across all matches
@@ -226,6 +285,20 @@ export const createToolHandlers = (context: {
                 equip_us: r.equip_value_us,
                 equip_them: r.equip_value_them
             }));
+        },
+        aggregate_player_stats: async ({ mapId, result, startDate, endDate }: { mapId?: string, result?: string, startDate?: string, endDate?: string }) => {
+            let filtered = context.allMatches;
+            if (mapId) filtered = filtered.filter(m => m.mapId === mapId);
+            if (result) filtered = filtered.filter(m => m.result === result);
+            if (startDate) filtered = filtered.filter(m => m.date >= startDate);
+            if (endDate) filtered = filtered.filter(m => m.date <= endDate);
+            
+            const { MatchAggregator } = await import('../../../utils/analytics/matchAggregator');
+            const aggregated = MatchAggregator.aggregate(filtered);
+            return {
+                matchCount: filtered.length,
+                players: aggregated
+            };
         },
         query_tournaments: async () => {
             return context.allTournaments || [];

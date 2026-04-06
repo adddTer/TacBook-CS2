@@ -40,7 +40,20 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
         });
     }
 
-    events.forEach((e: any) => {
+    let matchStarted = false;
+    const hasMatchStartEvent = events.some(e => e.event_name === 'round_announce_match_start');
+    if (!hasMatchStartEvent) {
+        matchStarted = true; // Fallback if no start event
+    }
+
+    const validEvents = events.filter(e => {
+        if (e.event_name === 'round_announce_match_start') {
+            matchStarted = true;
+        }
+        return matchStarted;
+    });
+
+    validEvents.forEach((e: any) => {
         if (e.user_steamid) {
             const sid = normalizeSteamId(e.user_steamid);
             collectPlayerInfo(sid, e.user_name);
@@ -177,7 +190,7 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
     let iterations = 0;
     while (changed && iterations < 5) {
         changed = false;
-        events.forEach((e: any) => {
+        validEvents.forEach((e: any) => {
             if (e.event_name === 'player_death') {
                 const vic = normalizeSteamId(e.user_steamid);
                 const att = normalizeSteamId(e.attacker_steamid);
