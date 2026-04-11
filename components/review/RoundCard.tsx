@@ -4,7 +4,7 @@ import { MatchRound, Match, MatchTimelineEvent } from '../../types';
 import { TimelineEventRow } from './TimelineEventRow';
 import { RoundTeamStats } from './RoundTeamStats';
 import { getWinReasonText, formatTime, Icons } from './TimelineHelpers';
-import { ROSTER } from '../../constants/roster';
+import { getAllPlayers } from '../../utils/teamLoader';
 import { resolveName } from '../../utils/demo/helpers';
 
 interface RoundCardProps {
@@ -76,7 +76,7 @@ export const RoundCard: React.FC<RoundCardProps> = ({ round, isExpanded, onToggl
         if (pMatch) {
             name = pMatch.steamid && resolveName(pMatch.steamid) !== pMatch.steamid ? resolveName(pMatch.steamid) : resolveName(pMatch.playerId);
         } else {
-            const roster = ROSTER.find(r => r.id === sid || r.name === sid);
+            const roster = getAllPlayers().find(r => r.id === sid || r.name === sid);
             if (roster) name = roster.id;
         }
         return { name, ...(stats as any), steamid: sid };

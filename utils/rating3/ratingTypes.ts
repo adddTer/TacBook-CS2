@@ -26,4 +26,5 @@ export interface RoundContext {
     botKills: number; // New: Track kills against BOTs to exclude from rating
     rating: number; 
     wpa: number; // Accumulated WPA for this round
+    wpaDetails?: { reason: string, delta: number, tick: number }[]; // For timeline
 }

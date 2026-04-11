@@ -1,6 +1,6 @@
 
 import { DemoData } from "../../types";
-import { ROSTER } from "../../constants/roster";
+import { getAllPlayers } from '../teamLoader';
 import { normalizeSteamId, resolveName } from "./helpers";
 
 interface TeamAnalysisResult {
@@ -70,7 +70,7 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
     allSteamIds.forEach(sid => {
         const rawName = steamIdToName.get(sid) || "Unknown";
         const resolved = resolveName(rawName);
-        const isRoster = ROSTER.some(r => r.id === resolved);
+        const isRoster = getAllPlayers().some(r => r.id === resolved);
         if (isRoster) rosterSteamIds.add(sid);
     });
 

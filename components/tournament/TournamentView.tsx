@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import { Tournament, Match, ContentGroup, MatchBon } from "../../types";
 import { TournamentList } from "./TournamentList";
 import { TournamentDetail } from "./TournamentDetail";
-import { TournamentCreatorModal } from "./TournamentCreatorModal";
 import { TournamentStats } from "./TournamentStats";
+import { PRE_CODED_TOURNAMENTS } from "../../utils/preCodedTournaments";
 
 interface TournamentViewProps {
   allTournaments: Tournament[];
@@ -17,19 +17,18 @@ interface TournamentViewProps {
 }
 
 export const TournamentView: React.FC<TournamentViewProps> = ({
-  allTournaments,
   allMatches,
   writableGroups,
-  onSaveTournament,
-  onDeleteTournament,
   onSaveMatch,
   onDeleteMatch,
   onSaveBon,
 }) => {
   const [selectedTournament, setSelectedTournament] =
     useState<Tournament | null>(null);
-  const [isCreatorOpen, setIsCreatorOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "stats">("list");
+
+  // Use pre-coded tournaments
+  const displayTournaments = PRE_CODED_TOURNAMENTS;
 
   if (selectedTournament) {
     return (
@@ -62,46 +61,18 @@ export const TournamentView: React.FC<TournamentViewProps> = ({
             数据统计
           </button>
         </div>
-        {viewMode === "list" && (
-          <button
-            onClick={() => setIsCreatorOpen(true)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-transform active:scale-95 flex items-center gap-2"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            创建赛事
-          </button>
-        )}
       </div>
 
       {viewMode === "list" ? (
         <TournamentList
-          tournaments={allTournaments}
+          tournaments={displayTournaments}
           allMatches={allMatches}
           onSelectTournament={setSelectedTournament}
-          onDeleteTournament={onDeleteTournament}
+          onDeleteTournament={() => {}} // Disabled for pre-coded
         />
       ) : (
-        <TournamentStats tournaments={allTournaments} allMatches={allMatches} />
+        <TournamentStats tournaments={displayTournaments} allMatches={allMatches} />
       )}
-
-      <TournamentCreatorModal
-        isOpen={isCreatorOpen}
-        onClose={() => setIsCreatorOpen(false)}
-        writableGroups={writableGroups}
-        onSave={onSaveTournament}
-      />
     </div>
   );
 };

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Match } from '../../types';
 import { SourceBadge, getMapDisplayName, getMapEnName } from './ReviewShared';
 import { isMyTeamMatch, calculateScoreFromRounds } from '../../utils/matchHelpers';
+import { CURRENT_PARSER_VERSION } from '../../utils/demoParser';
 import { MatchFilterBar, FilterState } from './MatchFilterBar';
 
 interface MatchListProps {
@@ -249,9 +250,12 @@ export const MatchList: React.FC<MatchListProps> = ({
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
                                         <SourceBadge source={match.source} />
-                                        {match.source === 'Demo' && match.parserVersion !== '1.1.4' && (
-                                            <span className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-[10px] font-bold rounded uppercase tracking-wider">
-                                                数据过期
+                                        {match.source === 'Demo' && match.parserVersion !== CURRENT_PARSER_VERSION && (
+                                            <span 
+                                                className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-[10px] font-bold rounded uppercase tracking-wider"
+                                                title={!match.rawDemoJson ? "缺少原始数据，无法自动升级，请重新导入" : "数据过期，等待自动升级"}
+                                            >
+                                                {!match.rawDemoJson ? "需重新导入" : "数据过期"}
                                             </span>
                                         )}
                                     </div>

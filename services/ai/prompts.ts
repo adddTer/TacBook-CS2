@@ -1,9 +1,9 @@
 
 import { Tactic } from "../../types";
-import { ROSTER } from "../../constants/roster";
+import { getAllPlayers } from '../../utils/teamLoader';
 
 export const buildTacticSystemPrompt = (currentTactic: Partial<Tactic>): string => {
-    const rosterRoles = ROSTER.map(r => `${r.roleType} (${r.id})`).join(", ");
+    const rosterRoles = getAllPlayers().map(r => `${r.roleType} (${r.id})`).join(", ");
 
     return `
 You are a professional CS2 Coach and IGL. 

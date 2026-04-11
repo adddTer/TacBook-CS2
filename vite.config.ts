@@ -11,6 +11,18 @@ export default defineConfig({
   // IMPORTANT: This ensures assets are loaded relatively, 
   // preventing 404 errors on GitHub Pages (which serves from a /repo-name/ subpath).
   base: './', 
+  server: {
+    proxy: {
+      '/api/liquipedia': {
+        target: 'https://liquipedia.net',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/liquipedia/, '/counterstrike/api.php'),
+        headers: {
+          'User-Agent': 'TacbookCS2/1.0 (tyronetannerfxtgll@gmail.com)'
+        }
+      }
+    }
+  },
   build: {
     sourcemap: false,
   },

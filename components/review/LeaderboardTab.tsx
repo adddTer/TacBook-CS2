@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Match } from '../../types';
-import { ROSTER } from '../../constants/roster';
+import { getAllPlayers } from '../../utils/teamLoader';
 import { resolveName } from '../../utils/demo/helpers';
 import { MatchAggregator } from '../../utils/analytics/matchAggregator';
 import { getScoreStyle, getRatingStyle, getWpaStyle, TIER_CLASSES } from '../../utils/styleConstants';
@@ -26,13 +26,13 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
     // --- Core Calculation Logic ---
     const leaderboardData = useMemo(() => {
         const aggregated = MatchAggregator.aggregateFull(allMatches);
-        const rosterIds = new Set(ROSTER.map(r => r.id));
+        const rosterIds = new Set(getAllPlayers().map(r => r.id));
 
         return aggregated.map(player => {
             const isRoster = rosterIds.has(player.playerId);
             if (!includeStrangers && !isRoster) return null;
 
-            const rosterInfo = ROSTER.find(r => r.id === player.playerId);
+            const rosterInfo = getAllPlayers().find(r => r.id === player.playerId);
             const name = rosterInfo ? rosterInfo.name : player.name;
             const role = player.role.name;
 

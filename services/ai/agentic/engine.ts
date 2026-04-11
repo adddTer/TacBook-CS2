@@ -67,7 +67,7 @@ export class AgenticEngine {
     ) {
         const startTime = Date.now();
         let loopCount = 0;
-        const MAX_LOOPS = 15; 
+        const MAX_LOOPS = 30; // Increased for long tasks
         
         let currentResponseMsg: CopilotMessage;
         
@@ -110,6 +110,16 @@ export class AgenticEngine {
                     }
                     responseObj = JSON.parse(JSON.stringify(responseObj));
                     
+                    // Truncate large responses to prevent token explosion
+                    const jsonStr = JSON.stringify(responseObj);
+                    const limit = 15000;
+                    if (jsonStr.length > limit) {
+                        responseObj = { 
+                            _truncated: `Data omitted to save tokens (exceeded ${limit} chars). Please query again with more specific filters if needed.`,
+                            _preview: jsonStr.substring(0, limit) + '...'
+                        };
+                    }
+                    
                     const functionResponse: any = { name: call.name, response: responseObj };
                     if (call.id && !call.id.startsWith('call_')) {
                         functionResponse.id = call.id;
@@ -151,10 +161,10 @@ export class AgenticEngine {
             try {
                 let response;
                 let retryCount = 0;
-                const MAX_RETRIES = 1;
+                const MAX_RETRIES = 3; // Increased for better stability
                 
                 const modelConfig: any = {
-                    systemInstruction: "你是一个专业的 CS2 战术助手。你可以通过调用工具来查询战术、道具、比赛数据或记录记忆。请尽量通过工具获取真实数据后再回答用户。数据来源是用户自行上传的demo。对于不包含注册玩家的比赛，不返回比赛结果。如果需要多次调用工具才能完成任务，请分步进行。你的回答应该专业、简洁且富有洞察力。\n\n**绝对重要：不要在没有调用 finish 工具的情况下结束你的回答！当你完成了用户的请求，或者已经给出了最终回复，你必须（MUST）调用 finish 工具，并将最终回复作为 message 参数传入。否则对话将永远卡住！**",
+                    systemInstruction: "你是一个专业的 CS2 战术助手。你可以通过调用工具来查询战术、道具、比赛数据或记录记忆。请尽量通过工具获取真实数据后再回答用户。数据来源是用户自行上传的demo。对于不包含注册玩家的比赛，不返回比赛结果。如果需要多次调用工具才能完成任务，请分步进行。你的回答应该专业、简洁且富有洞察力。\n\n**重要提示：你可以正常输出文本来回复用户。当所有的操作和回复都彻底完成后，必须调用 finish 工具来结束当前回合。**",
                     tools: [{ functionDeclarations: toolDeclarations }],
                 };
 
@@ -240,11 +250,69 @@ export class AgenticEngine {
                                 }]
                             };
                         } else {
-                            response = await this.ai.models.generateContent({
+                            const stream = await this.ai.models.generateContentStream({
                                 model: this.modelName,
                                 contents: apiHistory,
                                 config: modelConfig
                             });
+                            
+                            const parts: Part[] = [];
+                            let textContent = "";
+                            
+                            for await (const chunk of stream) {
+                                if (abortSignal?.aborted) {
+                                    throw new DOMException('Aborted', 'AbortError');
+                                }
+                                
+                                const candidate = chunk.candidates?.[0];
+                                if (!candidate || !candidate.content || !candidate.content.parts) continue;
+                                
+                                for (const part of candidate.content.parts) {
+                                    if (part.text) {
+                                        textContent += part.text;
+                                        
+                                        // We can do a naive update for the UI to see the stream without mutating the base text yet
+                                        let previewText = textContent;
+                                        let previewReasoning = "";
+                                        
+                                        const thinkMatch = previewText.match(/<think>([\s\S]*?)<\/think>/);
+                                        const thinkOpenMatch = previewText.match(/<think>([\s\S]*)$/);
+                                        
+                                        if (thinkMatch) {
+                                            previewReasoning = thinkMatch[1].trim();
+                                            previewText = previewText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+                                        } else if (thinkOpenMatch) {
+                                            previewReasoning = thinkOpenMatch[1].trim();
+                                            previewText = previewText.replace(/<think>[\s\S]*$/g, '').trim();
+                                        }
+                                        
+                                        const combinedText = (currentResponseMsg.text ? currentResponseMsg.text + (currentResponseMsg.text.endsWith('\n\n') ? '' : '\n\n') : '') + previewText;
+                                        const combinedReasoning = (currentResponseMsg.reasoningContent ? currentResponseMsg.reasoningContent + '\n\n' : '') + previewReasoning;
+                                        
+                                        onUpdate({ 
+                                            ...currentResponseMsg, 
+                                            text: combinedText,
+                                            reasoningContent: combinedReasoning || undefined
+                                        });
+                                    }
+                                    if (part.functionCall) {
+                                        parts.push(part);
+                                    }
+                                }
+                            }
+                            
+                            if (textContent) {
+                                parts.unshift({ text: textContent });
+                            }
+                            
+                            response = {
+                                candidates: [{
+                                    content: {
+                                        role: 'model',
+                                        parts: parts
+                                    }
+                                }]
+                            };
                         }
                         break;
                     } catch (e: any) {
@@ -279,8 +347,9 @@ export class AgenticEngine {
 
                 // 1. Handle Text Response
                 const textParts = parts.filter(p => p.text).map(p => p.text).join('\n\n');
+                let currentText = '';
                 if (textParts) {
-                    let currentText = textParts;
+                    currentText = textParts;
                     
                     // Extract reasoning content
                     const thinkMatch = currentText.match(/<think>([\s\S]*?)<\/think>/);
@@ -344,8 +413,28 @@ export class AgenticEngine {
 
                     const toolResponseParts: Part[] = [];
                     const newToolResults: ToolResult[] = [];
+                    let hasFinishTool = false;
 
                     for (const call of newToolCalls) {
+                        if (call.name === 'finish') {
+                            hasFinishTool = true;
+                            if (call.args && call.args.message) {
+                                const finishMsg = call.args.message;
+                                // Deduplicate: if the message is already in currentText (or very similar), don't append it again.
+                                // Some models output the exact same text in the text part and the finish tool message.
+                                const isDuplicate = currentText && (currentText.includes(finishMsg) || finishMsg.includes(currentText));
+                                
+                                if (!isDuplicate) {
+                                    currentResponseMsg.text = (currentResponseMsg.text ? currentResponseMsg.text + '\n\n' : '') + finishMsg;
+                                    currentResponseMsg.steps = [...(currentResponseMsg.steps || []), {
+                                        id: `step_${Date.now()}_reply_finish`,
+                                        type: 'reply',
+                                        content: finishMsg
+                                    }];
+                                }
+                            }
+                        }
+
                         const handler = this.handlers[call.name];
                         const result = await this.executeTool(call, handler);
                         newToolResults.push(result);
@@ -357,6 +446,16 @@ export class AgenticEngine {
                         }
                         // Sanitize responseObj to remove undefined values
                         responseObj = JSON.parse(JSON.stringify(responseObj));
+                        
+                        // Truncate large responses to prevent token explosion during long tasks
+                        const jsonStr = JSON.stringify(responseObj);
+                        const limit = 15000;
+                        if (jsonStr.length > limit) {
+                            responseObj = { 
+                                _truncated: `Data omitted to save tokens (exceeded ${limit} chars). Please query again with more specific filters if needed.`,
+                                _preview: jsonStr.substring(0, limit) + '...'
+                            };
+                        }
 
                         const functionResponse: any = { 
                             name: call.name, 
@@ -383,8 +482,14 @@ export class AgenticEngine {
 
                     onThreadUpdate({ memory: this.thread.memory });
                     
-                    // If finish tool was called, we can break the loop after sending the result, or wait for the model's final text?
-                    // Actually, if finish is called, the model might still want to say something. Let's just continue and let the model output text.
+                    if (hasFinishTool) {
+                        currentResponseMsg.status = 'completed';
+                        currentResponseMsg.endTime = Date.now();
+                        currentResponseMsg.runningTime = (currentResponseMsg.runningTime || 0) + (Date.now() - startTime);
+                        onUpdate({ ...currentResponseMsg });
+                        break;
+                    }
+                    
                     continue;
                 }
 
@@ -488,7 +593,7 @@ export class AgenticEngine {
                             for (const part of content.parts) {
                                 if (part.functionResponse && part.functionResponse.response) {
                                     const jsonStr = JSON.stringify(part.functionResponse.response);
-                                    const limit = isLastMessage ? 50000 : 500;
+                                    const limit = isLastMessage ? 15000 : 500; // Reduced from 50000 to 15000 for better cross-model stability
                                     if (jsonStr.length > limit) {
                                         part.functionResponse.response = { 
                                             _truncated: `Data omitted to save tokens (exceeded ${limit} chars). Please query again with more specific filters if needed.`,
@@ -530,8 +635,19 @@ export class AgenticEngine {
                                 
                                 if (!isLastMessage) {
                                     const jsonStr = JSON.stringify(responseObj);
-                                    if (jsonStr.length > 2000) {
-                                        responseObj = { _truncated: "Data omitted to save tokens. Please query again if needed." };
+                                    if (jsonStr.length > 500) {
+                                        responseObj = { 
+                                            _truncated: "Data omitted to save tokens. Please query again if needed.",
+                                            _preview: jsonStr.substring(0, 500) + '...'
+                                        };
+                                    }
+                                } else {
+                                    const jsonStr = JSON.stringify(responseObj);
+                                    if (jsonStr.length > 15000) {
+                                        responseObj = { 
+                                            _truncated: "Data omitted to save tokens. Please query again if needed.",
+                                            _preview: jsonStr.substring(0, 15000) + '...'
+                                        };
                                     }
                                 }
 

@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { MATCH_HISTORY } from '../data/matches';
-import { ROSTER } from '../constants/roster';
+import { getAllPlayers } from '../utils/teamLoader';
 import { MAPS } from '../constants';
 import { Match, PlayerMatchStats, Rank } from '../types';
 import { getTeamNames } from '../utils/matchHelpers';
 import { resolveName } from '../utils/demo/helpers';
+import { MatchAggregator } from '../utils/analytics/matchAggregator';
 
 const getRosterId = (p: PlayerMatchStats) => {
     return p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
@@ -21,9 +22,9 @@ export const TBTVView: React.FC = () => {
 
   // --- Calculations ---
   const playerStats = useMemo(() => {
-    return ROSTER.map(player => {
+    return getAllPlayers().map(player => {
         const matchesPlayed = matches
-            .filter(m => m.players.some(p => getRosterId(p) === player.id))
+            .filter(m => [...m.players, ...m.enemyPlayers].some(p => getRosterId(p) === player.id))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
         const totalMatches = matchesPlayed.length;
@@ -44,7 +45,7 @@ export const TBTVView: React.FC = () => {
             };
         }
 
-        const latestMatchPlayer = matchesPlayed[0].players.find(p => getRosterId(p) === player.id);
+        const latestMatchPlayer = [...matchesPlayed[0].players, ...matchesPlayed[0].enemyPlayers].find(p => getRosterId(p) === player.id);
         const currentRank = latestMatchPlayer?.rank || '?';
 
         let sums = {
@@ -53,13 +54,14 @@ export const TBTVView: React.FC = () => {
         };
 
         matchesPlayed.forEach(m => {
-            const p = m.players.find(p => getRosterId(p) === player.id)!;
+            const rawP = [...m.players, ...m.enemyPlayers].find(p => getRosterId(p) === player.id)!;
+            const p = MatchAggregator.aggregateMatchBySide(m, [rawP], 'ALL')[0];
             sums.k += p.kills;
             sums.d += p.deaths;
             sums.a += p.assists;
             sums.rating += p.rating;
             sums.adr += p.adr;
-            sums.we += p.we;
+            sums.we += p.we || 0;
             sums.hsRate += p.hsRate;
         });
 
@@ -82,11 +84,12 @@ export const TBTVView: React.FC = () => {
   const selectedPlayerStats = useMemo(() => {
       if (!selectedPlayerId) return null;
       const profile = playerStats.find(p => p.id === selectedPlayerId);
-      const history = matches.filter(m => m.players.some(p => getRosterId(p) === selectedPlayerId))
+      const history = matches.filter(m => [...m.players, ...m.enemyPlayers].some(p => getRosterId(p) === selectedPlayerId))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .map(m => {
-            const stats = m.players.find(p => getRosterId(p) === selectedPlayerId)!;
-            return { match: m, stats };
+            const rawStats = [...m.players, ...m.enemyPlayers].find(p => getRosterId(p) === selectedPlayerId)!;
+            const aggregatedStats = MatchAggregator.aggregateMatchBySide(m, [rawStats], 'ALL')[0];
+            return { match: m, stats: aggregatedStats };
         });
       return { profile, history };
   }, [selectedPlayerId, playerStats, matches]);
@@ -196,7 +199,7 @@ export const TBTVView: React.FC = () => {
                 {[...players].sort((a,b) => b.rating - a.rating).map(p => {
                     const kdDiff = p.kills - p.deaths;
                     const rosterId = getRosterId(p);
-                    const isRosterMember = ROSTER.some(r => r.id === rosterId);
+                    const isRosterMember = getAllPlayers().some(r => r.id === rosterId);
                     
                     return (
                         <tr 

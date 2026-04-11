@@ -1,15 +1,15 @@
 import { Match, PlayerMatchStats, MatchBon } from '../types';
-import { ROSTER } from '../constants/roster';
+import { getAllPlayers, getTeams } from './teamLoader';
 import { MAPS } from '../constants/maps';
 
 /**
  * Determines if a match involves the "Main Roster" (My Team).
- * Returns true if ANY player in the match is found in the defined ROSTER.
+ * Returns true if ANY player in the match is found in the defined getAllPlayers().
  */
 export const isMyTeamMatch = (match: Match): boolean => {
     // Check both 'players' and 'enemyPlayers' arrays
     return [...match.players, ...match.enemyPlayers].some(p => {
-        return ROSTER.some(r => {
+        return getAllPlayers().some(r => {
             if (r.id === p.playerId || r.name === p.playerId) return true;
             if (!p.steamid) return false;
             
@@ -90,6 +90,35 @@ export const validateSeriesMatch = (anchorMatch: Match, newMatch: Match): { vali
 };
 
 const identifyTeam = (players: PlayerMatchStats[]): string | undefined => {
+    const teams = getTeams();
+    for (const team of teams) {
+        let matchCount = 0;
+        for (const p of players) {
+            const isMatch = team.players.some(tp => {
+                if (tp.id === p.playerId || tp.name === p.playerId) return true;
+                if (!p.steamid) return false;
+                
+                const pSteamIdStr = String(p.steamid);
+                if (tp.id === pSteamIdStr) return true;
+                
+                let isIdMatch = tp.steamids?.includes(pSteamIdStr) || 
+                    (pSteamIdStr.endsWith('00') && tp.steamids?.some(id => id.startsWith(pSteamIdStr.slice(0, -2))));
+                    
+                if (!isIdMatch && /^\d+$/.test(pSteamIdStr) && pSteamIdStr.length < 16) {
+                    const accountId = parseInt(pSteamIdStr, 10);
+                    const base = BigInt('76561197960265728');
+                    const convertedId = (base + BigInt(accountId)).toString();
+                    isIdMatch = tp.steamids?.includes(convertedId);
+                }
+                
+                return isIdMatch;
+            });
+            if (isMatch) matchCount++;
+        }
+        if (matchCount >= 3) {
+            return team.name;
+        }
+    }
     return undefined;
 };
 
@@ -106,14 +135,14 @@ export const getTeamNames = (match: Match): { teamA: string, teamB: string } => 
     if (identifiedTeamA) teamA = identifiedTeamA;
     if (identifiedTeamB) teamB = identifiedTeamB;
 
-    const isTeamAUs = match.players.some(p => ROSTER.some(r => 
+    const isTeamAUs = match.players.some(p => getAllPlayers().some(r => 
         r.id === p.playerId || r.name === p.playerId || 
         (p.steamid && (r.steamids?.includes(String(p.steamid)) || 
         (String(p.steamid).endsWith('00') && r.steamids?.some(id => id.startsWith(String(p.steamid).slice(0, -2)))) ||
         (/^\d+$/.test(String(p.steamid)) && String(p.steamid).length < 16 && r.steamids?.includes((BigInt('76561197960265728') + BigInt(parseInt(String(p.steamid), 10))).toString()))))
     ));
     
-    const isTeamBUs = match.enemyPlayers.some(p => ROSTER.some(r => 
+    const isTeamBUs = match.enemyPlayers.some(p => getAllPlayers().some(r => 
         r.id === p.playerId || r.name === p.playerId || 
         (p.steamid && (r.steamids?.includes(String(p.steamid)) || 
         (String(p.steamid).endsWith('00') && r.steamids?.some(id => id.startsWith(String(p.steamid).slice(0, -2)))) ||

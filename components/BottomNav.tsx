@@ -2,8 +2,8 @@
 import React from 'react';
 
 interface BottomNavProps {
-  currentMode: 'tactics' | 'utilities' | 'weapons' | 'economy' | 'events' | 'training';
-  onChange: (mode: 'tactics' | 'utilities' | 'weapons' | 'economy' | 'events' | 'training') => void;
+  currentMode: 'tactics' | 'utilities' | 'weapons' | 'economy' | 'training';
+  onChange: (mode: 'tactics' | 'utilities' | 'weapons' | 'economy' | 'training') => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ currentMode, onChange }) => {

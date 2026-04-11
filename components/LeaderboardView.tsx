@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Match } from '../types';
-import { ROSTER } from '../constants/roster';
+import { getAllPlayers } from '../utils/teamLoader';
 import { resolveName } from '../utils/demo/helpers';
 import { getRatingColorClass, RankBadge } from './review/ReviewShared';
 import { Search, Filter, Trophy, Target, Zap, Shield, Crosshair, Activity, Flame } from 'lucide-react';
@@ -34,7 +34,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
     const aggregatedStats = useMemo(() => {
         const aggregatedAll = MatchAggregator.aggregateFull(allMatches);
         
-        return ROSTER.map(player => {
+        return getAllPlayers().map(player => {
             const aggregatedPlayer = aggregatedAll.find(p => p.playerId === player.id || p.steamid === player.id);
             if (!aggregatedPlayer || aggregatedPlayer.matchesPlayed === 0) return null;
 
@@ -208,7 +208,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                             <div>
                                 <div className="font-bold text-lg flex items-center">
                                     {processedData[1].id}
-                                    {ROSTER.find(r => r.id === processedData[1].id)?.isCommander && <CommanderBadge />}
+                                    {getAllPlayers().find(r => r.id === processedData[1].id)?.isCommander && <CommanderBadge />}
                                 </div>
                                 <div className="text-xs text-neutral-500">{processedData[1].role}</div>
                             </div>
@@ -236,7 +236,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                                     <div className="text-xs font-bold text-yellow-400 uppercase tracking-widest mb-1">Season MVP</div>
                                     <div className="font-black text-3xl flex items-center">
                                         {processedData[0].id}
-                                        {ROSTER.find(r => r.id === processedData[0].id)?.isCommander && <CommanderBadge />}
+                                        {getAllPlayers().find(r => r.id === processedData[0].id)?.isCommander && <CommanderBadge />}
                                     </div>
                                 </div>
                             </div>
@@ -271,7 +271,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                             <div>
                                 <div className="font-bold text-lg flex items-center">
                                     {processedData[2].id}
-                                    {ROSTER.find(r => r.id === processedData[2].id)?.isCommander && <CommanderBadge />}
+                                    {getAllPlayers().find(r => r.id === processedData[2].id)?.isCommander && <CommanderBadge />}
                                 </div>
                                 <div className="text-xs text-neutral-500">{processedData[2].role}</div>
                             </div>
@@ -316,7 +316,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({ allMatches }) 
                                             <div>
                                                 <div className="leading-none text-sm flex items-center">
                                                     {p.name}
-                                                    {ROSTER.find(r => r.id === p.id)?.isCommander && <CommanderBadge />}
+                                                    {getAllPlayers().find(r => r.id === p.id)?.isCommander && <CommanderBadge />}
                                                 </div>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <span className="text-[9px] font-medium text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-1.5 rounded border border-neutral-200 dark:border-neutral-700">{p.role}</span>

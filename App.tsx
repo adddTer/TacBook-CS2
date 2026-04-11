@@ -10,7 +10,6 @@ import { TacticEditor } from './components/TacticEditor';
 import { UtilityEditor } from './components/UtilityEditor';
 import { ReviewView } from './components/ReviewView';
 import { ArsenalView } from './components/ArsenalView'; 
-import { EventsView } from './components/events/EventsView';
 import { TrainingCamp } from './components/TrainingCamp';
 import { BottomNav } from './components/BottomNav';
 import { TacticDetailView } from './components/TacticDetailView';
@@ -20,6 +19,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { GroupManagerModal } from './components/GroupManagerModal'; 
 import { ConfirmModal } from './components/ConfirmModal';
 import { AiConfigModal } from './components/AiConfigModal';
+import { LiquipediaScraper } from './components/LiquipediaScraper';
 import { GlobalCopilot } from './components/ai/GlobalCopilot';
 import { useTactics } from './hooks/useTactics';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
@@ -31,7 +31,7 @@ const App: React.FC = () => {
   // --- Global App State ---
   const [side, setSide] = useState<Side>('T');
   const [currentMap, setCurrentMap] = useState<MapId>('mirage');
-  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'economy' | 'events' | 'training'>('tactics');
+  const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'economy' | 'training'>('tactics');
   const [theme, setTheme] = useState<Theme>('system');
   const [utilityViewMode, setUtilityViewMode] = useState<'detail' | 'accordion'>('detail');
   const [isDebug, setIsDebug] = useState(true);
@@ -71,7 +71,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
-      if (['tactics', 'utilities', 'weapons', 'economy', 'events', 'training'].includes(hash)) {
+      if (['tactics', 'utilities', 'weapons', 'economy', 'training'].includes(hash)) {
         setViewMode(hash as any);
       } else if (hash.startsWith('match/') || hash.startsWith('player/')) {
         setViewMode('weapons');
@@ -414,7 +414,6 @@ const App: React.FC = () => {
             
             {viewMode === 'economy' && <div className="max-w-[1920px] mx-auto"><ArsenalView /></div>}
             
-            {viewMode === 'events' && <div className="max-w-[1920px] mx-auto"><EventsView /></div>}
             {viewMode === 'training' && <TrainingCamp allTactics={allTactics} allUtilities={allUtilities} />}
           </main>
       </div>
@@ -501,6 +500,21 @@ const App: React.FC = () => {
         allMatches={allMatches}
         allTournaments={allTournaments}
         allBons={allBons}
+        onSaveTactic={(tactic) => {
+          const groupId = tactic.groupId || (writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
+          if (groupId) handleSaveTactic(tactic, groupId);
+        }}
+        onSaveUtility={(utility) => {
+          const groupId = utility.groupId || (writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
+          if (groupId) handleSaveUtility(utility, groupId);
+        }}
+        onSaveMatch={(match) => {
+          const groupId = match.groupId || (writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
+          if (groupId) handleSaveMatch(match, groupId);
+        }}
+        onDeleteTactic={deleteTactic}
+        onDeleteUtility={deleteUtility}
+        onDeleteMatch={deleteMatch}
       />
 
       <BottomNav currentMode={viewMode} onChange={setViewMode} />

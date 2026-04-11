@@ -1,0 +1,1951 @@
+[
+  {
+    "id": "team_vitality",
+    "name": "Team Vitality",
+    "type": "professional",
+    "players": [
+      {
+        "id": "apEX",
+        "name": "apEX",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197989744167"
+        ]
+      },
+      {
+        "id": "ZywOo",
+        "name": "ZywOo",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198113666193"
+        ]
+      },
+      {
+        "id": "flameZ",
+        "name": "flameZ",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197978835160"
+        ]
+      },
+      {
+        "id": "mezii",
+        "name": "mezii",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197973140692"
+        ]
+      },
+      {
+        "id": "ropz",
+        "name": "ropz",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197991272318"
+        ]
+      },
+      {
+        "id": "XTQZZZ",
+        "name": "XTQZZZ",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198039316598"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "natus_vincere",
+    "name": "Natus Vincere",
+    "type": "professional",
+    "players": [
+      {
+        "id": "b1t",
+        "name": "b1t",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198246607476"
+        ]
+      },
+      {
+        "id": "Aleksib",
+        "name": "Aleksib",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198013243326"
+        ]
+      },
+      {
+        "id": "iM",
+        "name": "iM",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198050250233"
+        ]
+      },
+      {
+        "id": "w0nderful",
+        "name": "w0nderful",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199063068840"
+        ]
+      },
+      {
+        "id": "makazze",
+        "name": "makazze",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199076189612"
+        ]
+      },
+      {
+        "id": "B1ad3",
+        "name": "B1ad3",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198013523865"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "parivision",
+    "name": "PARIVISION",
+    "type": "professional",
+    "players": [
+      {
+        "id": "BELCHONOKK",
+        "name": "BELCHONOKK",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198253670517"
+        ]
+      },
+      {
+        "id": "Jame",
+        "name": "Jame",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198036125584"
+        ]
+      },
+      {
+        "id": "nota",
+        "name": "nota",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198975070027"
+        ]
+      },
+      {
+        "id": "xiELO",
+        "name": "xiELO",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198141272052"
+        ]
+      },
+      {
+        "id": "zweih",
+        "name": "zweih",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198210626739"
+        ]
+      },
+      {
+        "id": "dastan",
+        "name": "dastan",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197993707993"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "aurora_gaming",
+    "name": "Aurora Gaming",
+    "type": "professional",
+    "players": [
+      {
+        "id": "XANTARES",
+        "name": "XANTARES",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198044118796"
+        ]
+      },
+      {
+        "id": "MAJ3R",
+        "name": "MAJ3R",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197967432889"
+        ]
+      },
+      {
+        "id": "Wicadia",
+        "name": "Wicadia",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198812513923"
+        ]
+      },
+      {
+        "id": "woxic",
+        "name": "woxic",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198083485506"
+        ]
+      },
+      {
+        "id": "soulfly",
+        "name": "soulfly",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198327068178"
+        ]
+      },
+      {
+        "id": "Fabre",
+        "name": "Fabre",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197999269131"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "team_falcons",
+    "name": "Team Falcons",
+    "type": "professional",
+    "players": [
+      {
+        "id": "NiKo",
+        "name": "NiKo",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198041683378"
+        ]
+      },
+      {
+        "id": "TeSeS",
+        "name": "TeSeS",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197996678278"
+        ]
+      },
+      {
+        "id": "kyxsan",
+        "name": "kyxsan",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198057282432"
+        ]
+      },
+      {
+        "id": "m0NESY",
+        "name": "m0NESY",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198074762801"
+        ]
+      },
+      {
+        "id": "kyousuke",
+        "name": "kyousuke",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199032006224"
+        ]
+      },
+      {
+        "id": "zonic",
+        "name": "zonic",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197960428292"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mouz",
+    "name": "MOUZ",
+    "type": "professional",
+    "players": [
+      {
+        "id": "torzsi",
+        "name": "torzsi",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198355739212"
+        ]
+      },
+      {
+        "id": "xertioN",
+        "name": "xertioN",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198193174134"
+        ]
+      },
+      {
+        "id": "Jimpphat",
+        "name": "Jimpphat",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198855375325"
+        ]
+      },
+      {
+        "id": "Brollan",
+        "name": "Brollan",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198138828475"
+        ]
+      },
+      {
+        "id": "Spinx",
+        "name": "Spinx",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198063336407"
+        ]
+      },
+      {
+        "id": "sycrone",
+        "name": "sycrone",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198009427663"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "furia",
+    "name": "FURIA",
+    "type": "professional",
+    "players": [
+      {
+        "id": "yuurih",
+        "name": "yuurih",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198164970560"
+        ]
+      },
+      {
+        "id": "KSCERATO",
+        "name": "KSCERATO",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198058500492"
+        ]
+      },
+      {
+        "id": "FalleN",
+        "name": "FalleN",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197960690195"
+        ]
+      },
+      {
+        "id": "molodoy",
+        "name": "molodoy",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198200982290"
+        ]
+      },
+      {
+        "id": "YEKINDAR",
+        "name": "YEKINDAR",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198134401925"
+        ]
+      },
+      {
+        "id": "sidde",
+        "name": "sidde",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198409606393"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "the_mongolz",
+    "name": "The MongolZ",
+    "type": "professional",
+    "players": [
+      {
+        "id": "bLitz",
+        "name": "bLitz",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198959824088"
+        ]
+      },
+      {
+        "id": "Techno4K",
+        "name": "Techno4K",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198966340160"
+        ]
+      },
+      {
+        "id": "910",
+        "name": "910",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199203563345"
+        ]
+      },
+      {
+        "id": "mzinho",
+        "name": "mzinho",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198838822582"
+        ]
+      },
+      {
+        "id": "cobrazera",
+        "name": "cobrazera",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199430871803"
+        ]
+      },
+      {
+        "id": "maaRaa",
+        "name": "maaRaa",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561199063343858"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "team_spirit",
+    "name": "Team Spirit",
+    "type": "professional",
+    "players": [
+      {
+        "id": "magixx",
+        "name": "magixx",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199063238565"
+        ]
+      },
+      {
+        "id": "zont1x",
+        "name": "zont1x",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198995880877"
+        ]
+      },
+      {
+        "id": "donk",
+        "name": "donk",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198386265483"
+        ]
+      },
+      {
+        "id": "sh1ro",
+        "name": "sh1ro",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198081484775"
+        ]
+      },
+      {
+        "id": "tN1R",
+        "name": "tN1R",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198872013168"
+        ]
+      },
+      {
+        "id": "hally",
+        "name": "hally",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197987245888"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "astralis",
+    "name": "Astralis",
+    "type": "professional",
+    "players": [
+      {
+        "id": "Staehr",
+        "name": "Staehr",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198005107817"
+        ]
+      },
+      {
+        "id": "jabbi",
+        "name": "jabbi",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198120557348"
+        ]
+      },
+      {
+        "id": "HooXi",
+        "name": "HooXi",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197998926770"
+        ]
+      },
+      {
+        "id": "phzy",
+        "name": "phzy",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198408199043"
+        ]
+      },
+      {
+        "id": "ryu",
+        "name": "ryu",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197960276237"
+        ]
+      },
+      {
+        "id": "ruggah",
+        "name": "ruggah",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197962433244"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "g2_esports",
+    "name": "G2 Esports",
+    "type": "professional",
+    "players": [
+      {
+        "id": "huNter-",
+        "name": "huNter-",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198012872053"
+        ]
+      },
+      {
+        "id": "HeavyGod",
+        "name": "HeavyGod",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198068002993"
+        ]
+      },
+      {
+        "id": "SunPayus",
+        "name": "SunPayus",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198309839541"
+        ]
+      },
+      {
+        "id": "matys",
+        "name": "matys",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199046478501"
+        ]
+      },
+      {
+        "id": "NertZ",
+        "name": "NertZ",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198053126645"
+        ]
+      },
+      {
+        "id": "sAw",
+        "name": "sAw",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197972265203"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "fut_esports",
+    "name": "FUT Esports",
+    "type": "professional",
+    "players": [
+      {
+        "id": "dem0n",
+        "name": "dem0n",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198875633179"
+        ]
+      },
+      {
+        "id": "Krabeni",
+        "name": "Krabeni",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198991278425"
+        ]
+      },
+      {
+        "id": "cmtry",
+        "name": "cmtry",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199313968259"
+        ]
+      },
+      {
+        "id": "dziugss",
+        "name": "dziugss",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199100725838"
+        ]
+      },
+      {
+        "id": "lauNX",
+        "name": "lauNX",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198972795853"
+        ]
+      },
+      {
+        "id": "coolio",
+        "name": "coolio",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198079275281"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "monte",
+    "name": "Monte",
+    "type": "professional",
+    "players": [
+      {
+        "id": "Gizmy",
+        "name": "Gizmy",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198344226986"
+        ]
+      },
+      {
+        "id": "afro",
+        "name": "afro",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198035581101"
+        ]
+      },
+      {
+        "id": "AZUWU",
+        "name": "AZUWU",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198974494129"
+        ]
+      },
+      {
+        "id": "Bymas",
+        "name": "Bymas",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198093386355"
+        ]
+      },
+      {
+        "id": "Rainwaker",
+        "name": "Rainwaker",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198138113790"
+        ]
+      },
+      {
+        "id": "kakafu",
+        "name": "kakafu",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197989772438"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "9z_team",
+    "name": "9z Team",
+    "type": "professional",
+    "players": [
+      {
+        "id": "max",
+        "name": "max",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198242950384"
+        ]
+      },
+      {
+        "id": "HUASOPEEK",
+        "name": "HUASOPEEK",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198319723208"
+        ]
+      },
+      {
+        "id": "luchov",
+        "name": "luchov",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198067722198"
+        ]
+      },
+      {
+        "id": "meyern",
+        "name": "meyern",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198195642865"
+        ]
+      },
+      {
+        "id": "dgt",
+        "name": "dgt",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198216891576"
+        ]
+      },
+      {
+        "id": "BIT",
+        "name": "BIT",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197969490124"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "pain_gaming",
+    "name": "paiN Gaming",
+    "type": "professional",
+    "players": [
+      {
+        "id": "biguzera",
+        "name": "biguzera",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198015308884"
+        ]
+      },
+      {
+        "id": "nqz",
+        "name": "nqz",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198350342505"
+        ]
+      },
+      {
+        "id": "snow",
+        "name": "snow",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198377335846"
+        ]
+      },
+      {
+        "id": "piriajr",
+        "name": "piriajr",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198396338183"
+        ]
+      },
+      {
+        "id": "v$m",
+        "name": "v$m",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198011732823"
+        ]
+      },
+      {
+        "id": "rikz",
+        "name": "rikz",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197993370569"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "legacy",
+    "name": "Legacy",
+    "type": "professional",
+    "players": [
+      {
+        "id": "latto",
+        "name": "latto",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198850020186"
+        ]
+      },
+      {
+        "id": "dumau",
+        "name": "dumau",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198194325317"
+        ]
+      },
+      {
+        "id": "saadzin",
+        "name": "saadzin",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198100494962"
+        ]
+      },
+      {
+        "id": "n1ssim",
+        "name": "n1ssim",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198061763596"
+        ]
+      },
+      {
+        "id": "arT",
+        "name": "arT",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198043769572"
+        ]
+      },
+      {
+        "id": "RiVAS",
+        "name": "RiVAS",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198168124360"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "gamerlegion",
+    "name": "GamerLegion",
+    "type": "professional",
+    "players": [
+      {
+        "id": "Tauson",
+        "name": "Tauson",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198316706174"
+        ]
+      },
+      {
+        "id": "PR",
+        "name": "PR",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198310561479"
+        ]
+      },
+      {
+        "id": "REZ",
+        "name": "REZ",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198034172415"
+        ]
+      },
+      {
+        "id": "hypex",
+        "name": "hypex",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198254686734"
+        ]
+      },
+      {
+        "id": "Snax",
+        "name": "Snax",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197982141573"
+        ]
+      },
+      {
+        "id": "imd",
+        "name": "imd",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198028930552"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "big",
+    "name": "BIG",
+    "type": "professional",
+    "players": [
+      {
+        "id": "tabseN",
+        "name": "tabseN",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197961491680"
+        ]
+      },
+      {
+        "id": "JDC",
+        "name": "JDC",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198078771373"
+        ]
+      },
+      {
+        "id": "gr1ks",
+        "name": "gr1ks",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198370176682"
+        ]
+      },
+      {
+        "id": "blameF",
+        "name": "blameF",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198028458803"
+        ]
+      },
+      {
+        "id": "faveN",
+        "name": "faveN",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198118196092"
+        ]
+      },
+      {
+        "id": "xenn",
+        "name": "xenn",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198127439015"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "betboom_team",
+    "name": "BetBoom Team",
+    "type": "professional",
+    "players": [
+      {
+        "id": "s1ren",
+        "name": "s1ren",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198167785069"
+        ]
+      },
+      {
+        "id": "Magnojez",
+        "name": "Magnojez",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198372023214"
+        ]
+      },
+      {
+        "id": "Boombl4",
+        "name": "Boombl4",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198146207066"
+        ]
+      },
+      {
+        "id": "FL4MUS",
+        "name": "FL4MUS",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198014259134"
+        ]
+      },
+      {
+        "id": "zorte",
+        "name": "zorte",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198059614402"
+        ]
+      },
+      {
+        "id": "Fierce",
+        "name": "Fierce",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198002489915"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "b8",
+    "name": "B8",
+    "type": "professional",
+    "players": [
+      {
+        "id": "npl",
+        "name": "npl",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198305036904"
+        ]
+      },
+      {
+        "id": "esenthial",
+        "name": "esenthial",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199149812353"
+        ]
+      },
+      {
+        "id": "alex666",
+        "name": "alex666",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198304115519"
+        ]
+      },
+      {
+        "id": "kensizor",
+        "name": "kensizor",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198382173659"
+        ]
+      },
+      {
+        "id": "s1zzi",
+        "name": "s1zzi",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199001538362"
+        ]
+      },
+      {
+        "id": "Maddened",
+        "name": "Maddened",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198393262926"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "heroic",
+    "name": "HEROIC",
+    "type": "professional",
+    "players": [
+      {
+        "id": "xfl0ud",
+        "name": "xfl0ud",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198178209109"
+        ]
+      },
+      {
+        "id": "nilo",
+        "name": "nilo",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198161056567"
+        ]
+      },
+      {
+        "id": "Chr1zN",
+        "name": "Chr1zN",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198292598811"
+        ]
+      },
+      {
+        "id": "susp",
+        "name": "susp",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198342718168"
+        ]
+      },
+      {
+        "id": "yxngstxr",
+        "name": "yxngstxr",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199137143905"
+        ]
+      },
+      {
+        "id": "TOBIZ",
+        "name": "TOBIZ",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198111983523"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "sinners_esports",
+    "name": "SINNERS Esports",
+    "type": "professional",
+    "players": [
+      {
+        "id": "beastik",
+        "name": "beastik",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198033438750"
+        ]
+      },
+      {
+        "id": "SHOCK",
+        "name": "SHOCK",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198169560297"
+        ]
+      },
+      {
+        "id": "kisserek",
+        "name": "kisserek",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198252742076"
+        ]
+      },
+      {
+        "id": "stressarN",
+        "name": "stressarN",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198304437116"
+        ]
+      },
+      {
+        "id": "MoDo",
+        "name": "MoDo",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198350221098"
+        ]
+      },
+      {
+        "id": "bfull",
+        "name": "bfull",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198028602776"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "m80",
+    "name": "M80",
+    "type": "professional",
+    "players": [
+      {
+        "id": "Swisher",
+        "name": "Swisher",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198183003671"
+        ]
+      },
+      {
+        "id": "slaxz-",
+        "name": "slaxz-",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198064353169"
+        ]
+      },
+      {
+        "id": "s1n",
+        "name": "s1n",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198190463461"
+        ]
+      },
+      {
+        "id": "Lake",
+        "name": "Lake",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198337484196"
+        ]
+      },
+      {
+        "id": "JBa",
+        "name": "JBa",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198184153575"
+        ]
+      },
+      {
+        "id": "dephh",
+        "name": "dephh",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197987260907"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "nrg",
+    "name": "NRG",
+    "type": "professional",
+    "players": [
+      {
+        "id": "oSee",
+        "name": "oSee",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198047472534"
+        ]
+      },
+      {
+        "id": "nitr0",
+        "name": "nitr0",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197995889730"
+        ]
+      },
+      {
+        "id": "br0",
+        "name": "br0",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198060483793"
+        ]
+      },
+      {
+        "id": "Sonic",
+        "name": "Sonic",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": []
+      },
+      {
+        "id": "Grim",
+        "name": "Grim",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198191236195"
+        ]
+      },
+      {
+        "id": "daps",
+        "name": "daps",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197980158081"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "sharks_esports",
+    "name": "Sharks Esports",
+    "type": "professional",
+    "players": [
+      {
+        "id": "gafolo",
+        "name": "gafolo",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198135228658"
+        ]
+      },
+      {
+        "id": "rdnzao",
+        "name": "rdnzao",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198307734468"
+        ]
+      },
+      {
+        "id": "doc",
+        "name": "doc",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198095896540"
+        ]
+      },
+      {
+        "id": "koala",
+        "name": "koala",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198809462276"
+        ]
+      },
+      {
+        "id": "maxxkor",
+        "name": "maxxkor",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561199030972198"
+        ]
+      },
+      {
+        "id": "D10S",
+        "name": "D10S",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198122750299"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "gaimin_gladiators",
+    "name": "Gaimin Gladiators",
+    "type": "professional",
+    "players": [
+      {
+        "id": "JOTA",
+        "name": "JOTA",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198054820484"
+        ]
+      },
+      {
+        "id": "NEKIZ",
+        "name": "NEKIZ",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198036884160"
+        ]
+      },
+      {
+        "id": "felps",
+        "name": "felps",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197983031494"
+        ]
+      },
+      {
+        "id": "HEN1",
+        "name": "HEN1",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198018027263"
+        ]
+      },
+      {
+        "id": "Luken",
+        "name": "Luken",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198006379986"
+        ]
+      },
+      {
+        "id": "horvy",
+        "name": "horvy",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197971316261"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mibr",
+    "name": "MIBR",
+    "type": "professional",
+    "players": [
+      {
+        "id": "brnz4n",
+        "name": "brnz4n",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198855876580"
+        ]
+      },
+      {
+        "id": "insani",
+        "name": "insani",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198061423730"
+        ]
+      },
+      {
+        "id": "kl1m",
+        "name": "kl1m",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198125068631"
+        ]
+      },
+      {
+        "id": "LNZ",
+        "name": "LNZ",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198104626893"
+        ]
+      },
+      {
+        "id": "venomzera",
+        "name": "venomzera",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198218265253"
+        ]
+      },
+      {
+        "id": "LETN1",
+        "name": "LETN1",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198042092011"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "team_liquid",
+    "name": "Team Liquid",
+    "type": "professional",
+    "players": [
+      {
+        "id": "NAF",
+        "name": "NAF",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198001151695"
+        ]
+      },
+      {
+        "id": "ultimate",
+        "name": "ultimate",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198283989223"
+        ]
+      },
+      {
+        "id": "siuhy",
+        "name": "siuhy",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198150673360"
+        ]
+      },
+      {
+        "id": "EliGE",
+        "name": "EliGE",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198066693739"
+        ]
+      },
+      {
+        "id": "malbsMd",
+        "name": "malbsMd",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198080703143"
+        ]
+      },
+      {
+        "id": "flashie",
+        "name": "flashie",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197993995860"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "tyloo",
+    "name": "TYLOO",
+    "type": "professional",
+    "players": [
+      {
+        "id": "JamYoung",
+        "name": "JamYoung",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198364937038"
+        ]
+      },
+      {
+        "id": "Moseyuh",
+        "name": "Moseyuh",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198355197522"
+        ]
+      },
+      {
+        "id": "Mercury",
+        "name": "Mercury",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198108796479"
+        ]
+      },
+      {
+        "id": "Jee",
+        "name": "Jee",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198360407641"
+        ]
+      },
+      {
+        "id": "zero",
+        "name": "zero",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197994587863",
+          "76561198956909643"
+        ]
+      },
+      {
+        "id": "zhokiNg",
+        "name": "zhokiNg",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198059759920"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "lynn_vision_gaming",
+    "name": "Lynn Vision Gaming",
+    "type": "professional",
+    "players": [
+      {
+        "id": "westmelon",
+        "name": "westmelon",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": []
+      },
+      {
+        "id": "z4kr",
+        "name": "z4kr",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198137783463"
+        ]
+      },
+      {
+        "id": "EmiliaQAQ",
+        "name": "EmiliaQAQ",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198816731401"
+        ]
+      },
+      {
+        "id": "Starry",
+        "name": "Starry",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198880299543"
+        ]
+      },
+      {
+        "id": "C4LLM3SU3",
+        "name": "C4LLM3SU3",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198416388144"
+        ]
+      },
+      {
+        "id": "GUM",
+        "name": "GUM",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561198024159494"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "thunderdownunder",
+    "name": "THUNDERdOWNUNDER",
+    "type": "professional",
+    "players": [
+      {
+        "id": "asap",
+        "name": "asap",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198028656944"
+        ]
+      },
+      {
+        "id": "TjP",
+        "name": "TjP",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198163780030"
+        ]
+      },
+      {
+        "id": "aliStair",
+        "name": "aliStair",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198098346710"
+        ]
+      },
+      {
+        "id": "dexter",
+        "name": "dexter",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198061801241"
+        ]
+      },
+      {
+        "id": "Liazz",
+        "name": "Liazz",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "liazz"
+        ]
+      },
+      {
+        "id": "viridian",
+        "name": "viridian",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197972045728"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "flyquest",
+    "name": "FlyQuest",
+    "type": "professional",
+    "players": [
+      {
+        "id": "INS",
+        "name": "INS",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197987212623"
+        ]
+      },
+      {
+        "id": "Vexite",
+        "name": "Vexite",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198052888143"
+        ]
+      },
+      {
+        "id": "nettik",
+        "name": "nettik",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198332845251"
+        ]
+      },
+      {
+        "id": "jks",
+        "name": "jks",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561197977105184"
+        ]
+      },
+      {
+        "id": "story",
+        "name": "story",
+        "role": "Player",
+        "roleType": "Player",
+        "steamids": [
+          "76561198065448360"
+        ]
+      },
+      {
+        "id": "AZR",
+        "name": "AZR",
+        "role": "Coach",
+        "roleType": "Coach",
+        "steamids": [
+          "76561197985097994"
+        ]
+      }
+    ]
+  }
+]

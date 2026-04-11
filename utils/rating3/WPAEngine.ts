@@ -2,7 +2,7 @@
 import { Side } from "../../types";
 import type { WPAUpdate } from "./ratingTypes"; // Changed from ./types
 import { MATRIX_PRE, MATRIX_POST, COEFF } from "./wpa/constants";
-import { getExpectedWinRate } from "./economy";
+import { getExpectedWinRate, getEquipmentIndex } from "./economy";
 
 export type { WPAUpdate }; 
 
@@ -16,7 +16,8 @@ export class WPAEngine {
     private roundTime: number = 115; 
     private currentWinProb: number = 0.5;
     
-    private roundStartEconMod: number = 0;
+    private tEquip: number = 0;
+    private ctEquip: number = 0;
     private ctKits: number = 0; // Track defuse kits for Post-Plant calc
     
     // NEW: Retrospective Result
@@ -47,7 +48,8 @@ export class WPAEngine {
         this.plantTime = 0;
         this.roundTime = 115;
         this.currentWinProb = 0.5;
-        this.roundStartEconMod = 0;
+        this.tEquip = 0;
+        this.ctEquip = 0;
         this.ctKits = 0;
         this.roundResult = null;
         this.playerRoundWPA.clear();
@@ -58,26 +60,8 @@ export class WPAEngine {
     }
 
     public initializeRound(tEquip: number, ctEquip: number) {
-        const tAvg = tEquip / 5;
-        const ctAvg = ctEquip / 5;
-        
-        // This is the 1v1 engagement win rate based on equipment value
-        const p = getExpectedWinRate(tAvg, ctAvg, 'T', false, false);
-        
-        // Convert 1v1 win rate to 5v5 round win rate using Negative Binomial Distribution
-        // Probability of getting 5 kills before the enemy gets 5 kills
-        const q = 1 - p;
-        let p5v5 = 0;
-        const coeffs = [1, 5, 15, 35, 70]; // C(4+k, k) for k=0..4
-        for (let k = 0; k < 5; k++) {
-            p5v5 += coeffs[k] * Math.pow(p, 5) * Math.pow(q, k);
-        }
-        
-        // Base T win rate for 5v5 is MATRIX_PRE[5][5] = 0.488
-        // We calculate the delta from 0.5 (neutral 5v5) and apply it to the base
-        this.roundStartEconMod = p5v5 - 0.5;
-        
-        // Recalculate initial prob with new econ mod
+        this.tEquip = tEquip;
+        this.ctEquip = ctEquip;
         this.currentWinProb = this.calculateWinProb();
     }
 
@@ -98,10 +82,30 @@ export class WPAEngine {
         return this.currentWinProb;
     }
 
-    private calculateWinProb(): number {
-        const tIdx = Math.max(0, Math.min(5, this.tAlive));
-        const ctIdx = Math.max(0, Math.min(5, this.ctAlive));
+    private interpolateMatrix(matrix: number[][], rowVal: number, colVal: number): number {
+        const r = Math.max(0, Math.min(5, rowVal));
+        const c = Math.max(0, Math.min(5, colVal));
         
+        const r0 = Math.floor(r);
+        const r1 = Math.min(5, r0 + 1);
+        const c0 = Math.floor(c);
+        const c1 = Math.min(5, c0 + 1);
+        
+        const rFrac = r - r0;
+        const cFrac = c - c0;
+        
+        const v00 = matrix[r0][c0];
+        const v01 = matrix[r0][c1];
+        const v10 = matrix[r1][c0];
+        const v11 = matrix[r1][c1];
+        
+        const top = v00 * (1 - cFrac) + v01 * cFrac;
+        const bottom = v10 * (1 - cFrac) + v11 * cFrac;
+        
+        return top * (1 - rFrac) + bottom * rFrac;
+    }
+
+    private calculateWinProb(): number {
         // --- TERMINAL STATE OVERRIDES ---
         if (this.isDefusedState) return 0.0; // CT Win (T Prob 0.0)
         if (this.isExplodedState) return 1.0; // T Win (T Prob 1.0)
@@ -115,52 +119,51 @@ export class WPAEngine {
             return 1.0;
         }
 
-        let p = 0.5;
+        // --- EFFECTIVE COMBAT POWER (ECONOMY MODIFIER) ---
+        // Calculate average equipment value
+        const tAvg = this.tAlive > 0 ? this.tEquip / this.tAlive : 0;
+        const ctAvg = this.ctAlive > 0 ? this.ctEquip / this.ctAlive : 0;
+        
+        // Get economy index (0 = Full Buy, 5 = Full Eco)
+        const tIdxEcon = getEquipmentIndex(tAvg);
+        const ctIdxEcon = getEquipmentIndex(ctAvg);
+        
+        // Calculate strength factor (1.0 for Full Buy, ~0.72 for Full Eco)
+        // This naturally scales the player's value based on their loadout
+        const tStrength = 1.0 - 0.056 * tIdxEcon;
+        const ctStrength = 1.0 - 0.056 * ctIdxEcon;
+        
+        // Calculate effective alive players
+        const effT = this.tAlive * tStrength;
+        const effCT = this.ctAlive * ctStrength;
 
+        // --- PROBABILITY CALCULATION ---
         if (this.isPlanted) {
-            // Post-Plant Logic
-            p = MATRIX_POST[tIdx][ctIdx];
-
-            // [Bug Fix] Include dampened Economy Modifier in Post-Plant
-            p += (this.roundStartEconMod * 0.3);
+            // Post-Plant Logic: Use MATRIX_POST with effective players
+            let p = this.interpolateMatrix(MATRIX_POST, effT, effCT);
 
             // --- Retrospective Retake Correction (v4.0) ---
             // Determine Scenario
             let isScenario1 = false; // Defused (CT Win)
-            // Default to Scenario 2 (Exploded / T Win / Unknown)
-            // If we don't know the result, we assume standard time decay (Scenario 2).
-            // This prevents probability from staying flat when time runs out.
-
             if (this.roundResult && this.roundResult.winner === 'CT') {
-                // CT Win + Planted = Scenario 1 (Defuse)
                 isScenario1 = true;
             }
             
             // Debug Log for Scene Logic
-            if (this.isPlanted && Math.random() < 0.1) {
+            if (Math.random() < 0.1) {
                  console.log(`[WPA_DEBUG] Post-Plant Calc:
-                    RoundResult: ${this.roundResult ? JSON.stringify(this.roundResult) : 'NULL'}
                     Winner: ${this.roundResult?.winner}
-                    Defuser: ${this.roundResult?.defuserSid}
                     Scenario1 (Defuse): ${isScenario1}
                     TimeRemaining: ${this.roundTime.toFixed(1)}
-                    Alive: T=${this.tAlive}, CT=${this.ctAlive}
-                    DefusedState: ${this.isDefusedState}
-                    ExplodedState: ${this.isExplodedState}
+                    EffAlive: T=${effT.toFixed(2)}, CT=${effCT.toFixed(2)}
                  `);
             }
-            
-            const ctProbBase = 1.0 - p;
-            let x = 1.0;
 
-            // Apply Time Decay based on Scenario
             const timePassed = Math.max(0, COEFF.C4_TIME - this.roundTime);
             
-            // Helper for Piecewise Linear Interpolation
             const interpolate = (t: number, points: number[][]) => {
                 if (t <= points[0][0]) return points[0][1];
                 if (t >= points[points.length-1][0]) return points[points.length-1][1];
-                
                 for (let i = 0; i < points.length - 1; i++) {
                     const [t1, x1] = points[i];
                     const [t2, x2] = points[i+1];
@@ -172,18 +175,15 @@ export class WPAEngine {
                 return points[points.length-1][1];
             };
 
+            const ctProbBase = 1.0 - p;
+
             if (isScenario1) {
                 // Scenario 1: Defuse Success (CT Win)
-                
-                // SPECIAL CASE: If T are all dead, CT win is guaranteed (100%)
-                // "无论何时，T方全部被消灭后，胜率升至100%，系数恢复为1.0。"
-                // FIX: Only applies in Scenario 1 (CT Win). In Scenario 2 (T Win), T dead doesn't mean CT Win (bomb could explode).
                 if (this.tAlive === 0) {
                      return 0.0; // T Prob = 0.0 -> CT Prob = 1.0
                 }
 
-                // Data Points: 0s:1.0, 10s:0.95, 20s:0.82, 28s:0.68, 35s:0.40
-                // We extrapolate 40s to 0.20 to maintain the "slow decay" trend
+                // CT win prob decays slowly
                 const points = [
                     [0, 1.0],
                     [10, 0.95],
@@ -192,12 +192,13 @@ export class WPAEngine {
                     [35, 0.40],
                     [40, 0.20]
                 ];
-                x = interpolate(timePassed, points);
+                const x = interpolate(timePassed, points);
+                const ctProb = ctProbBase * x;
+                p = 1.0 - ctProb; // T prob rises
                 
             } else {
                 // Scenario 2: Bomb Exploded / T Win / Unknown
-                // Data Points: 0-28s same as above.
-                // 32s:0.35, 35s:0.08, 37s:0.0
+                // CT win prob decays to 0 rapidly
                 const points = [
                     [0, 1.0],
                     [10, 0.95],
@@ -208,25 +209,42 @@ export class WPAEngine {
                     [37, 0.0],
                     [40, 0.0]
                 ];
-                x = interpolate(timePassed, points);
+                const x = interpolate(timePassed, points);
+                const ctProb = ctProbBase * x;
+                p = 1.0 - ctProb; // T prob rises
             }
             
-            // Apply multiplier to CT Win Probability
-            const ctProb = ctProbBase * x;
-            p = 1.0 - ctProb;
+            return Math.max(0.0, Math.min(1.0, p));
         } else {
-            // Pre-Plant Logic
-            p = MATRIX_PRE[tIdx][ctIdx];
-            p += this.roundStartEconMod;
+            // Pre-Plant Logic: Use MATRIX_PRE with effective players
+            let p = this.interpolateMatrix(MATRIX_PRE, effT, effCT);
             
             // Time Decay (Pre-Plant Only)
             if (this.roundTime < COEFF.TIME_PANIC) {
                 const panicFactor = Math.pow((COEFF.TIME_PANIC - Math.max(0, this.roundTime)) / COEFF.TIME_PANIC, 3);
                 p = p * (1.0 - panicFactor);
             }
+            
+            return Math.max(0.0, Math.min(1.0, p));
         }
+    }
 
-        return Math.max(0.0, Math.min(1.0, p));
+    public updateEquipment(tEquip: number, ctEquip: number, allTs: string[], allCTs: string[]): WPAUpdate[] {
+        this.tEquip = tEquip;
+        this.ctEquip = ctEquip;
+        
+        const prevProb = this.currentWinProb;
+        const newProb = this.calculateWinProb();
+        this.currentWinProb = newProb;
+        
+        const probDelta = newProb - prevProb;
+        const totalPoints = probDelta * COEFF.SCALING;
+        
+        const updates: WPAUpdate[] = [];
+        if (Math.abs(totalPoints) < 0.001) return updates;
+        
+        // Return a special update that RatingEngine will process
+        return [{ sid: 'TEAM_DELTA', delta: totalPoints, reason: 'equipment' }];
     }
 
     // --- Event Handlers ---

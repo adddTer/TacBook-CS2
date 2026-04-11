@@ -1,23 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { HltvEvent } from '../../types/hltv';
-import { fetchHltvEvents } from '../../services/hltvService';
+// import { fetchHltvEvents } from '../../services/hltvService';
 
 export const EventsView: React.FC = () => {
     const [events, setEvents] = useState<HltvEvent[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        const loadEvents = async () => {
-            try {
-                const data = await fetchHltvEvents();
-                setEvents(data);
-            } catch (error) {
-                console.error("Failed to load events", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadEvents();
+        // const loadEvents = async () => {
+        //     try {
+        //         const data = await fetchHltvEvents();
+        //         setEvents(data);
+        //     } catch (error) {
+        //         console.error("Failed to load events", error);
+        //     } finally {
+        //         setLoading(false);
+        //     }
+        // };
+        // loadEvents();
     }, []);
 
     if (loading) {
@@ -41,11 +41,17 @@ export const EventsView: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {events.map(event => (
-                    <EventCard key={event.id} event={event} />
-                ))}
-            </div>
+            {events.length === 0 ? (
+                <div className="text-center py-10 text-neutral-500">
+                    赛事自动获取功能已暂时禁用。
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {events.map(event => (
+                        <EventCard key={event.id} event={event} />
+                    ))}
+                </div>
+            )}
         </div>
     );
 };

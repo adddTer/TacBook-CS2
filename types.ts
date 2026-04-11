@@ -147,6 +147,13 @@ export interface PlayerProfile {
     isCommander?: boolean;
 }
 
+export interface TeamProfile {
+    id: string;
+    name: string;
+    type: 'user' | 'professional';
+    players: PlayerProfile[];
+}
+
 export type Rank = string; // Flexible rank string (e.g., 'B+', 'S', 'A')
 
 export interface DuelRecord {
@@ -385,12 +392,42 @@ export interface Match {
 
 // --- Tournament Support ---
 
+export interface TournamentPrize {
+    placement: string;
+    amount: number;
+}
+
+export interface TournamentStageMatch {
+    id: string;
+    team1: string;
+    team2: string;
+    score1?: number;
+    score2?: number;
+    status: 'pending' | 'live' | 'completed';
+    date?: string;
+}
+
+export interface TournamentStage {
+    id: string;
+    name: string;
+    format: string;
+    matches?: TournamentStageMatch[];
+}
+
 export interface Tournament {
     id: string;
     title: string;
+    tier?: string;
     startDate: string;
     endDate?: string;
+    location?: string;
+    vrsInvitationDate?: string;
+    teamsCount?: number;
+    prizePool?: number;
+    prizes?: TournamentPrize[];
+    stages?: TournamentStage[];
     groupId?: string;
+    isPreCoded?: boolean;
 }
 
 // --- Demo JSON Specification Types ---

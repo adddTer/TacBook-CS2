@@ -1,6 +1,6 @@
 import { DemoData, Match, PlayerMatchStats, MatchRound, MatchTimelineEvent, PlayerRoundStats, Side } from "../types";
 import { generateId } from "./idGenerator";
-import { ROSTER } from "../constants/roster";
+import { getAllPlayers } from './teamLoader';
 import { RatingEngine } from "./rating3/RatingEngine";
 import { HealthTracker } from "./rating3/HealthTracker";
 
@@ -8,6 +8,8 @@ import { HealthTracker } from "./rating3/HealthTracker";
 import { normalizeSteamId, resolveName } from "./demo/helpers";
 import { determineTeammates } from "./demo/teamLogic";
 import { determineStartingSide } from "./demo/sideLogic";
+
+export const CURRENT_PARSER_VERSION = '1.1.10';
 
 // Hitgroup mapping for JSON string values
 const HITGROUP_MAP: Record<string, number> = {
@@ -23,7 +25,7 @@ const HITGROUP_MAP: Record<string, number> = {
 };
 
 export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
-    const events = Array.isArray(data) ? data : (data.events || []);
+    let events = Array.isArray(data) ? data : (data.events || []);
     const meta = (!Array.isArray(data) && data.meta) ? data.meta : { map_name: 'Unknown', server_name: '' };
     
     const EVENT_PRIORITY: Record<string, number> = {
@@ -45,6 +47,95 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         const pB = EVENT_PRIORITY[b.event_name] || 99;
         return pA - pB;
     });
+
+    // --- PRE-FILTER: Remove Knife Rounds ---
+    // A knife round is defined as a round with NO weapon purchases, >0 kills, and ALL kills are knife kills.
+    {
+        let currentRoundStart = -1;
+        let purchases = 0;
+        let knifeKills = 0;
+        let otherKills = 0;
+        let roundEvents: any[] = [];
+        const validEvents: any[] = [];
+        
+        let matchStarted = !events.some(e => e.event_name === 'round_announce_match_start');
+
+        for (const e of events) {
+            if (e.event_name === 'round_announce_match_start') {
+                matchStarted = true;
+                // Flush previous events as valid (warmup)
+                validEvents.push(...roundEvents);
+                roundEvents = [];
+                currentRoundStart = -1;
+                purchases = 0;
+                knifeKills = 0;
+                otherKills = 0;
+                validEvents.push(e);
+                continue;
+            }
+
+            if (!matchStarted) {
+                validEvents.push(e);
+                continue;
+            }
+
+            if (e.event_name === 'round_start') {
+                // Evaluate previous round
+                if (currentRoundStart !== -1) {
+                    const isKnifeRound = knifeKills > 0 && otherKills === 0;
+                    if (!isKnifeRound) {
+                        validEvents.push(...roundEvents);
+                    } else {
+                        console.log(`[Parser] Filtered out Knife Round (Start Tick: ${currentRoundStart})`);
+                        // Preserve important structural events that might have occurred during the knife round
+                        const importantEvents = roundEvents.filter(ev => 
+                            ev.event_name === 'round_announce_match_start' || 
+                            ev.event_name === 'cs_win_panel_match'
+                        );
+                        validEvents.push(...importantEvents);
+                    }
+                }
+                roundEvents = [e];
+                currentRoundStart = e.tick;
+                knifeKills = 0;
+                otherKills = 0;
+            } else {
+                if (currentRoundStart !== -1) {
+                    roundEvents.push(e);
+                    if (e.event_name === 'player_death') {
+                        const weapon = String(e.weapon || '').toLowerCase();
+                        const isKnife = weapon.includes('knife') || weapon.includes('bayonet') || weapon === 'melee';
+                        const isWorldOrNade = !weapon || weapon === 'world' || weapon === 'worldspawn' || weapon === 'trigger_hurt' || weapon === 'inferno' || weapon === 'suicide' || weapon.includes('grenade') || weapon.includes('flashbang') || weapon.includes('decoy');
+                        
+                        if (isKnife) {
+                            knifeKills++;
+                        } else if (!isWorldOrNade) {
+                            otherKills++;
+                        }
+                    }
+                } else {
+                    validEvents.push(e);
+                }
+            }
+        }
+        
+        // Evaluate last round
+        if (currentRoundStart !== -1) {
+            const isKnifeRound = knifeKills > 0 && otherKills === 0;
+            if (!isKnifeRound) {
+                validEvents.push(...roundEvents);
+            } else {
+                console.log(`[Parser] Filtered out Knife Round (Start Tick: ${currentRoundStart})`);
+                const importantEvents = roundEvents.filter(ev => 
+                    ev.event_name === 'round_announce_match_start' || 
+                    ev.event_name === 'cs_win_panel_match'
+                );
+                validEvents.push(...importantEvents);
+            }
+        }
+        
+        events = validEvents;
+    }
 
     // --- PHASE 5.5: Pre-Analyze Round Results (Retrospective Logic) ---
     const roundResults = new Map<number, { winner: 'T' | 'CT', reason: number, endTick: number, defuserSid?: string, defuseTick?: number }>();
@@ -719,6 +810,23 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             return false;
         };
 
+        // FIX: Ignore garbage time events in switch-side rounds or the last round
+        // This prevents post-round deaths from affecting Rating, KAST, DPR, etc.
+        if (isSwitchSideRound(currentRound) || currentRound === lastRound) {
+            const roundResult = roundResults.get(currentRound);
+            if (roundResult && tick > roundResult.endTick) {
+                const ignoredTypes = [
+                    'player_death', 'player_hurt', 'player_blind', 'weapon_fire',
+                    'hegrenade_detonate', 'flashbang_detonate', 'smokegrenade_detonate', 
+                    'molotov_detonate', 'decoy_detonate', 'inferno_startburn', 
+                    'inferno_expire', 'inferno_extinguish', 'bomb_planted', 'bomb_defused', 'bomb_exploded'
+                ];
+                if (ignoredTypes.includes(type)) {
+                    continue;
+                }
+            }
+        }
+
         if (type === 'round_start' || type === 'round_freeze_end') {
             hasRoundStartSeen = true; // Confirmed round start
             if (pendingRoundEnd) {
@@ -962,16 +1070,6 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             }
         }
         else if (type === 'player_death') {
-            // FIX: Ignore post-round deaths in switch-side rounds (12, 24, 27, 30...) OR the last round
-            // These are "garbage time" kills that shouldn't count for stats or RTG
-            if (isSwitchSideRound(currentRound) || currentRound === lastRound) {
-                const roundResult = roundResults.get(currentRound);
-                if (roundResult && tick > roundResult.endTick) {
-                    // console.log(`[Parser] Ignoring post-round death in switch/last round ${currentRound} (Tick: ${tick} > ${roundResult.endTick})`);
-                    continue;
-                }
-            }
-
             const vic = normalizeSteamId(e.user_steamid);
             const att = normalizeSteamId(e.attacker_steamid);
             const ast = normalizeSteamId(e.assister_steamid);
@@ -1089,14 +1187,6 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             }
         }
         else if (type === 'player_hurt') {
-            // FIX: Ignore post-round damage in switch-side rounds OR the last round
-            if (isSwitchSideRound(currentRound) || currentRound === lastRound) {
-                const roundResult = roundResults.get(currentRound);
-                if (roundResult && tick > roundResult.endTick) {
-                    continue;
-                }
-            }
-
             const att = normalizeSteamId(e.attacker_steamid);
             const vic = normalizeSteamId(e.user_steamid);
             const rawDmg = parseInt(e.dmg_health || 0);
@@ -1240,7 +1330,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
 
         if (stats.kills === 0 && stats.deaths === 0 && stats.assists === 0 && stats.total_damage === 0 && stats.utility_count === 0) return;
         
-        const isRosterByName = ROSTER.some(r => r.id === stats.playerId);
+        const isRosterByName = getAllPlayers().some(r => r.id === stats.playerId);
 
         if (teammateSteamIds.has(sid) || isRosterByName) ourPlayers.push(stats);
         else enemyPlayers.push(stats);
@@ -1272,7 +1362,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         players: ourPlayers,
         enemyPlayers: enemyPlayers,
         rounds: matchRounds,
-        parserVersion: '1.1.4',
+        parserVersion: CURRENT_PARSER_VERSION,
         rawDemoJson: data
     };
 };

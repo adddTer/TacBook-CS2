@@ -7,6 +7,7 @@ import { normalizeSteamId } from "../demo/helpers";
 import type { RoundContext } from "./ratingTypes"; // Changed from ./types
 import { getExpectedWinRate } from "./economy";
 import { calculateRoundRating } from "./rating/formula";
+import { DISPLAY_NAME_TO_ID } from "./constants";
 
 export type { RoundContext }; 
 
@@ -18,13 +19,16 @@ export class RatingEngine {
     private roundStats = new Map<string, RoundContext>();
     private recentDeaths: { victim: string, killer: string, tick: number }[] = [];
     
-    // AttackerID -> VictimID -> DamageDealt
-    private damageGraph = new Map<string, Map<string, number>>();
+    // AttackerID -> VictimID -> { raw: number, weighted: number }
+    private damageGraph = new Map<string, Map<string, { raw: number, weighted: number }>>();
     private firstKillHappened = false;
     private roundStartTick = 0;
     
     // Accumulators: SteamID -> { sumRating, rounds, impactSum, sumWPA }
     private playerRatings = new Map<string, { sumRating: number, rounds: number, impactSum: number, sumWPA: number }>();
+
+    // Drop Pool for tracking weapon trades
+    private dropPool: { item: string, dropperSid: string, team: 'T' | 'CT', tick: number }[] = [];
 
     // FIX: Accumulative Roster Cache to handle empty Round 1 inputs
     private knownRoundTs = new Set<string>();
@@ -53,7 +57,8 @@ export class RatingEngine {
                 wpa: 0,
                 killShareRating: 0, // Init
                 survivalScore: 0.538, // Init to survived
-                botKills: 0 // Init
+                botKills: 0, // Init
+                wpaDetails: []
             });
         }
         return this.roundStats.get(sid)!;
@@ -97,9 +102,80 @@ export class RatingEngine {
         return normalized;
     }
 
+    private handleEquipmentChange(event: any, type: string, tick: number, aliveTs: Set<string>, aliveCTs: Set<string>, allRoundPlayers: Set<string>): WPAUpdate[] {
+        let rawSid = event.user_steamid;
+        if (!rawSid || rawSid === "0") rawSid = event.steamid;
+        const sid = this.resolvePlayerId(rawSid, allRoundPlayers);
+        if (sid === "BOT") return [];
+
+        let rawItem = event.item;
+        if ((!rawItem || rawItem === null) && event.item_name) {
+            rawItem = DISPLAY_NAME_TO_ID[event.item_name];
+        }
+        if (!rawItem || typeof rawItem !== 'string') return [];
+        const item = rawItem.replace("weapon_", "").replace("item_", "");
+
+        const team = this.knownRoundTs.has(sid) ? 'T' : (this.knownRoundCTs.has(sid) ? 'CT' : undefined);
+        if (!team) return [];
+
+        // 1. Calculate new equipment values
+        let tEquip = 0;
+        let ctEquip = 0;
+        aliveTs.forEach(id => tEquip += this.inventory.getCurrentValue(id));
+        aliveCTs.forEach(id => ctEquip += this.inventory.getCurrentValue(id));
+
+        // 2. Update WPA Engine
+        const updates = this.wpaEngine.updateEquipment(tEquip, ctEquip, Array.from(this.knownRoundTs), Array.from(this.knownRoundCTs));
+        
+        if (updates.length === 0) return [];
+
+        // 3. Process the update
+        const update = updates[0]; // Should be TEAM_DELTA
+        const totalPoints = update.delta;
+
+        let rewardSid = sid;
+        let finalUpdates: WPAUpdate[] = [];
+
+        if (type === 'item_drop') {
+            this.dropPool.push({ item, dropperSid: sid, team, tick });
+            const wpaChange = team === 'T' ? totalPoints : -totalPoints; 
+            finalUpdates.push({ sid, delta: wpaChange, reason: 'item_drop' });
+        } else if (type === 'item_pickup') {
+            let dropIdx = -1;
+            for (let i = this.dropPool.length - 1; i >= 0; i--) {
+                if (this.dropPool[i].item === item && this.dropPool[i].team === team) {
+                    dropIdx = i;
+                    break;
+                }
+            }
+            if (dropIdx !== -1) {
+                rewardSid = this.dropPool[dropIdx].dropperSid;
+                this.dropPool.splice(dropIdx, 1);
+            }
+            const wpaChange = team === 'T' ? totalPoints : -totalPoints; 
+            finalUpdates.push({ sid: rewardSid, delta: wpaChange, reason: 'item_pickup' });
+        } else if (type === 'item_purchase' || type === 'item_refund') {
+            const wpaChange = team === 'T' ? totalPoints : -totalPoints;
+            finalUpdates.push({ sid, delta: wpaChange, reason: type });
+        }
+
+        return finalUpdates;
+    }
+
     public handleDefuseStart(sid: string, hasKit: boolean) {
         // Delegate to WPA Engine
         this.wpaEngine.handleDefuseStart(sid, hasKit);
+    }
+
+    private commitWPAUpdates(updates: WPAUpdate[], tick: number) {
+        this.wpaEngine.commitUpdates(updates);
+        updates.forEach(u => {
+            if (u.sid !== 'TEAM_DELTA' && u.sid !== 'BOT' && u.sid !== '0') {
+                const stats = this.getRoundStats(u.sid);
+                if (!stats.wpaDetails) stats.wpaDetails = [];
+                stats.wpaDetails.push({ reason: u.reason || 'unknown', delta: u.delta, tick });
+            }
+        });
     }
 
     public getCurrentRatings(): Map<string, number> {
@@ -122,6 +198,7 @@ export class RatingEngine {
         this.firstKillHappened = false;
         this.knownRoundTs.clear();
         this.knownRoundCTs.clear();
+        this.dropPool = [];
         
         // FIX: Ensure WPA Engine is reset even if round_start is missing
         this.wpaEngine.startNewRound();
@@ -176,6 +253,9 @@ export class RatingEngine {
 
         if (['item_pickup', 'item_drop', 'item_purchase', 'item_refund'].includes(type)) {
             this.inventory.handleItemEvent(event);
+            const equipUpdates = this.handleEquipmentChange(event, type, tick, aliveTs, aliveCTs, allRoundPlayers);
+            eventUpdates.push(...equipUpdates);
+            this.commitWPAUpdates(equipUpdates, tick);
         }
 
         if (type === 'round_announce_match_start') {
@@ -294,7 +374,7 @@ export class RatingEngine {
                 tPlayers,
                 ctPlayers
             );
-            this.wpaEngine.commitUpdates(timeUpdates);
+            this.commitWPAUpdates(timeUpdates, tick);
         }
 
         const probAfterTime = this.wpaEngine.getCurrentWinProb();
@@ -327,7 +407,18 @@ export class RatingEngine {
             if (att !== "BOT" && vic !== "BOT" && att !== vic && att !== "0") {
                 if (!this.damageGraph.has(att)) this.damageGraph.set(att, new Map());
                 const vMap = this.damageGraph.get(att)!;
-                vMap.set(vic, (vMap.get(vic) || 0) + actualDmg);
+                
+                // Calculate E_damage at the time of damage
+                const vicValue = this.inventory.getCurrentValue(vic);
+                const attValue = this.inventory.getCurrentValue(att);
+                const pExpAttacker = getExpectedWinRate(attValue, vicValue, attSide || 'T', !!isFriendlyFire, false);
+                const E_damage = 0.5 / pExpAttacker;
+                
+                const existing = vMap.get(vic) || { raw: 0, weighted: 0 };
+                existing.raw += actualDmg;
+                // Friendly fire does not apply economic multiplier (E=1.0)
+                existing.weighted += actualDmg * (isFriendlyFire ? 1.0 : E_damage);
+                vMap.set(vic, existing);
             }
 
             if (!isFriendlyFire) {
@@ -343,7 +434,7 @@ export class RatingEngine {
                             tPlayers, ctPlayers
                         );
                         eventUpdates.push(...wpaUpdates);
-                        this.wpaEngine.commitUpdates(wpaUpdates);
+                        this.commitWPAUpdates(wpaUpdates, tick);
                     }
                 }
             } else {
@@ -355,7 +446,7 @@ export class RatingEngine {
                             tPlayers, ctPlayers
                         );
                         eventUpdates.push(...wpaUpdates);
-                        this.wpaEngine.commitUpdates(wpaUpdates);
+                        this.commitWPAUpdates(wpaUpdates, tick);
                     }
                 }
             }
@@ -382,7 +473,7 @@ export class RatingEngine {
                 isPlant ? activeKits : undefined
             );
             eventUpdates.push(...wpaUpdates);
-            this.wpaEngine.commitUpdates(wpaUpdates);
+            this.commitWPAUpdates(wpaUpdates, tick);
         }
 
         if (type === 'bomb_exploded') {
@@ -390,7 +481,7 @@ export class RatingEngine {
                 timeElapsed, tPlayers, ctPlayers
             );
             eventUpdates.push(...wpaUpdates);
-            this.wpaEngine.commitUpdates(wpaUpdates);
+            this.commitWPAUpdates(wpaUpdates, tick);
         }
 
         if (type === 'player_death') {
@@ -402,6 +493,9 @@ export class RatingEngine {
             const vic = this.resolvePlayerId(rawVic, allRoundPlayers);
             const ast = this.resolvePlayerId(rawAst, allRoundPlayers);
             
+            // Remove death drops from dropPool (to prevent them from being counted as voluntary teammate trades)
+            this.dropPool = this.dropPool.filter(d => !(d.dropperSid === vic && d.tick === tick));
+
             // [Bug Fix] Check if victim had kit BEFORE clearing inventory
             const hasKit = this.inventory.hasKit(vic);
 
@@ -525,7 +619,7 @@ export class RatingEngine {
                 const contributorSides = new Map<string, 'T' | 'CT'>();
                 this.damageGraph.forEach((victimMap, attackerSid) => {
                     if (victimMap.has(vic)) {
-                        damageContributors.set(attackerSid, victimMap.get(vic)!);
+                        damageContributors.set(attackerSid, victimMap.get(vic)!.raw);
                         const side = this.knownRoundTs.has(attackerSid) ? 'T' : (this.knownRoundCTs.has(attackerSid) ? 'CT' : undefined);
                         if (side) contributorSides.set(attackerSid, side);
                     }
@@ -560,7 +654,7 @@ export class RatingEngine {
                         tradeCompensation // NEW
                     );
                     eventUpdates.push(...updates);
-                    this.wpaEngine.commitUpdates(updates);
+                    this.commitWPAUpdates(updates, tick);
                 }
             } else {
                 // Warn only if we really couldn't figure it out
@@ -610,16 +704,16 @@ export class RatingEngine {
                     const V_rem = 1.0 - C_t_total;
 
                     // Calculate Total Damage Weight
-                    let totalWeight = 0;
-                    const contributors: { sid: string, weight: number, isFlash: boolean, side?: 'T' | 'CT' }[] = [];
+                    let totalRawDamage = 0;
+                    const contributors: { sid: string, rawDamage: number, weightedDamage: number, isFlash: boolean, side?: 'T' | 'CT' }[] = [];
 
                     // 1. Damage Contributors
                     this.damageGraph.forEach((victimMap, attackerSid) => {
                         if (victimMap.has(vic)) {
                             const contributorSide = this.knownRoundTs.has(attackerSid) ? 'T' : (this.knownRoundCTs.has(attackerSid) ? 'CT' : undefined);
-                            const dmg = victimMap.get(vic)!;
-                            contributors.push({ sid: attackerSid, weight: dmg, isFlash: false, side: contributorSide });
-                            totalWeight += dmg;
+                            const dmgData = victimMap.get(vic)!;
+                            contributors.push({ sid: attackerSid, rawDamage: dmgData.raw, weightedDamage: dmgData.weighted, isFlash: false, side: contributorSide });
+                            totalRawDamage += dmgData.raw;
                         }
                     });
 
@@ -627,30 +721,39 @@ export class RatingEngine {
                     if (ast && ast !== "BOT" && ast !== "0" && event.assistedflash) {
                         const astSide = this.knownRoundTs.has(ast) ? 'T' : (this.knownRoundCTs.has(ast) ? 'CT' : undefined);
                         const FLASH_WEIGHT = 30;
-                        contributors.push({ sid: ast, weight: FLASH_WEIGHT, isFlash: true, side: astSide });
-                        totalWeight += FLASH_WEIGHT;
+                        contributors.push({ sid: ast, rawDamage: FLASH_WEIGHT, weightedDamage: FLASH_WEIGHT, isFlash: true, side: astSide });
+                        totalRawDamage += FLASH_WEIGHT;
                     }
 
                     let totalPenalty = 0;
 
                     // Distribute Shares
-                    if (totalWeight > 0) {
+                    if (totalRawDamage > 0) {
                         // Fixed Share to Killer
                         const attStats = this.getRoundStats(att);
-                        const killerShare = (V_rem * FIXED_SHARE * E);
+                        const killerE = isFriendlyKill ? 1.0 : E;
+                        const killerShare = (V_rem * FIXED_SHARE * killerE);
                         attStats.killShareRating += killerShare * multiplier;
                         if (isFriendlyKill) totalPenalty += killerShare;
 
                         // Damage/Flash Share to Contributors
                         const assistPool = V_rem * DAMAGE_SHARE;
                         contributors.forEach(c => {
-                            const shareRatio = c.weight / totalWeight;
+                            // 权重始终基于原始伤害
+                            const shareRatio = c.rawDamage / totalRawDamage; 
+                            // 基础奖励
+                            const baseShare = shareRatio * assistPool; 
+                            
                             const pStats = this.getRoundStats(c.sid);
                             let share = 0;
+                            
                             if (c.isFlash) {
-                                share = (shareRatio * assistPool * 1.0); // Flash doesn't use E
+                                share = baseShare * 1.0; // 闪光助攻不适用经济修正
                             } else {
-                                share = (shareRatio * assistPool * E); // Damage uses E
+                                // 提取该玩家造成伤害时的平均经济系数
+                                const E_avg = c.weightedDamage / c.rawDamage; 
+                                // 最终奖励乘上经济系数
+                                share = baseShare * E_avg; 
                             }
                             
                             // If contributor is on the victim's team, they get a penalty (negative share)
@@ -665,7 +768,8 @@ export class RatingEngine {
                     } else {
                         // Fallback: If no damage recorded, killer takes all
                         const attStats = this.getRoundStats(att);
-                        const fallbackShare = (V_rem * E);
+                        const killerE = isFriendlyKill ? 1.0 : E;
+                        const fallbackShare = (V_rem * killerE);
                         attStats.killShareRating += fallbackShare * multiplier;
                         if (isFriendlyKill) totalPenalty += fallbackShare;
                     }
@@ -760,7 +864,7 @@ export class RatingEngine {
 
         // 1. WPA Round Closure (Distribute remaining probability symmetrically to ALL players)
         const closureUpdates = this.wpaEngine.finalizeRound(winnerSide, finalTs, finalCTs);
-        this.wpaEngine.commitUpdates(closureUpdates);
+        this.commitWPAUpdates(closureUpdates, 0); // Use 0 for end of round tick
 
         // 2. Inventory Snapshots
         this.inventory.snapshotRoundEnd(activeSteamIds);

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PlayerMatchStats, ClutchRecord, MultiKillBreakdown } from '../../types';
-import { ROSTER } from '../../constants/roster';
+import { getAllPlayers } from '../../utils/teamLoader';
 import { getRatingColorClass } from './ReviewShared';
 import { resolveName } from '../../utils/demo/helpers';
 import { ArrowUp, ArrowDown } from 'lucide-react';
@@ -165,7 +165,7 @@ export const ScoreboardTable: React.FC<ScoreboardTableProps> = ({
                         const kdDiff = p.kills - p.deaths;
                         // Resolve roster ID if possible, otherwise use playerId (which is name) or steamid
                         const rosterId = p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
-                        const isRosterMember = ROSTER.some(r => r.id === rosterId);
+                        const isRosterMember = getAllPlayers().some(r => r.id === rosterId);
                         const ratingColor = getRatingColorClass(p.rating, 'text');
                         
                         const multiKills = p.multikills || { k2: 0, k3: 0, k4: 0, k5: 0 };

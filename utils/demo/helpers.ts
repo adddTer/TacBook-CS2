@@ -1,5 +1,5 @@
 
-import { ROSTER } from "../../constants/roster";
+import { getAllPlayers } from '../teamLoader';
 
 export const normalizeSteamId = (id: string | number | null | undefined): string => {
     if (id === null || id === undefined || id === 0 || id === "0" || id === "BOT") return "BOT";
@@ -34,7 +34,7 @@ export const resolveName = (rawName: string | null | undefined): string => {
     if (!rawName) return "Unknown";
     const clean = String(rawName).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     
-    const rosterMatch = ROSTER.find(r => {
+    const rosterMatch = getAllPlayers().find(r => {
         if (r.id === clean || r.name === clean) return true;
         
         let isMatch = r.steamids?.includes(clean) || 

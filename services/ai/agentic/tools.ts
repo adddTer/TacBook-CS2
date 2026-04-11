@@ -7,9 +7,8 @@ export const toolDeclarations: FunctionDeclaration[] = [
         parameters: {
             type: Type.OBJECT,
             properties: {
-                message: { type: Type.STRING, description: "最终回复给用户的消息" }
-            },
-            required: ["message"]
+                message: { type: Type.STRING, description: "（可选）结束语或最终总结" }
+            }
         }
     },
     {
@@ -114,6 +113,18 @@ export const toolDeclarations: FunctionDeclaration[] = [
         }
     },
     {
+        name: "query_player_matches",
+        description: "查询指定选手参与的所有比赛记录。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                playerId: { type: Type.STRING, description: "选手ID" },
+                steamid: { type: Type.STRING, description: "SteamID" },
+                limit: { type: Type.NUMBER, description: "返回的比赛数量限制 (默认 10)" }
+            }
+        }
+    },
+    {
         name: "query_tournaments",
         description: "查询赛事列表。"
     },
@@ -154,6 +165,41 @@ export const toolDeclarations: FunctionDeclaration[] = [
                 endDate: { type: Type.STRING, description: "结束日期 (YYYY-MM-DD)" }
             }
         }
+    },
+    {
+        name: "run_data_analysis",
+        description: "执行 JavaScript 代码进行高级数据分析、统计、查询与筛选。你可以访问全局变量 `db`，它包含 { matches, tactics, utilities, tournaments, bons }。代码必须返回一个值（例如通过 return 语句）。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                code: { type: Type.STRING, description: "要执行的 JavaScript 代码。例如: `return db.matches.filter(m => m.mapId === 'mirage').length;`" }
+            },
+            required: ["code"]
+        }
+    },
+    {
+        name: "update_database_item",
+        description: "更新或创建数据库中的项目（战术、道具、比赛等）。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                collection: { type: Type.STRING, description: "集合名称 ('tactics', 'utilities', 'matches')" },
+                item: { type: Type.OBJECT, description: "要更新或创建的完整项目对象。必须包含 id。" }
+            },
+            required: ["collection", "item"]
+        }
+    },
+    {
+        name: "delete_database_item",
+        description: "删除数据库中的项目。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                collection: { type: Type.STRING, description: "集合名称 ('tactics', 'utilities', 'matches')" },
+                id: { type: Type.STRING, description: "要删除的项目 ID" }
+            },
+            required: ["collection", "id"]
+        }
     }
 ];
 
@@ -166,7 +212,13 @@ export const createToolHandlers = (context: {
     allBons?: any[],
     threadMemory: Record<string, any>,
     updateMemory: (key: string, value: any) => void,
-    isAdmin?: boolean
+    isAdmin?: boolean,
+    onSaveTactic?: (tactic: any) => Promise<void> | void,
+    onSaveUtility?: (utility: any) => Promise<void> | void,
+    onSaveMatch?: (match: any) => Promise<void> | void,
+    onDeleteTactic?: (tactic: any) => Promise<void> | void,
+    onDeleteUtility?: (utility: any) => Promise<void> | void,
+    onDeleteMatch?: (match: any) => Promise<void> | void
 }) => {
     const checkPermission = (action: string) => {
         if (!context.isAdmin) {
@@ -251,6 +303,31 @@ export const createToolHandlers = (context: {
                 recentMatches: playerStats.slice(-5)
             };
         },
+        query_player_matches: async ({ playerId, steamid, limit = 10 }: { playerId?: string, steamid?: string, limit?: number }) => {
+            const matches = context.allMatches;
+            const playerMatches: any[] = [];
+            
+            matches.forEach(m => {
+                const p = m.players.find((ps: any) => ps.playerId === playerId || ps.steamid === steamid);
+                if (p) {
+                    playerMatches.push({
+                        matchId: m.id,
+                        date: m.date,
+                        mapId: m.mapId,
+                        result: m.result,
+                        score: m.score,
+                        kills: p.kills,
+                        deaths: p.deaths,
+                        rating: p.rating
+                    });
+                }
+            });
+            
+            // Sort by date descending
+            playerMatches.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            return playerMatches.slice(0, limit);
+        },
         query_team_stats: async ({ teamName = 'us' }: { teamName?: string }) => {
             const matches = context.allMatches;
             const wins = matches.filter(m => m.result === 'WIN').length;
@@ -305,6 +382,70 @@ export const createToolHandlers = (context: {
         },
         query_series: async () => {
             return context.allBons || [];
+        },
+        run_data_analysis: async ({ code }: { code: string }) => {
+            try {
+                // Create a safe-ish environment with access to db
+                const db = {
+                    matches: context.allMatches || [],
+                    tactics: context.allTactics || [],
+                    utilities: context.allUtilities || [],
+                    tournaments: context.allTournaments || [],
+                    bons: context.allBons || []
+                };
+                // We use new Function to execute the code. 
+                // Wrap in an async IIFE to support await inside the code if needed.
+                const fn = new Function('db', `return (async () => { ${code} })();`);
+                const result = await fn(db);
+                return { result };
+            } catch (e: any) {
+                return { error: `执行代码时出错: ${e.message}\n请检查代码语法或逻辑。` };
+            }
+        },
+        update_database_item: async ({ collection, item }: { collection: string, item: any }) => {
+            checkPermission("修改数据库");
+            if (!item || !item.id) return { error: "项目必须包含 id" };
+            
+            try {
+                if (collection === 'tactics' && context.onSaveTactic) {
+                    await context.onSaveTactic(item);
+                    return { status: "success", message: `已更新战术: ${item.id}` };
+                } else if (collection === 'utilities' && context.onSaveUtility) {
+                    await context.onSaveUtility(item);
+                    return { status: "success", message: `已更新道具: ${item.id}` };
+                } else if (collection === 'matches' && context.onSaveMatch) {
+                    await context.onSaveMatch(item);
+                    return { status: "success", message: `已更新比赛: ${item.id}` };
+                }
+                return { error: `不支持的集合或未提供保存回调: ${collection}` };
+            } catch (e: any) {
+                return { error: `保存失败: ${e.message}` };
+            }
+        },
+        delete_database_item: async ({ collection, id }: { collection: string, id: string }) => {
+            checkPermission("删除数据库项目");
+            
+            try {
+                if (collection === 'tactics' && context.onDeleteTactic) {
+                    const item = context.allTactics.find(t => t.id === id);
+                    if (!item) return { error: "未找到该项目" };
+                    await context.onDeleteTactic(item);
+                    return { status: "success", message: `已删除战术: ${id}` };
+                } else if (collection === 'utilities' && context.onDeleteUtility) {
+                    const item = context.allUtilities.find(u => u.id === id);
+                    if (!item) return { error: "未找到该项目" };
+                    await context.onDeleteUtility(item);
+                    return { status: "success", message: `已删除道具: ${id}` };
+                } else if (collection === 'matches' && context.onDeleteMatch) {
+                    const item = context.allMatches.find(m => m.id === id);
+                    if (!item) return { error: "未找到该项目" };
+                    await context.onDeleteMatch(item);
+                    return { status: "success", message: `已删除比赛: ${id}` };
+                }
+                return { error: `不支持的集合或未提供删除回调: ${collection}` };
+            } catch (e: any) {
+                return { error: `删除失败: ${e.message}` };
+            }
         }
     };
 };

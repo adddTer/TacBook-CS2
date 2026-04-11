@@ -4,7 +4,7 @@ import { Match, PlayerMatchStats, ClutchRecord, MultiKillBreakdown } from '../..
 import { calculatePlayerStats } from '../../../utils/analytics/playerStatsCalculator';
 import { identifyRole } from '../../../utils/analytics/roleIdentifier';
 import { resolveName } from '../../../utils/demo/helpers';
-import { ROSTER } from '../../../constants/roster';
+import { getAllPlayers } from '../../../utils/teamLoader';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 
 interface DataPopupCellProps {
@@ -172,7 +172,7 @@ const PerformanceTable: React.FC<PerformanceTableProps> = ({ playersData, title,
                     {sortedPlayers.map((data, idx) => {
                         const p = data.player;
                         const rosterId = p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId);
-                        const isRosterMember = ROSTER.some(r => r.id === rosterId);
+                        const isRosterMember = getAllPlayers().some(r => r.id === rosterId);
                         const displayName = isRosterMember ? rosterId : p.playerId;
                         
                         const popupAlign = idx >= sortedPlayers.length - 2 ? 'top' : 'bottom';

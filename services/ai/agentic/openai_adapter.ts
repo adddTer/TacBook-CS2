@@ -57,8 +57,8 @@ export function convertGeminiHistoryToOpenAI(apiHistory: Content[]) {
             const textParts = msg.parts?.filter(p => p.text);
             
             let contentText = textParts?.map(p => p.text || '').join('\n') || '';
-            // Strip <think>...</think> tags from the prompt
-            contentText = contentText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            // Do not strip <think> tags here, so the model can remember its reasoning across tool calls.
+            // DeepSeek relies on seeing its past reasoning to avoid repeating itself.
 
             const message: any = {
                 role: 'assistant',

@@ -1,12 +1,15 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Match, ContentGroup, PlayerMatchStats, Tournament, MatchBon } from '../types';
-import { ROSTER } from '../constants/roster';
+import { getAllPlayers } from '../utils/teamLoader';
 import { resolveName } from '../utils/demo/helpers';
 import { MatchAggregator } from '../utils/analytics/matchAggregator';
-import { getMapDisplayName, getMapEnName, isMyTeamMatch } from '../utils/matchHelpers';
+import { getMapDisplayName, getMapEnName, isMyTeamMatch, getTeamNames } from '../utils/matchHelpers';
+import { CURRENT_PARSER_VERSION } from '../utils/demoParser';
 import { MatchList } from './review/MatchList';
+import { TeamList } from './review/TeamList';
 import { PlayerList } from './review/PlayerList';
+import { TeamProfile } from '../types';
 import { MatchDetail } from './review/MatchDetail';
 import { PlayerDetail } from './review/PlayerDetail';
 import { TournamentView } from './tournament/TournamentView';
@@ -66,6 +69,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     const [initialBonMatches, setInitialBonMatches] = useState<Match[]>([]);
     const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+    const [selectedTeam, setSelectedTeam] = useState<TeamProfile | null>(null);
     
     // Navigation History
     const [historyStack, setHistoryStack] = useState<string[]>([]);
@@ -75,7 +79,6 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     // Check for parser updates
     useEffect(() => {
-        const CURRENT_PARSER_VERSION = '1.1.4';
         const autoUpdate = safeStorage.getItem('autoUpdateMatches') !== 'false';
         
         if (!autoUpdate || isUpdatingRef.current) return;
@@ -111,9 +114,6 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                     updatedMatch.date = match.date; // Keep original date
                     updatedMatch.parserVersion = CURRENT_PARSER_VERSION;
                     
-                    // Improve performance by deleting the raw demo JSON after re-parsing
-                    delete updatedMatch.rawDemoJson;
-                    
                     onSaveMatch(updatedMatch, match.groupId || 'local');
                 } catch (e) {
                     console.error(`Failed to re-parse match ${match.id}`, e);
@@ -138,7 +138,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     // Modals
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-    const [pendingImportFiles, setPendingImportFiles] = useState<FileList | null>(null);
+    const [pendingImportFiles, setPendingImportFiles] = useState<File[] | null>(null);
 
     const [parseErrors, setParseErrors] = useState<ParseError[]>([]);
     const [showDebugger, setShowDebugger] = useState(false);
@@ -183,7 +183,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
     // --- Helper: Get Roster Count ---
     const getRosterCount = (players: any[]) => {
-        const rosterIds = new Set(ROSTER.map(r => r.id));
+        const rosterIds = new Set(getAllPlayers().map(r => r.id));
         let count = 0;
         players.forEach(p => {
             const resolved = resolveName(p.playerId);
@@ -267,6 +267,11 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             // Server
             if (m.serverName && m.serverName.toLowerCase().includes(q)) return true;
 
+            // Team Names
+            const { teamA, teamB } = getTeamNames(m);
+            if (teamA.toLowerCase().includes(q)) return true;
+            if (teamB.toLowerCase().includes(q)) return true;
+
             // Score (13:11)
             const scoreRegex = /^(\d+)\s*[:：]\s*(\d+)$/;
             const scoreMatch = q.match(scoreRegex);
@@ -335,7 +340,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         const statsMap = new Map(aggregated.map(p => [p.playerId, p]));
         const steamMap = new Map(aggregated.filter(p => p.steamid).map(p => [p.steamid!, p]));
 
-        return ROSTER.map(player => {
+        return getAllPlayers().map(player => {
             const p = statsMap.get(player.id) || steamMap.get(player.id);
             
             if (!p) {
@@ -383,6 +388,11 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         setSelectedPlayerId(resolved);
     };
 
+    const handleTeamClick = (team: TeamProfile) => {
+        pushCurrentStateToHistory();
+        setSelectedTeam(team);
+    };
+
     const handleMatchClick = (match: Match) => {
         pushCurrentStateToHistory();
         setSelectedPlayerId(null);
@@ -393,6 +403,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         setActiveTab(tab);
         setSelectedMatch(null);
         setSelectedPlayerId(null);
+        setSelectedTeam(null);
         setHistoryStack([]);
     };
 
@@ -401,6 +412,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             // Fallback: Return to main interface
             setSelectedMatch(null);
             setSelectedPlayerId(null);
+            setSelectedTeam(null);
             window.location.hash = 'weapons';
             return;
         }
@@ -412,6 +424,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             // Fallback: Return to main interface
             setSelectedMatch(null);
             setSelectedPlayerId(null);
+            setSelectedTeam(null);
             window.location.hash = 'weapons';
             return;
         }
@@ -421,6 +434,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         // Reset all selection states first
         setSelectedMatch(null);
         setSelectedPlayerId(null);
+        setSelectedTeam(null);
         
         // Apply state from history
         let found = false;
@@ -430,6 +444,11 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         }
         else if (type === 'player') {
             setSelectedPlayerId(id);
+            found = true;
+        }
+        else if (type === 'team') {
+            // We would need to find the team by ID. For now, just go back to the tab.
+            setActiveTab('players');
             found = true;
         }
         else if (type === 'tab') {
@@ -444,16 +463,56 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         }
     };
 
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
+        // Reset input value so the same file/folder can be selected again
+        const target = e.target;
+        
         if (writableGroups.length === 0) {
             alert("请先新建一个战术包用于保存比赛数据。");
+            target.value = '';
             return;
         }
 
-        setPendingImportFiles(files);
+        setLoadingState({ isVisible: true, message: '正在读取文件...' });
+        
+        let extractedFiles: File[] = [];
+        
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if (file.name.endsWith('.zip')) {
+                try {
+                    const JSZip = (await import('jszip')).default;
+                    const zip = new JSZip();
+                    const loadedZip = await zip.loadAsync(file);
+                    
+                    for (const relativePath in loadedZip.files) {
+                        const zipEntry = loadedZip.files[relativePath];
+                        if (!zipEntry.dir && relativePath.endsWith('.json')) {
+                            const blob = await zipEntry.async('blob');
+                            const extractedFile = new File([blob], zipEntry.name, { type: 'application/json', lastModified: file.lastModified });
+                            extractedFiles.push(extractedFile);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Failed to read zip file", err);
+                }
+            } else if (file.name.endsWith('.json')) {
+                extractedFiles.push(file);
+            }
+        }
+
+        setLoadingState({ isVisible: false, message: '' });
+        target.value = '';
+
+        if (extractedFiles.length === 0) {
+            alert("未找到可用的 .json 文件。");
+            return;
+        }
+
+        setPendingImportFiles(extractedFiles);
         setIsImportModalOpen(true);
     };
 
@@ -517,13 +576,11 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         
         if (errors.length > 0) setParseErrors(errors);
         setPendingImportFiles(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const handleImportCancel = () => {
         setIsImportModalOpen(false);
         setPendingImportFiles(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const handleBatchDelete = (items: { type: 'match', id: string }[]) => {
@@ -564,8 +621,9 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             .filter(m => [...m.players, ...m.enemyPlayers].some(px => resolveName(px.playerId) === selectedPlayerId || resolveName(px.steamid) === selectedPlayerId))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .map(m => {
-                const stats = [...m.players, ...m.enemyPlayers].find(px => resolveName(px.playerId) === selectedPlayerId || resolveName(px.steamid) === selectedPlayerId)!;
-                return { match: m, stats };
+                const rawStats = [...m.players, ...m.enemyPlayers].find(px => resolveName(px.playerId) === selectedPlayerId || resolveName(px.steamid) === selectedPlayerId)!;
+                const aggregatedStats = MatchAggregator.aggregateMatchBySide(m, [rawStats], 'ALL')[0];
+                return { match: m, stats: aggregatedStats };
             });
 
         const fullStats = calculatePlayerStats(selectedPlayerId, history, 'ALL');
@@ -575,7 +633,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             id: selectedPlayerId,
             name: p.steamid && resolveName(p.steamid) !== p.steamid ? resolveName(p.steamid) : resolveName(p.playerId),
             role: dynamicRole.name,
-            roleType: ROSTER.find(r => r.id === selectedPlayerId) ? 'Member' : 'Guest',
+            roleType: getAllPlayers().find(r => r.id === selectedPlayerId) ? 'Member' : 'Guest',
             steamid: p.steamid,
             matches: (p as any).matchesPlayed || 0,
             currentRank: p.rank || '?',
@@ -637,6 +695,31 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         );
     }
 
+    if (selectedTeam) {
+        // Filter playerStats to only include players in the selected team
+        const teamPlayerStats = playerStats.filter(p => selectedTeam.players.some(tp => tp.id === p.id));
+        return (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
+                <div className="flex items-center gap-4 mb-6">
+                    <button 
+                        onClick={handleBack}
+                        className="w-10 h-10 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl flex items-center justify-center text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors shadow-sm"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                    </button>
+                    <div>
+                        <h2 className="text-2xl font-black text-neutral-900 dark:text-white">{selectedTeam.name}</h2>
+                        <div className="text-sm text-neutral-500">{selectedTeam.type === 'user' ? '用户队伍' : '职业队伍'} · {selectedTeam.players.length} 名队员</div>
+                    </div>
+                </div>
+                <PlayerList 
+                    playerStats={teamPlayerStats} 
+                    onSelectPlayer={handlePlayerClick} 
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
             <LoadingOverlay 
@@ -671,7 +754,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                         onClick={() => handleTabChange('players')}
                         className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'players' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}
                     >
-                        队员
+                        队伍
                     </button>
                     <button
                         onClick={() => handleTabChange('leaderboard')}
@@ -748,9 +831,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
                             <svg className="w-5 h-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
                         </button>
                     )}
-                    <label className="w-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/20 cursor-pointer">
+                    <label className="w-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/20 cursor-pointer" title="导入文件/ZIP">
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                        <input type="file" className="hidden" accept=".json" multiple onChange={handleFileSelect} ref={fileInputRef} />
+                        <input type="file" className="hidden" accept=".json,.zip" multiple onChange={handleFileSelect} ref={fileInputRef} />
+                    </label>
+                    <label className="w-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-indigo-500/20 cursor-pointer" title="导入文件夹">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                        {/* @ts-ignore */}
+                        <input type="file" className="hidden" webkitdirectory="" directory="" multiple onChange={handleFileSelect} />
                     </label>
                 </div>
             </div>
@@ -775,11 +863,8 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
             {activeTab === 'tournaments' && (
                 <TournamentView
-                    allTournaments={allTournaments}
                     allMatches={allMatches}
                     writableGroups={writableGroups}
-                    onSaveTournament={onSaveTournament}
-                    onDeleteTournament={onDeleteTournament}
                     onSaveMatch={onSaveMatch}
                     onDeleteMatch={onDeleteMatch}
                     onSaveBon={onSaveBon}
@@ -800,29 +885,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
             {activeTab === 'players' && (
                 <div className="space-y-6">
-                    <div className="flex items-center gap-2 p-1 bg-neutral-100 dark:bg-neutral-800 rounded-xl w-fit">
-                        <button 
-                            onClick={() => setPlayersSubTab('list')}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${playersSubTab === 'list' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
-                        >
-                            队员列表
-                        </button>
-                        <button 
-                            onClick={() => setPlayersSubTab('history')}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${playersSubTab === 'history' ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
-                        >
-                            变动记录
-                        </button>
-                    </div>
-
-                    {playersSubTab === 'list' ? (
-                        <PlayerList 
-                            playerStats={playerStats} 
-                            onSelectPlayer={handlePlayerClick} 
-                        />
-                    ) : (
-                        <RosterTimelineView />
-                    )}
+                    <TeamList onSelectTeam={handleTeamClick} />
                 </div>
             )}
 

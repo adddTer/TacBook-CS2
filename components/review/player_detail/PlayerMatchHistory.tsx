@@ -19,17 +19,17 @@ export const PlayerMatchHistory: React.FC<PlayerMatchHistoryProps> = ({ history,
                     const kdDiff = stats.kills - stats.deaths;
 
                     // Calculate Result relative to this player
-                    const isPlayerOnMyTeam = isMyTeamMatch(match);
+                    const isPlayerInUs = match.players.some(p => p.playerId === stats.playerId || p.steamid === stats.steamid);
                     
                     let resultForPlayer = match.result;
                     if (match.result !== 'TIE') {
-                        if (!isPlayerOnMyTeam) {
+                        if (!isPlayerInUs) {
                             resultForPlayer = match.result === 'WIN' ? 'LOSS' : 'WIN';
                         }
                     }
 
-                    const scoreLeft = isPlayerOnMyTeam ? match.score.us : match.score.them;
-                    const scoreRight = isPlayerOnMyTeam ? match.score.them : match.score.us;
+                    const scoreLeft = isPlayerInUs ? match.score.us : match.score.them;
+                    const scoreRight = isPlayerInUs ? match.score.them : match.score.us;
                     
                     const winColor = resultForPlayer === 'WIN' ? 'text-green-600 dark:text-green-500' : resultForPlayer === 'LOSS' ? 'text-red-500' : 'text-yellow-500';
                     

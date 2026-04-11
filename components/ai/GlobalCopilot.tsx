@@ -14,9 +14,18 @@ interface GlobalCopilotProps {
     allMatches: any[];
     allTournaments: any[];
     allBons: any[];
+    onSaveTactic?: (tactic: any) => void;
+    onSaveUtility?: (utility: any) => void;
+    onSaveMatch?: (match: any) => void;
+    onDeleteTactic?: (tactic: any) => void;
+    onDeleteUtility?: (utility: any) => void;
+    onDeleteMatch?: (match: any) => void;
 }
 
-export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUtilities, allMatches, allTournaments, allBons }) => {
+export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ 
+    allTactics, allUtilities, allMatches, allTournaments, allBons,
+    onSaveTactic, onSaveUtility, onSaveMatch, onDeleteTactic, onDeleteUtility, onDeleteMatch
+}) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [showConfig, setShowConfig] = useState(false);
@@ -138,7 +147,13 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
             allMatches,
             allTournaments,
             allBons,
-            isAdmin // Use the current state
+            isAdmin, // Use the current state
+            onSaveTactic,
+            onSaveUtility,
+            onSaveMatch,
+            onDeleteTactic,
+            onDeleteUtility,
+            onDeleteMatch
         }, model, thinkingLevel);
 
         // Process Loop
@@ -497,11 +512,15 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                                                                 else if (tc.name === 'get_match_rounds') actionText = `获取了比赛回合数据 (${tc.args?.matchId || '未知'})`;
                                                                                 else if (tc.name === 'get_match_players') actionText = `获取了比赛选手数据 (${tc.args?.matchId || '未知'})`;
                                                                                 else if (tc.name === 'query_player_stats') actionText = `查询了玩家统计数据 (${tc.args?.playerId || tc.args?.steamid || '未知'})`;
+                                                                                else if (tc.name === 'query_player_matches') actionText = `查询了玩家比赛记录 (${tc.args?.playerId || tc.args?.steamid || '未知'})`;
                                                                                 else if (tc.name === 'query_tournaments') actionText = `查询了赛事列表`;
                                                                                 else if (tc.name === 'query_series') actionText = `查询了系列赛信息`;
                                                                                 else if (tc.name === 'query_team_stats') actionText = `查询了队伍统计数据 (${tc.args?.teamName || '未知'})`;
                                                                                 else if (tc.name === 'query_economy_data') actionText = `查询了经济数据`;
                                                                                 else if (tc.name === 'aggregate_player_stats') actionText = `聚合了玩家统计数据`;
+                                                                                else if (tc.name === 'run_data_analysis') actionText = `执行了数据分析脚本`;
+                                                                                else if (tc.name === 'update_database_item') actionText = `更新了数据库项目 (${tc.args?.collection || '未知'})`;
+                                                                                else if (tc.name === 'delete_database_item') actionText = `删除了数据库项目 (${tc.args?.collection || '未知'})`;
                                                                                 else if (tc.name === 'finish') actionText = `标记对话完成`;
 
                                                                                 return (
@@ -576,11 +595,15 @@ export const GlobalCopilot: React.FC<GlobalCopilotProps> = ({ allTactics, allUti
                                                                             else if (tc.name === 'get_match_rounds') actionText = `获取了比赛回合数据 (${tc.args?.matchId || '未知'})`;
                                                                             else if (tc.name === 'get_match_players') actionText = `获取了比赛选手数据 (${tc.args?.matchId || '未知'})`;
                                                                             else if (tc.name === 'query_player_stats') actionText = `查询了玩家统计数据 (${tc.args?.playerId || tc.args?.steamid || '未知'})`;
+                                                                            else if (tc.name === 'query_player_matches') actionText = `查询了玩家比赛记录 (${tc.args?.playerId || tc.args?.steamid || '未知'})`;
                                                                             else if (tc.name === 'query_tournaments') actionText = `查询了赛事列表`;
                                                                             else if (tc.name === 'query_series') actionText = `查询了系列赛信息`;
                                                                             else if (tc.name === 'query_team_stats') actionText = `查询了队伍统计数据 (${tc.args?.teamName || '未知'})`;
                                                                             else if (tc.name === 'query_economy_data') actionText = `查询了经济数据`;
                                                                             else if (tc.name === 'aggregate_player_stats') actionText = `聚合了玩家统计数据`;
+                                                                            else if (tc.name === 'run_data_analysis') actionText = `执行了数据分析脚本`;
+                                                                            else if (tc.name === 'update_database_item') actionText = `更新了数据库项目 (${tc.args?.collection || '未知'})`;
+                                                                            else if (tc.name === 'delete_database_item') actionText = `删除了数据库项目 (${tc.args?.collection || '未知'})`;
                                                                             else if (tc.name === 'finish') actionText = `标记对话完成`;
 
                                                                             return (
