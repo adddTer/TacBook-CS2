@@ -1,13 +1,31 @@
 import { FunctionDeclaration, Type } from "@google/genai";
+import { getTeams } from "../../../utils/teamLoader";
 
 export const toolDeclarations: FunctionDeclaration[] = [
     {
-        name: "finish",
-        description: "当你完成了用户的请求，并且不需要再调用任何工具时，调用此工具以结束当前回合。",
+        name: "update_task_state",
+        description: "更新全局长任务状态机。在处理复杂长任务时，必须使用此工具来维护宏观进度。包含任务计划、当前步骤、已完成步骤和中间结果。",
         parameters: {
             type: Type.OBJECT,
             properties: {
-                message: { type: Type.STRING, description: "（可选）结束语或最终总结" }
+                plan: { 
+                    type: Type.ARRAY, 
+                    items: { type: Type.STRING },
+                    description: "结构化的执行步骤列表" 
+                },
+                currentStepIndex: { 
+                    type: Type.INTEGER, 
+                    description: "当前正在执行的步骤索引（从 0 开始）" 
+                },
+                completedSteps: { 
+                    type: Type.ARRAY, 
+                    items: { type: Type.STRING },
+                    description: "已完成的步骤描述列表" 
+                },
+                intermediateResults: { 
+                    type: Type.STRING, 
+                    description: "阶段性结果的 JSON 字符串，用于在步骤间传递数据" 
+                }
             }
         }
     },
@@ -69,41 +87,24 @@ export const toolDeclarations: FunctionDeclaration[] = [
         }
     },
     {
-        name: "get_match_details",
-        description: "获取指定比赛的详细数据（不包含具体回合和选手数据，请使用专门的工具获取）。",
+        name: "get_match_data",
+        description: "按需获取指定比赛的详细数据。为了节省 Token 并且精准获取所需信息，请通过 includes 数组指定你要获取的模块（例如：['summary', 'players']）。如果没有指定，只会返回比赛摘要。",
         parameters: {
             type: Type.OBJECT,
             properties: {
-                matchId: { type: Type.STRING, description: "比赛ID" }
-            },
-            required: ["matchId"]
-        }
-    },
-    {
-        name: "get_match_rounds",
-        description: "获取指定比赛的每一轮详细数据（击杀、胜负、比分等）。",
-        parameters: {
-            type: Type.OBJECT,
-            properties: {
-                matchId: { type: Type.STRING, description: "比赛ID" }
-            },
-            required: ["matchId"]
-        }
-    },
-    {
-        name: "get_match_players",
-        description: "获取指定比赛中所有选手的详细统计数据（击杀、死亡、Rating等）。",
-        parameters: {
-            type: Type.OBJECT,
-            properties: {
-                matchId: { type: Type.STRING, description: "比赛ID" }
+                matchId: { type: Type.STRING, description: "比赛ID" },
+                includes: { 
+                    type: Type.ARRAY, 
+                    items: { type: Type.STRING },
+                    description: "要包含的数据模块。可选值: 'summary' (包含对阵表、比分等), 'rounds' (每回合胜负结果), 'players' (赛后总成绩如K/D、rating), 'economy' (每回合经济与装备)。" 
+                }
             },
             required: ["matchId"]
         }
     },
     {
         name: "query_player_stats",
-        description: "查询选手的统计数据，可以按选手ID或SteamID查询。",
+        description: "查询选手的统计数据，可以按选手ID或SteamID查询。注意：返回的 wpa 是回合平均值（百分比形式），请直接展示该平均值，不要将其作为总和处理。",
         parameters: {
             type: Type.OBJECT,
             properties: {
@@ -134,28 +135,50 @@ export const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: "query_team_stats",
-        description: "查询战队的整体统计数据。",
+        description: "查询指定战队的整体统计数据。队伍判定依据：一局比赛的一方至少3人属于该队伍。",
         parameters: {
             type: Type.OBJECT,
             properties: {
-                teamName: { type: Type.STRING, description: "战队名称 (默认为 'us')" }
-            }
+                teamName: { type: Type.STRING, description: "战队名称" }
+            },
+            required: ["teamName"]
         }
     },
     {
-        name: "query_economy_data",
-        description: "查询指定比赛的经济数据，包括每轮的装备价值和剩余金钱。",
+        name: "list_registered_teams",
+        description: "查询当前数据库中已注册的队伍列表。"
+    },
+    {
+        name: "query_team_members",
+        description: "查询指定队伍的成员信息。",
         parameters: {
             type: Type.OBJECT,
             properties: {
-                matchId: { type: Type.STRING, description: "比赛ID" }
+                teamName: { type: Type.STRING, description: "战队名称" }
             },
-            required: ["matchId"]
+            required: ["teamName"]
+        }
+    },
+    {
+        name: "query_unassociated_matches",
+        description: "查询不属于任何队伍的比赛。"
+    },
+    {
+        name: "create_service_card",
+        description: "生成一个精美的服务卡片（Service Card），提供点击跳转功能。支持比赛(match)、战术(tactic)、道具(utility)和玩家(player)。优先使用此工具为用户提供快捷的可视化入口，而不是干巴巴的文字链接。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                type: { type: Type.STRING, description: "实体类型，可选值为: 'match', 'tactic', 'utility', 'player'" },
+                id: { type: Type.STRING, description: "实体对象的唯一 ID" },
+                label: { type: Type.STRING, description: "卡片上要显示的标题或文本内容" }
+            },
+            required: ["type", "id", "label"]
         }
     },
     {
         name: "aggregate_player_stats",
-        description: "使用通用聚合器聚合所有或经过筛选的比赛中的选手数据，返回所有选手的聚合统计信息和角色定位。",
+        description: "使用通用聚合器聚合所有或经过筛选的比赛中的选手数据，返回所有选手的聚合统计信息和角色定位。注意：返回的 wpa 是回合平均值（百分比形式），请直接展示该平均值，不要将其作为总和处理。",
         parameters: {
             type: Type.OBJECT,
             properties: {
@@ -168,13 +191,46 @@ export const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: "run_data_analysis",
-        description: "执行 JavaScript 代码进行高级数据分析、统计、查询与筛选。你可以访问全局变量 `db`，它包含 { matches, tactics, utilities, tournaments, bons }。代码必须返回一个值（例如通过 return 语句）。",
+        description: "代码解释器沙盒 (Code Interpreter Sandbox)。执行 JavaScript 代码进行高级数据分析、统计、查询与筛选。你可以访问全局变量 `db`，它包含 { matches, tactics, utilities, tournaments, bons }。你可以使用 `console.log()` 打印中间结果或调试信息，这些信息会作为终端输出返回给你。代码必须返回一个最终值。**警告：代码运行在主线程，严禁编写死循环 (如 while(true))，否则会导致浏览器崩溃。**",
         parameters: {
             type: Type.OBJECT,
             properties: {
-                code: { type: Type.STRING, description: "要执行的 JavaScript 代码。例如: `return db.matches.filter(m => m.mapId === 'mirage').length;`" }
+                code: { type: Type.STRING, description: "要执行的 JavaScript 代码。例如: `console.log('Total matches:', db.matches.length); return db.matches.filter(m => m.mapId === 'mirage').length;`" }
             },
             required: ["code"]
+        }
+    },
+    {
+        name: "calculate",
+        description: "执行数学表达式计算（支持加减乘除、括号等），用于复杂的统计计算或验证计算结果。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                expression: { type: Type.STRING, description: "要计算的数学表达式 (例: '(15+3)/2' 或 '0.65 * 100')" }
+            },
+            required: ["expression"]
+        }
+    },
+    {
+        name: "search_wikipedia",
+        description: "搜索维基百科以获取关于电竞、队伍、游戏机制百科等公开资料作为分析辅助。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                query: { type: Type.STRING, description: "搜索关键词（支持中英文）" }
+            },
+            required: ["query"]
+        }
+    },
+    {
+        name: "search_internet",
+        description: "搜索外部互联网新闻、时事或通用知识。仅在本地数据库或维基百科查不到时使用此工具作为备用。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                query: { type: Type.STRING, description: "搜索关键词" }
+            },
+            required: ["query"]
         }
     },
     {
@@ -212,6 +268,7 @@ export const createToolHandlers = (context: {
     allBons?: any[],
     threadMemory: Record<string, any>,
     updateMemory: (key: string, value: any) => void,
+    updateTaskState?: (state: any) => void,
     isAdmin?: boolean,
     onSaveTactic?: (tactic: any) => Promise<void> | void,
     onSaveUtility?: (utility: any) => Promise<void> | void,
@@ -227,8 +284,12 @@ export const createToolHandlers = (context: {
     };
 
     return {
-        finish: async ({ message }: { message: string }) => {
-            return { status: "success", message: "对话已完成" };
+        update_task_state: async (args: any) => {
+            if (context.updateTaskState) {
+                context.updateTaskState(args);
+                return { status: "success", message: "全局任务状态已更新" };
+            }
+            return { error: "无法更新状态" };
         },
         memory_save: async ({ key, value }: { key: string, value: any }) => {
             checkPermission("保存记忆");
@@ -258,22 +319,39 @@ export const createToolHandlers = (context: {
             if (result) filtered = filtered.filter(m => m.result === result);
             return filtered.map(m => ({ id: m.id, mapId: m.mapId, result: m.result, score: m.score, date: m.date }));
         },
-        get_match_details: async ({ matchId }: { matchId: string }) => {
+        get_match_data: async ({ matchId, includes = ['summary'] }: { matchId: string, includes?: string[] }) => {
             const match = context.allMatches.find(m => m.id === matchId);
             if (!match) return { error: "未找到该比赛数据" };
-            // Return full match data but omit rawDemoJson, rounds, and players to prevent token explosion
-            const { rawDemoJson, rounds, players, ...safeMatch } = match;
-            return safeMatch;
-        },
-        get_match_rounds: async ({ matchId }: { matchId: string }) => {
-            const match = context.allMatches.find(m => m.id === matchId);
-            if (!match) return { error: "未找到该比赛数据" };
-            return match.rounds || [];
-        },
-        get_match_players: async ({ matchId }: { matchId: string }) => {
-            const match = context.allMatches.find(m => m.id === matchId);
-            if (!match) return { error: "未找到该比赛数据" };
-            return match.players || [];
+            
+            const result: any = {};
+            
+            if (includes.includes('summary') || includes.length === 0) {
+                const { rawDemoJson, rounds, players, ...safeMatch } = match;
+                result.summary = safeMatch;
+            }
+            
+            if (includes.includes('rounds')) {
+                result.rounds = match.rounds || [];
+            }
+            
+            if (includes.includes('players')) {
+                result.players = match.players.map((p: any) => {
+                    const { r3_wpa_accum, r3_impact_accum, r3_econ_accum, r3_rounds_played, kastSum, headshots, ...cleanP } = p;
+                    return cleanP;
+                }) || [];
+            }
+            
+            if (includes.includes('economy')) {
+                const rounds = match.rounds || [];
+                result.economy = rounds.map((r: any) => ({
+                    round: r.roundNumber,
+                    winner: r.winnerSide,
+                    equip_us: r.equip_value_us,
+                    equip_them: r.equip_value_them
+                }));
+            }
+            
+            return result;
         },
         query_player_stats: async ({ playerId, steamid }: { playerId?: string, steamid?: string }) => {
             // Aggregate stats for a player across all matches
@@ -282,7 +360,10 @@ export const createToolHandlers = (context: {
             
             matches.forEach(m => {
                 const p = m.players.find((ps: any) => ps.playerId === playerId || ps.steamid === steamid);
-                if (p) playerStats.push({ matchId: m.id, date: m.date, mapId: m.mapId, ...p });
+                if (p) {
+                    const { r3_wpa_accum, r3_impact_accum, r3_econ_accum, r3_rounds_played, kastSum, headshots, ...cleanP } = p as any;
+                    playerStats.push({ matchId: m.id, date: m.date, mapId: m.mapId, ...cleanP });
+                }
             });
             
             if (playerStats.length === 0) return { error: "未找到该选手的统计数据" };
@@ -328,8 +409,23 @@ export const createToolHandlers = (context: {
             
             return playerMatches.slice(0, limit);
         },
-        query_team_stats: async ({ teamName = 'us' }: { teamName?: string }) => {
-            const matches = context.allMatches;
+        query_team_stats: async ({ teamName }: { teamName: string }) => {
+            const teams = getTeams();
+            const targetTeam = teams.find(t => t.name.toLowerCase() === teamName.toLowerCase() || t.id.toLowerCase() === teamName.toLowerCase());
+            if (!targetTeam) return { error: `未找到战队: ${teamName}` };
+
+            const teamPlayerIds = new Set(targetTeam.players.map(p => p.id));
+            
+            const matches = context.allMatches.filter(m => {
+                let teamMembersInMatch = 0;
+                m.players.forEach((p: any) => {
+                    if (teamPlayerIds.has(p.playerId) || teamPlayerIds.has(p.name)) {
+                        teamMembersInMatch++;
+                    }
+                });
+                return teamMembersInMatch >= 3;
+            });
+
             const wins = matches.filter(m => m.result === 'WIN').length;
             const losses = matches.filter(m => m.result === 'LOSS').length;
             const ties = matches.filter(m => m.result === 'TIE').length;
@@ -342,26 +438,68 @@ export const createToolHandlers = (context: {
             });
             
             return {
-                teamName,
+                teamName: targetTeam.name,
                 totalMatches: matches.length,
                 wins,
                 losses,
                 ties,
-                winRate: (wins / (matches.length || 1)) * 100,
+                winRate: matches.length > 0 ? (wins / matches.length) * 100 : 0,
                 mapStats
             };
         },
-        query_economy_data: async ({ matchId }: { matchId: string }) => {
-            const match = context.allMatches.find(m => m.id === matchId);
-            if (!match) return { error: "未找到该比赛数据" };
+        list_registered_teams: async () => {
+            return getTeams().map(t => ({ id: t.id, name: t.name, type: t.type }));
+        },
+        query_team_members: async ({ teamName }: { teamName: string }) => {
+            const teams = getTeams();
+            const targetTeam = teams.find(t => t.name.toLowerCase() === teamName.toLowerCase() || t.id.toLowerCase() === teamName.toLowerCase());
+            if (!targetTeam) return { error: `未找到战队: ${teamName}` };
+            return targetTeam.players;
+        },
+        query_unassociated_matches: async () => {
+            const teams = getTeams();
+            const allRegisteredPlayerIds = new Set(teams.flatMap(t => t.players.map(p => p.id)));
             
-            const rounds = match.rounds || [];
-            return rounds.map((r: any) => ({
-                round: r.roundNumber,
-                winner: r.winnerSide,
-                equip_us: r.equip_value_us,
-                equip_them: r.equip_value_them
+            const matches = context.allMatches.filter(m => {
+                let registeredPlayersInMatch = 0;
+                m.players.forEach((p: any) => {
+                    if (allRegisteredPlayerIds.has(p.playerId) || allRegisteredPlayerIds.has(p.name)) {
+                        registeredPlayersInMatch++;
+                    }
+                });
+                return registeredPlayersInMatch < 3;
+            });
+            
+            return matches.map(m => ({
+                id: m.id,
+                date: m.date,
+                mapId: m.mapId,
+                score: m.score,
+                players: m.players.map((p: any) => p.name)
             }));
+        },
+        create_service_card: async ({ type, id, label }: { type: string, id: string, label: string }) => {
+            const validTypes = ['match', 'tactic', 'utility', 'player'];
+            if (!validTypes.includes(type)) {
+                return { error: "无效的实体类型。必须是 'match', 'tactic', 'utility', 或 'player'" };
+            }
+
+            // Verify existence based on type to avoid dead links
+            let exists = false;
+            if (type === 'match') exists = !!context.allMatches.find(m => m.id === id);
+            if (type === 'tactic') exists = !!context.allTactics.find(t => t.id === id);
+            if (type === 'utility') exists = !!context.allUtilities.find(u => u.id === id);
+            if (type === 'player') {
+                // Players are embedded in matches, let's just do a loose check or trust the AI
+                exists = true; 
+            }
+
+            if (!exists) {
+                return { error: `警告: 未找到该 ID (${id}) 对应的 ${type} 实体。` };
+            }
+            
+            // Return a special markdown link that the UI will intercept and render as a service card
+            return `[${label}](#${type}/${id})`;
         },
         aggregate_player_stats: async ({ mapId, result, startDate, endDate }: { mapId?: string, result?: string, startDate?: string, endDate?: string }) => {
             let filtered = context.allMatches;
@@ -372,10 +510,73 @@ export const createToolHandlers = (context: {
             
             const { MatchAggregator } = await import('../../../utils/analytics/matchAggregator');
             const aggregated = MatchAggregator.aggregate(filtered);
+            
+            // Clean up internal accumulators to avoid confusing the AI
+            const cleanedPlayers = aggregated.map(p => {
+                const { r3_wpa_accum, r3_impact_accum, r3_econ_accum, r3_rounds_played, kastSum, headshots, ...cleanP } = p as any;
+                return cleanP;
+            });
+
             return {
                 matchCount: filtered.length,
-                players: aggregated
+                players: cleanedPlayers
             };
+        },
+        calculate: async ({ expression }: { expression: string }) => {
+            try {
+                // Remove everything except numbers, math operators, and parentheses to prevent injection
+                const sanitized = expression.replace(/[^0-9+\-*/(). ]/g, '');
+                // eslint-disable-next-line no-new-func
+                const result = new Function(`return (${sanitized})`)();
+                return { expression: sanitized, result };
+            } catch (e: any) {
+                return { error: `计算失败: ${e.message}` };
+            }
+        },
+        search_wikipedia: async ({ query }: { query: string }) => {
+            try {
+                const url = `https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json&origin=*`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.query && data.query.search) {
+                    return { 
+                        results: data.query.search.slice(0, 5).map((s: any) => ({
+                            title: s.title,
+                            snippet: s.snippet.replace(/<\/?[^>]+(>|$)/g, "")
+                        }))
+                    };
+                }
+                return { error: "未找到相关结果" };
+            } catch (e: any) {
+                return { error: `搜索失败: ${e.message}` };
+            }
+        },
+        search_internet: async ({ query }: { query: string }) => {
+            try {
+                const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`;
+                const res = await fetch(proxyUrl);
+                if (!res.ok) throw new Error('Proxy returned status ' + res.status);
+                const data = await res.json();
+                const html = data.contents;
+                
+                const results = [];
+                const snippetRegex = /<a class="result__url"[^>]* href="([^"]+)">(.*?)<\/a>.*?<a class="result__snippet[^>]*>(.*?)<\/a>/gs;
+                let match;
+                let count = 0;
+                while ((match = snippetRegex.exec(html)) !== null && count < 5) {
+                    results.push({
+                        url: match[1],
+                        title: match[2].replace(/<\/?[^>]+(>|$)/g, ""),
+                        snippet: match[3].replace(/<\/?[^>]+(>|$)/g, "")
+                    });
+                    count++;
+                }
+                if (results.length === 0) return { error: "未找到结果，请尝试简化的搜索词或其他工具。" };
+                return { results };
+            } catch (e: any) {
+                return { error: `搜索失败: ${e.message}` };
+            }
         },
         query_tournaments: async () => {
             return context.allTournaments || [];
@@ -385,7 +586,6 @@ export const createToolHandlers = (context: {
         },
         run_data_analysis: async ({ code }: { code: string }) => {
             try {
-                // Create a safe-ish environment with access to db
                 const db = {
                     matches: context.allMatches || [],
                     tactics: context.allTactics || [],
@@ -393,11 +593,21 @@ export const createToolHandlers = (context: {
                     tournaments: context.allTournaments || [],
                     bons: context.allBons || []
                 };
-                // We use new Function to execute the code. 
-                // Wrap in an async IIFE to support await inside the code if needed.
-                const fn = new Function('db', `return (async () => { ${code} })();`);
-                const result = await fn(db);
-                return { result };
+                
+                let logs: string[] = [];
+                const mockConsole = {
+                    log: (...args: any[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+                    error: (...args: any[]) => logs.push('[ERROR] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+                    warn: (...args: any[]) => logs.push('[WARN] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '))
+                };
+
+                const fn = new Function('db', 'console', `return (async () => { ${code} })();`);
+                const result = await fn(db, mockConsole);
+                
+                return { 
+                    result,
+                    logs: logs.length > 0 ? logs.join('\n') : undefined
+                };
             } catch (e: any) {
                 return { error: `执行代码时出错: ${e.message}\n请检查代码语法或逻辑。` };
             }

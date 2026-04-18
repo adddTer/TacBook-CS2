@@ -74,10 +74,48 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
         if (isRoster) rosterSteamIds.add(sid);
     });
 
+    // Helper to get numeric team ID
+    const steamIdLooseEqual = (a?: string, b?: string) => {
+        if (!a || !b) return false;
+        if (a === b) return true;
+        const safePrefixLen = 14; 
+        if (a.length >= safePrefixLen && b.length >= safePrefixLen) {
+            return a.slice(0, safePrefixLen) === b.slice(0, safePrefixLen);
+        }
+        return false;
+    };
+
+    const getNumericTeamForSid = (sid: string): string | undefined => {
+        const raw = steamIdToTeamId.get(sid);
+        if (raw !== undefined && raw !== null) {
+            const t = String(raw).trim();
+            if (/^\d+$/.test(t)) return t;
+        }
+        if (!Array.isArray(data) && Array.isArray((data as any).players)) {
+            for (const p of (data as any).players) {
+                const psid = normalizeSteamId(p.steamid);
+                if (psid === sid || steamIdLooseEqual(psid, sid)) {
+                    if (p.team_number !== undefined && p.team_number !== null) {
+                        const tn = String(p.team_number).trim();
+                        if (/^\d+$/.test(tn)) {
+                            steamIdToTeamId.set(sid, tn);
+                            return tn;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        return undefined;
+    };
+
     // 2. Identify "My Team" ID based on metadata
     const teamCounts = new Map<string | number, number>();
     rosterSteamIds.forEach(sid => {
-        const tid = steamIdToTeamId.get(sid);
+        let tid = steamIdToTeamId.get(sid);
+        if (tid === undefined) {
+            tid = getNumericTeamForSid(sid);
+        }
         if (tid !== undefined) {
             teamCounts.set(tid, (teamCounts.get(tid) || 0) + 1);
         }
@@ -94,52 +132,23 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
     });
 
     // 3. Build Initial Teammate Set
-    const teammateSteamIds = new Set<string>(rosterSteamIds);
+    const teammateSteamIds = new Set<string>();
     
     if (myTeamIdentifier !== null) {
         allSteamIds.forEach(sid => {
-            if (steamIdToTeamId.get(sid) === myTeamIdentifier) {
+            let tid = steamIdToTeamId.get(sid);
+            if (tid === undefined) {
+                tid = getNumericTeamForSid(sid);
+            }
+            if (tid === myTeamIdentifier) {
                 teammateSteamIds.add(sid);
             }
         });
-    }
-    
-    // Fallback: 5-man stack logic
-    if (rosterSteamIds.size === 0) {
+    } else if (rosterSteamIds.size > 0) {
+        teammateSteamIds.add(Array.from(rosterSteamIds)[0]);
+    } else {
+        // Fallback: 5-man stack logic
         const numTeamGroups = new Map<string, Set<string>>();
-        const steamIdLooseEqual = (a?: string, b?: string) => {
-            if (!a || !b) return false;
-            if (a === b) return true;
-            const safePrefixLen = 14; 
-            if (a.length >= safePrefixLen && b.length >= safePrefixLen) {
-                return a.slice(0, safePrefixLen) === b.slice(0, safePrefixLen);
-            }
-            return false;
-        };
-
-        const getNumericTeamForSid = (sid: string): string | undefined => {
-            const raw = steamIdToTeamId.get(sid);
-            if (raw !== undefined && raw !== null) {
-                const t = String(raw).trim();
-                if (/^\d+$/.test(t)) return t;
-            }
-            if (!Array.isArray(data) && Array.isArray((data as any).players)) {
-                for (const p of (data as any).players) {
-                    const psid = normalizeSteamId(p.steamid);
-                    if (psid === sid || steamIdLooseEqual(psid, sid)) {
-                        if (p.team_number !== undefined && p.team_number !== null) {
-                            const tn = String(p.team_number).trim();
-                            if (/^\d+$/.test(tn)) {
-                                steamIdToTeamId.set(sid, tn);
-                                return tn;
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-            return undefined;
-        };
 
         activeSteamIds.forEach(sid => {
             const tn = getNumericTeamForSid(sid);

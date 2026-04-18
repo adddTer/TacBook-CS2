@@ -1,5 +1,15 @@
 import { Tournament } from '../types';
 
+// 辅助函数：快速生成单个 16 支队伍瑞士轮阶段的 33 场比赛
+const generateSwissMatches = (stagePrefix: string) => {
+    return Array.from({ length: 33 }, (_, index) => ({
+        id: `${stagePrefix}-m${index + 1}`,
+        team1: 'TBD',
+        team2: 'TBD',
+        status: 'pending' as const
+    }));
+};
+
 export const PRE_CODED_TOURNAMENTS: Tournament[] = [
     {
         id: 'iem-cologne-2026',
@@ -29,57 +39,45 @@ export const PRE_CODED_TOURNAMENTS: Tournament[] = [
         stages: [
             { 
                 id: 'stage-1', 
-                name: '小组赛 1', 
+                name: 'Stage 1', 
                 format: '瑞士轮 Bo3',
-                matches: [
-                    { id: 'm1', team1: 'TBD', team2: 'TBD', status: 'pending' },
-                    { id: 'm2', team1: 'TBD', team2: 'TBD', status: 'pending' },
-                    { id: 'm3', team1: 'TBD', team2: 'TBD', status: 'pending' },
-                    { id: 'm4', team1: 'TBD', team2: 'TBD', status: 'pending' },
-                ]
+                matches: generateSwissMatches('s1')
             },
             { 
                 id: 'stage-2', 
-                name: '小组赛 2', 
+                name: 'Stage 2', 
                 format: '瑞士轮 Bo3',
-                matches: [
-                    { id: 'm5', team1: 'TBD', team2: 'TBD', status: 'pending' },
-                    { id: 'm6', team1: 'TBD', team2: 'TBD', status: 'pending' },
-                ]
+                matches: generateSwissMatches('s2')
             },
             { 
                 id: 'stage-3', 
-                name: '小组赛 3', 
+                name: 'Stage 3', 
                 format: '瑞士轮 Bo3',
-                matches: [
-                    { id: 'm7', team1: 'TBD', team2: 'TBD', status: 'pending' },
-                ]
+                matches: generateSwissMatches('s3')
             },
             { 
                 id: 'stage-4', 
                 name: '淘汰赛', 
                 format: '单败淘汰 Bo3\n- 总决赛 Bo5',
                 matches: [
-                    { id: 'qf1', team1: 'TBD', team2: 'TBD', status: 'pending', date: '1/4 决赛' },
-                    { id: 'qf2', team1: 'TBD', team2: 'TBD', status: 'pending', date: '1/4 决赛' },
-                    { id: 'qf3', team1: 'TBD', team2: 'TBD', status: 'pending', date: '1/4 决赛' },
-                    { id: 'qf4', team1: 'TBD', team2: 'TBD', status: 'pending', date: '1/4 决赛' },
-                    { id: 'sf1', team1: 'TBD', team2: 'TBD', status: 'pending', date: '半决赛' },
-                    { id: 'sf2', team1: 'TBD', team2: 'TBD', status: 'pending', date: '半决赛' },
-                    { id: 'f1', team1: 'TBD', team2: 'TBD', status: 'pending', date: '总决赛' },
+                    { id: 'qf1', team1: 'TBD', team2: 'TBD', status: 'pending' },
+                    { id: 'qf2', team1: 'TBD', team2: 'TBD', status: 'pending' },
+                    { id: 'qf3', team1: 'TBD', team2: 'TBD', status: 'pending' },
+                    { id: 'qf4', team1: 'TBD', team2: 'TBD', status: 'pending' },
+                    { id: 'sf1', team1: 'TBD', team2: 'TBD', status: 'pending' },
+                    { id: 'sf2', team1: 'TBD', team2: 'TBD', status: 'pending' },
+                    { id: 'f1', team1: 'TBD', team2: 'TBD', status: 'pending' },
                 ]
             },
         ]
     }
 ];
 
-// Calculate total prize pool dynamically
+// 动态计算总奖金池
 PRE_CODED_TOURNAMENTS.forEach(t => {
     if (t.prizes) {
         let total = 0;
         t.prizes.forEach(p => {
-            // Parse placement to see how many teams get this prize
-            // e.g., "3-4th" means 2 teams, "5-8th" means 4 teams
             let count = 1;
             if (p.placement.includes('-')) {
                 const parts = p.placement.replace('th', '').replace('st', '').replace('nd', '').replace('rd', '').split('-');

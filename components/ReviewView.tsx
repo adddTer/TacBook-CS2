@@ -77,6 +77,20 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     // Track if an update is in progress to prevent overlapping loops
     const isUpdatingRef = useRef(false);
 
+    // Handle global open-match event
+    useEffect(() => {
+        const handleOpenMatch = (e: CustomEvent) => {
+            const matchId = e.detail;
+            const match = allMatches.find(m => m.id === matchId);
+            if (match) {
+                setSelectedMatch(match);
+                setActiveTab('matches');
+            }
+        };
+        window.addEventListener('open-match', handleOpenMatch as EventListener);
+        return () => window.removeEventListener('open-match', handleOpenMatch as EventListener);
+    }, [allMatches]);
+
     // Check for parser updates
     useEffect(() => {
         const autoUpdate = safeStorage.getItem('autoUpdateMatches') !== 'false';
@@ -864,9 +878,12 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             {activeTab === 'tournaments' && (
                 <TournamentView
                     allMatches={allMatches}
+                    allTournaments={allTournaments}
                     writableGroups={writableGroups}
                     onSaveMatch={onSaveMatch}
                     onDeleteMatch={onDeleteMatch}
+                    onSaveTournament={onSaveTournament}
+                    onDeleteTournament={onDeleteTournament}
                     onSaveBon={onSaveBon}
                 />
             )}

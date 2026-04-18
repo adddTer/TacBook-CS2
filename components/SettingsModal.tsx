@@ -137,7 +137,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => { if(onOpenAiConfig) onOpenAiConfig(); }}
                     className="py-3 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-xl text-xs font-bold text-neutral-700 dark:text-neutral-300 transition-colors flex flex-col items-center justify-center gap-1"
                 >
-                    <svg className="w-5 h-5 mb-0.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    <svg className="w-5 h-5 mb-0.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                     API 管理器
                 </button>
             </div>

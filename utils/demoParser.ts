@@ -9,7 +9,7 @@ import { normalizeSteamId, resolveName } from "./demo/helpers";
 import { determineTeammates } from "./demo/teamLogic";
 import { determineStartingSide } from "./demo/sideLogic";
 
-export const CURRENT_PARSER_VERSION = '1.1.10';
+export const CURRENT_PARSER_VERSION = '1.1.13';
 
 // Hitgroup mapping for JSON string values
 const HITGROUP_MAP: Record<string, number> = {
@@ -52,24 +52,42 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
     // A knife round is defined as a round with NO weapon purchases, >0 kills, and ALL kills are knife kills.
     {
         let currentRoundStart = -1;
+        let roundEndTick = -1;
         let purchases = 0;
         let knifeKills = 0;
         let otherKills = 0;
+        let roundWeapons = new Set<string>();
+        let otherWeaponsList: string[] = [];
         let roundEvents: any[] = [];
         const validEvents: any[] = [];
         
         let matchStarted = !events.some(e => e.event_name === 'round_announce_match_start');
 
+        const evaluateKnifeRound = (source: string) => {
+            if (currentRoundStart === -1) return;
+            const isKnifeRound = knifeKills > 0 && otherKills === 0;
+            if (!isKnifeRound) {
+                validEvents.push(...roundEvents);
+            } else {
+                const importantEvents = roundEvents.filter(ev => 
+                    ev.event_name === 'cs_win_panel_match'
+                );
+                validEvents.push(...importantEvents);
+            }
+        };
+
         for (const e of events) {
             if (e.event_name === 'round_announce_match_start') {
                 matchStarted = true;
-                // Flush previous events as valid (warmup)
-                validEvents.push(...roundEvents);
+                evaluateKnifeRound('Match Restart');
                 roundEvents = [];
                 currentRoundStart = -1;
+                roundEndTick = -1;
                 purchases = 0;
                 knifeKills = 0;
                 otherKills = 0;
+                roundWeapons.clear();
+                otherWeaponsList = [];
                 validEvents.push(e);
                 continue;
             }
@@ -79,38 +97,79 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                 continue;
             }
 
-            if (e.event_name === 'round_start') {
-                // Evaluate previous round
-                if (currentRoundStart !== -1) {
-                    const isKnifeRound = knifeKills > 0 && otherKills === 0;
-                    if (!isKnifeRound) {
-                        validEvents.push(...roundEvents);
-                    } else {
-                        console.log(`[Parser] Filtered out Knife Round (Start Tick: ${currentRoundStart})`);
-                        // Preserve important structural events that might have occurred during the knife round
-                        const importantEvents = roundEvents.filter(ev => 
-                            ev.event_name === 'round_announce_match_start' || 
-                            ev.event_name === 'cs_win_panel_match'
-                        );
-                        validEvents.push(...importantEvents);
+            if (e.event_name === 'round_start' || e.event_name === 'round_freeze_end') {
+                if (currentRoundStart !== -1 && currentRoundStart !== e.tick) {
+                    // Only evaluate if we are actually starting a NEW round, not just transitioning
+                    // from round_start to round_freeze_end in the same tick bracket
+                    if (e.tick - currentRoundStart > 128) {
+                        evaluateKnifeRound('Explicit Start');
+                        roundEvents = [];
                     }
                 }
-                roundEvents = [e];
-                currentRoundStart = e.tick;
-                knifeKills = 0;
-                otherKills = 0;
+                
+                if (currentRoundStart === -1 || e.tick - currentRoundStart > 128) {
+                    roundEvents.push(e);
+                    currentRoundStart = e.tick;
+                    roundEndTick = -1;
+                    knifeKills = 0;
+                    otherKills = 0;
+                    roundWeapons.clear();
+                    otherWeaponsList = [];
+                } else {
+                    roundEvents.push(e);
+                }
             } else {
+                // LAZY INIT: If we have no round start, but we see action, start implicitly
+                if (currentRoundStart === -1 && e.tick > 0) {
+                     const type = e.event_name;
+                     if (type === 'player_death' || type === 'player_hurt' || type === 'bomb_planted' || type.includes('grenade')) {
+                         roundEvents.push(e);
+                         currentRoundStart = e.tick;
+                         roundEndTick = -1;
+                         knifeKills = 0;
+                         otherKills = 0;
+                         roundWeapons.clear();
+                         otherWeaponsList = [];
+                     }
+                }
+                
                 if (currentRoundStart !== -1) {
                     roundEvents.push(e);
+                    if (e.event_name === 'round_end' && roundEndTick === -1) {
+                        roundEndTick = e.tick;
+                    }
+                    if (e.event_name === 'cs_win_panel_round' && roundEndTick === -1) {
+                        roundEndTick = e.tick; // fallback end event
+                    }
                     if (e.event_name === 'player_death') {
-                        const weapon = String(e.weapon || '').toLowerCase();
-                        const isKnife = weapon.includes('knife') || weapon.includes('bayonet') || weapon === 'melee';
-                        const isWorldOrNade = !weapon || weapon === 'world' || weapon === 'worldspawn' || weapon === 'trigger_hurt' || weapon === 'inferno' || weapon === 'suicide' || weapon.includes('grenade') || weapon.includes('flashbang') || weapon.includes('decoy');
-                        
-                        if (isKnife) {
-                            knifeKills++;
-                        } else if (!isWorldOrNade) {
-                            otherKills++;
+                        // Ignore kills that happen way after the round has actually ended
+                        if (roundEndTick !== -1 && e.tick > roundEndTick + 128) {
+                            // Don't count late post-round goofing off toward knife round evaluation
+                        } else {
+                            const weapon = String(e.weapon || '').toLowerCase();
+                            roundWeapons.add(weapon);
+                            
+                            const isKnife = weapon.includes('knife') || 
+                                          weapon.includes('bayonet') || 
+                                          weapon.includes('karambit') || 
+                                          weapon.includes('butterfly') || 
+                                          weapon.includes('melee') ||
+                                          weapon.includes('flip') ||
+                                          weapon.includes('gut') ||
+                                          weapon.includes('falchion') ||
+                                          weapon.includes('bowie') ||
+                                          weapon.includes('stiletto') ||
+                                          weapon.includes('widowmaker') ||
+                                          weapon.includes('ursus') ||
+                                          weapon.includes('kukri');
+                            const isWorldOrNade = !weapon || weapon === 'world' || weapon === 'worldspawn' || weapon === 'trigger_hurt' || weapon === 'inferno' || weapon === 'suicide' || weapon.includes('grenade') || weapon.includes('flashbang') || weapon.includes('decoy');
+                            
+                            if (isKnife) {
+                                knifeKills++;
+                            } else if (!isWorldOrNade) {
+                                otherKills++;
+                                otherWeaponsList.push(weapon);
+                            }
                         }
                     }
                 } else {
@@ -120,19 +179,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         }
         
         // Evaluate last round
-        if (currentRoundStart !== -1) {
-            const isKnifeRound = knifeKills > 0 && otherKills === 0;
-            if (!isKnifeRound) {
-                validEvents.push(...roundEvents);
-            } else {
-                console.log(`[Parser] Filtered out Knife Round (Start Tick: ${currentRoundStart})`);
-                const importantEvents = roundEvents.filter(ev => 
-                    ev.event_name === 'round_announce_match_start' || 
-                    ev.event_name === 'cs_win_panel_match'
-                );
-                validEvents.push(...importantEvents);
-            }
-        }
+        evaluateKnifeRound('End of File');
         
         events = validEvents;
     }
@@ -934,8 +981,9 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         }
 
         if (type === 'begin_defuse') {
-            const sid = normalizeSteamId(e.user_steamid || e.userid);
-            const hasKit = e.haskit === true || e.haskit === 'true' || e.haskit === 1;
+            const anyE = e as any;
+            const sid = normalizeSteamId(anyE.user_steamid || anyE.userid);
+            const hasKit = anyE.haskit === true || anyE.haskit === 'true' || anyE.haskit === 1;
             ratingEngine.handleDefuseStart(sid, hasKit);
         }
 
@@ -990,14 +1038,10 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         if (type === 'round_freeze_end') {
             // FIX: Re-apply round result because handleEvent -> startNewRound -> reset() wipes it out
             let result = roundResults.get(currentRound);
-            
-            console.log(`[Parser_DEBUG] Phase 6: Round ${currentRound} Freeze End (Tick: ${tick}). Searching for result...`);
 
             if (!result || result.endTick <= tick) {
                 let bestCandidate: typeof result | undefined;
                 let minDistance = Infinity;
-                
-                console.log(`[Parser_DEBUG] Direct match failed or invalid (EndTick=${result?.endTick}). Starting Fuzzy Search...`);
 
                 for (const [rNum, res] of roundResults.entries()) {
                     if (res.endTick > tick) {
@@ -1013,19 +1057,11 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                 
                 if (bestCandidate) {
                     result = bestCandidate;
-                    console.log(`[Parser_DEBUG] Fuzzy Match Found: Round ending at ${result.endTick} (dist: ${minDistance})`);
-                } else {
-                    console.warn(`[Parser_DEBUG] Fuzzy Match Failed: No suitable future round found.`);
                 }
-            } else {
-                console.log(`[Parser_DEBUG] Direct Match Found: Round ending at ${result.endTick}`);
             }
 
             if (result) {
-                console.log(`[Parser_DEBUG] Setting Round Result for Engine: Winner=${result.winner}, Reason=${result.reason}, EndTick=${result.endTick}`);
                 ratingEngine.setRoundResult(result);
-            } else {
-                console.error(`[Parser_DEBUG] CRITICAL: Could not determine result for Round ${currentRound}! WPA will be broken.`);
             }
 
             currentRoundEvents.push({
@@ -1040,17 +1076,18 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         }
 
         if (type === 'round_end') {
+            const anyE = e as any;
             let winner: 'T' | 'CT' | null = null;
-            if (e.winner == 2 || String(e.winner) === '2') winner = 'T';
-            else if (e.winner == 3 || String(e.winner) === '3') winner = 'CT';
+            if (anyE.winner == 2 || String(anyE.winner) === '2') winner = 'T';
+            else if (anyE.winner == 3 || String(anyE.winner) === '3') winner = 'CT';
             
-            if (!winner && e.winner) {
-                const w = String(e.winner).toLowerCase();
+            if (!winner && anyE.winner) {
+                const w = String(anyE.winner).toLowerCase();
                 if (w === 't' || w.includes('terrorist')) winner = 'T';
                 if (w === 'ct' || w.includes('counter')) winner = 'CT';
             }
-            if (!winner && e.reason !== undefined) {
-                 const r = e.reason;
+            if (!winner && anyE.reason !== undefined) {
+                 const r = anyE.reason;
                  if (r == 1 || r == 8 || r == 9 || r == 12) winner = 'T'; // TargetBombed, TerroristsWin
                  if (r == 7) winner = 'CT'; // TargetSaved, CTsWin
             }
@@ -1058,7 +1095,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             if (winner) {
                 pendingRoundEnd = {
                     winner,
-                    reason: e.reason || 0,
+                    reason: anyE.reason || 0,
                     endTick: tick
                 };
                 currentRoundEvents.push({
@@ -1070,9 +1107,10 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             }
         }
         else if (type === 'player_death') {
-            const vic = normalizeSteamId(e.user_steamid);
-            const att = normalizeSteamId(e.attacker_steamid);
-            const ast = normalizeSteamId(e.assister_steamid);
+            const anyE = e as any;
+            const vic = normalizeSteamId(anyE.user_steamid);
+            const att = normalizeSteamId(anyE.attacker_steamid);
+            const ast = normalizeSteamId(anyE.assister_steamid);
 
             aliveTs.delete(vic);
             aliveCTs.delete(vic);
@@ -1087,7 +1125,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             };
             
             // FIX: Use hitgroup mapping if available in event, otherwise fallback
-            let headshot = e.headshot;
+            let headshot = anyE.headshot;
             // Additional check if e.headshot is boolean or not available
             
             // Hitgroup detection from kill event is sometimes missing in summary, rely on headshot flag
@@ -1098,11 +1136,11 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                 type: 'kill',
                 subject: att ? getTimelineInfo(att) : undefined,
                 target: getTimelineInfo(vic),
-                weapon: (e.weapon || "").replace("weapon_", ""),
-                isHeadshot: e.headshot,
-                isWallbang: e.penetrated > 0,
-                isBlind: e.attackerblind,
-                isSmoke: e.thrusmoke,
+                weapon: (anyE.weapon || "").replace("weapon_", ""),
+                isHeadshot: anyE.headshot,
+                isWallbang: anyE.penetrated > 0,
+                isBlind: anyE.attackerblind,
+                isSmoke: anyE.thrusmoke,
                 winProb: ratingEngine.getRoundWinProb(),
                 wpaUpdates: wpaUpdates || undefined,
                 duelStats: wpaUpdates?.duelStats
@@ -1141,7 +1179,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                     firstKillHappened = true;
                 }
 
-                if (e.headshot) {
+                if (anyE.headshot) {
                     (pAtt as any).headshots++;
                     if (rAtt) rAtt.headshots = (rAtt.headshots || 0) + 1;
                 }
@@ -1159,7 +1197,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                  pAst.assists++;
                  if (rAst) rAst.assists = (rAst.assists || 0) + 1;
                  
-                 if (e.assistedflash) {
+                 if (anyE.assistedflash) {
                      pAst.flash_assists = (pAst.flash_assists || 0) + 1;
                      currentRoundEvents.push({
                          tick, seconds: 0, type: 'flash_assist',
@@ -1187,13 +1225,14 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             }
         }
         else if (type === 'player_hurt') {
-            const att = normalizeSteamId(e.attacker_steamid);
-            const vic = normalizeSteamId(e.user_steamid);
-            const rawDmg = parseInt(e.dmg_health || 0);
+            const anyE = e as any;
+            const att = normalizeSteamId(anyE.attacker_steamid);
+            const vic = normalizeSteamId(anyE.user_steamid);
+            const rawDmg = parseInt(anyE.dmg_health || 0);
             const actualDmg = healthTracker.recordDamage(vic, rawDmg);
             
             // FIX: Convert string hitgroup to number if needed
-            let hg = e.hitgroup;
+            let hg = anyE.hitgroup;
             if (typeof hg === 'string') {
                 hg = HITGROUP_MAP[hg.toLowerCase()] || 0;
             }
@@ -1214,7 +1253,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                     type: 'damage',
                     subject: att ? getTimelineInfo(att) : undefined,
                     target: getTimelineInfo(vic),
-                    weapon: (e.weapon || "").replace("weapon_", ""),
+                    weapon: (anyE.weapon || "").replace("weapon_", ""),
                     damage: actualDmg,
                     hitgroup: hg, // Use corrected hitgroup
                     winProb: ratingEngine.getRoundWinProb(),
@@ -1227,7 +1266,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                 const r = getRoundPlayerStats(att);
                 if (p) {
                     p.total_damage += actualDmg; 
-                    const w = (e.weapon || "").replace("weapon_", "");
+                    const w = (anyE.weapon || "").replace("weapon_", "");
                     if (w === 'hegrenade') {
                         p.utility.heDamage += actualDmg;
                         r.utility.heDamage += actualDmg;
@@ -1242,9 +1281,10 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             }
         }
         else if (type === 'player_blind') {
-            const att = normalizeSteamId(e.attacker_steamid);
-            const vic = normalizeSteamId(e.user_steamid);
-            const dur = parseFloat(e.blind_duration || 0);
+            const anyE = e as any;
+            const att = normalizeSteamId(anyE.attacker_steamid);
+            const vic = normalizeSteamId(anyE.user_steamid);
+            const dur = parseFloat(anyE.blind_duration || 0);
             if (att && att !== "BOT" && att !== vic) {
                 if (dur > 0) {
                     const p = statsMap.get(att);
@@ -1259,7 +1299,8 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             }
         }
         else if (type.endsWith('_detonate')) {
-            const sid = normalizeSteamId(e.user_steamid);
+            const anyE = e as any;
+            const sid = normalizeSteamId(anyE.user_steamid);
             const p = statsMap.get(sid);
             const r = getRoundPlayerStats(sid);
             if (p) {
@@ -1270,7 +1311,8 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             }
         }
         else if (type === 'bomb_planted') {
-            const sid = normalizeSteamId(e.user_steamid);
+            const anyE = e as any;
+            const sid = normalizeSteamId(anyE.user_steamid);
             const r = getRoundPlayerStats(sid);
             if (r) r.planted = true;
             
@@ -1285,7 +1327,8 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
             });
         }
         else if (type === 'bomb_defused') {
-            const sid = normalizeSteamId(e.user_steamid);
+            const anyE = e as any;
+            const sid = normalizeSteamId(anyE.user_steamid);
             const r = getRoundPlayerStats(sid);
             if (r) r.defused = true;
             

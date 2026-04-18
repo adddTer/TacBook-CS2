@@ -144,6 +144,43 @@ const App: React.FC = () => {
       return () => mediaQuery.removeEventListener('change', listener);
   }, [theme]);
 
+  useEffect(() => {
+    const handleOpenMatch = (e: CustomEvent<string>) => {
+      // Logic for old events/opening matches generically if needed, e.g. navigate to Match view
+      window.location.hash = `match/${e.detail}`;
+      setViewMode('weapons');
+    };
+    
+    const handleOpenTactic = (e: CustomEvent<string>) => {
+      const tacticId = e.detail;
+      const tactic = allTactics.find(t => t.id === tacticId);
+      if (tactic) {
+        setViewMode('tactics');
+        setSelectedTactic(tactic);
+        setCurrentMap(tactic.mapId);
+      }
+    };
+
+    const handleOpenUtility = (e: CustomEvent<string>) => {
+      const utilityId = e.detail;
+      const utility = allUtilities.find(u => u.id === utilityId);
+      if (utility) {
+        setViewMode('utilities');
+        setSelectedUtility(utility);
+        setCurrentMap(utility.mapId);
+      }
+    };
+
+    window.addEventListener('open-match', handleOpenMatch as EventListener);
+    window.addEventListener('open-tactic', handleOpenTactic as EventListener);
+    window.addEventListener('open-utility', handleOpenUtility as EventListener);
+    return () => {
+        window.removeEventListener('open-match', handleOpenMatch as EventListener);
+        window.removeEventListener('open-tactic', handleOpenTactic as EventListener);
+        window.removeEventListener('open-utility', handleOpenUtility as EventListener);
+    };
+  }, [allTactics, allUtilities]);
+
   // Handle Filter Reset on Mode Switch
   useEffect(() => {
       updateFilter('selectedTags', []);

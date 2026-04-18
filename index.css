@@ -54,6 +54,22 @@ html.dark, html.dark body {
     background-image: linear-gradient(to right, var(--color-blue-400), var(--color-purple-400));
 }
 
+/* Slim scrollbar for internal tables & panels */
+.slim-scrollbar::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+}
+.slim-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.slim-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.5);
+    border-radius: 9999px;
+}
+.dark .slim-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(115, 115, 115, 0.5);
+}
+
 .bg-gradient-avatar {
     background-image: linear-gradient(to bottom right, var(--color-blue-600), var(--color-indigo-700));
 }

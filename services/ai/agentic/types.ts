@@ -11,6 +11,7 @@ export interface ToolResult {
     name: string;
     result: any;
     error?: string;
+    logs?: string;
 }
 
 export interface ActionStep {
@@ -36,7 +37,7 @@ export interface CopilotMessage {
     runningTime?: number; // Accumulated running time in milliseconds
     modelName?: string;
     thinkingLevel?: string;
-    status?: 'pending' | 'streaming' | 'completed' | 'error'; // 用于 UI 状态展示
+    status?: 'pending' | 'streaming' | 'completed' | 'error' | 'interrupted' | 'aborted'; // 用于 UI 状态展示
     errorType?: 'retryable' | 'fatal';
     errorMessage?: string;
     rawParts?: any[]; // Store exact parts returned by the model to preserve thought signatures
@@ -50,6 +51,14 @@ export interface CopilotThread {
     updatedAt: number;
     messages: CopilotMessage[];
     memory: Record<string, any>; // AI 的长期记忆空间
+    taskState?: {
+        plan: string[];
+        currentStepIndex: number;
+        completedSteps: string[];
+        errorCount: number;
+        intermediateResults: string;
+    };
+    pathway?: 'simple' | 'complex';
 }
 
 export interface DataSnapshot {

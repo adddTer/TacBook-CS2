@@ -122,9 +122,9 @@ export class InventoryTracker {
         if (!this.inventory.has(sid)) this.inventory.set(sid, []);
         const items = this.inventory.get(sid)!;
 
-        // FIX: Ignore item_purchase to prevent double counting with item_pickup
-        // Only track actual inventory changes via pickup/drop
-        if (event.event_name === "item_pickup") {
+        // FIX: Some parsers skip item_pickup and only send item_equip or item_purchase.
+        // We gracefully accept them, but slot enforcement prevents hoarding 10 AK47s.
+        if (event.event_name === "item_pickup" || event.event_name === "item_purchase" || event.event_name === "item_equip") {
             const slot = SLOT_MAP[item];
 
             if (slot) {

@@ -22,7 +22,6 @@ export interface StatsResult {
     dpr: number;
     kast: number;
     impact: number;
-    wpaSum: number;
     wpaAvg: number;
     multiKillRate: number;
     headshotPct: number;
@@ -374,7 +373,6 @@ export const calculatePlayerStats = (
       dpr: safeDiv(stats.deaths, rounds),
       kast: kastWeightedAvg,
       impact: safeDiv(impactSum, rounds),
-      wpaSum: wpaSum,
       wpaAvg: safeDiv(wpaSum, rounds),
       multiKillRate: multiKillWeightedAvg,
       headshotPct: safeDiv(stats.headshots, stats.kills) * 100,

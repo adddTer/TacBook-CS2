@@ -751,7 +751,7 @@ export class RatingEngine {
                                 share = baseShare * 1.0; // 闪光助攻不适用经济修正
                             } else {
                                 // 提取该玩家造成伤害时的平均经济系数
-                                const E_avg = c.weightedDamage / c.rawDamage; 
+                                const E_avg = c.rawDamage > 0 ? c.weightedDamage / c.rawDamage : 1.0; 
                                 // 最终奖励乘上经济系数
                                 share = baseShare * E_avg; 
                             }

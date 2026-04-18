@@ -1,6 +1,5 @@
-import { GoogleGenAI, GenerateContentResponse, Type, Content, Part, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse, Type, Content, Part, ThinkingLevel, FunctionDeclaration } from "@google/genai";
 import { CopilotMessage, CopilotThread, ToolCall, ToolResult } from "./types";
-import { toolDeclarations, createToolHandlers } from "./tools";
 import { convertGeminiToolsToOpenAI, convertGeminiHistoryToOpenAI } from "./openai_adapter";
 import { getAIConfig } from "../config";
 
@@ -11,21 +10,26 @@ export class AgenticEngine {
     private modelName: string;
     private thinkingLevel: string;
     private apiKey: string;
+    private systemInstructionBase: string;
+    private toolDeclarations: FunctionDeclaration[];
 
-    constructor(apiKey: string, thread: CopilotThread, context: any, modelName: string = "gemini-3.1-pro-preview", thinkingLevel: string = "HIGH") {
+    constructor(
+        apiKey: string, 
+        thread: CopilotThread, 
+        handlers: any, 
+        toolDeclarations: FunctionDeclaration[],
+        systemInstructionBase: string,
+        modelName: string = "gemini-3.1-pro-preview", 
+        thinkingLevel: string = "HIGH"
+    ) {
         this.apiKey = apiKey;
         this.ai = new GoogleGenAI({ apiKey });
         this.thread = thread;
         this.modelName = modelName;
         this.thinkingLevel = thinkingLevel;
-        this.handlers = createToolHandlers({
-            ...context,
-            threadMemory: thread.memory || {},
-            updateMemory: (key, value) => {
-                if (!this.thread.memory) this.thread.memory = {};
-                this.thread.memory[key] = value;
-            }
-        });
+        this.handlers = handlers;
+        this.toolDeclarations = toolDeclarations;
+        this.systemInstructionBase = systemInstructionBase;
     }
 
     /**
@@ -55,6 +59,55 @@ export class AgenticEngine {
         }
     }
 
+    private async determinePathway(userInput: string, abortSignal?: AbortSignal): Promise<'simple' | 'complex'> {
+        try {
+            const aiConfig = getAIConfig();
+            if (aiConfig.provider !== 'google') {
+                const baseUrl = aiConfig.baseUrl.replace(/\/$/, "") + "/chat/completions";
+                const messages = [{
+                    role: 'user',
+                    content: `分析以下用户的输入意图，判断这是一个“简单查询”还是“复杂长任务”。\n简单查询：意图明确，只需少量工具调用即可完成（如查询某个选手数据、某场比赛结果、查找特定战术）。\n复杂长任务：意图宽泛，需要多步推理、大量数据聚合、或分步骤执行（如综合分析大量demo、评选TOP20、深度对比战术风格）。\n\n用户输入："${userInput}"\n\n请仅输出 JSON 格式：{"intent": "simple" | "complex"}`
+                }];
+
+                const res = await fetch(baseUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${aiConfig.apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: aiConfig.model,
+                        messages: messages,
+                        temperature: 0.1,
+                        max_tokens: 50,
+                        response_format: { type: "json_object" }
+                    }),
+                    signal: abortSignal
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const content = data.choices[0].message.content.toLowerCase();
+                    if (content.includes('"intent": "complex"') || content.includes('"intent":"complex"')) {
+                        return 'complex';
+                    }
+                }
+            } else {
+                // For Google provider, we can just use a simple heuristic or default to simple for now to save latency,
+                // or implement a similar fetch call if needed. Let's use a basic keyword heuristic for speed if not OpenAI compatible.
+                const complexKeywords = ['分析', '评选', '综合', '深度', '对比', '所有', '全部'];
+                let score = 0;
+                for (const kw of complexKeywords) {
+                    if (userInput.includes(kw)) score++;
+                }
+                if (score >= 2 || userInput.length > 50) return 'complex';
+            }
+        } catch (e) {
+            console.warn("Intent routing failed, defaulting to simple:", e);
+        }
+        return 'simple';
+    }
+
     /**
      * Main entry point for processing a user message.
      * Runs the tool-calling loop until a final response is generated.
@@ -67,7 +120,7 @@ export class AgenticEngine {
     ) {
         const startTime = Date.now();
         let loopCount = 0;
-        const MAX_LOOPS = 30; // Increased for long tasks
+        const MAX_LOOPS = 100; // Increased significantly for extremely long tasks (10-60 mins)
         
         let currentResponseMsg: CopilotMessage;
         
@@ -89,6 +142,19 @@ export class AgenticEngine {
         }
 
         onUpdate(currentResponseMsg);
+
+        // Determine pathway if not set
+        if (!this.thread.pathway) {
+            const lastUserMsg = this.thread.messages.filter(m => m.role === 'user').pop();
+            if (lastUserMsg && lastUserMsg.text) {
+                onUpdate({ ...currentResponseMsg, text: "正在分析任务复杂度...", status: 'pending' });
+                this.thread.pathway = await this.determinePathway(lastUserMsg.text, abortSignal);
+                onThreadUpdate({ pathway: this.thread.pathway });
+                onUpdate({ ...currentResponseMsg, text: "" }); // clear the routing text
+            } else {
+                this.thread.pathway = 'simple';
+            }
+        }
 
         // We maintain a separate API history for the SDK to ensure correct role sequencing
         const apiHistory = this.prepareApiHistory();
@@ -144,6 +210,17 @@ export class AgenticEngine {
             }
         }
 
+        // If resuming and the last message in apiHistory is from the model (e.g. interrupted due to token limit or manual abort),
+        // we need to prompt it to continue, because Gemini requires the last message to be from the user.
+        if (resumeMessageId && apiHistory.length > 0 && apiHistory[apiHistory.length - 1].role === 'model') {
+            const continueContent: Content = {
+                role: 'user',
+                parts: [{ text: " " }] // Use a single space instead of explicit text to avoid breaking the flow
+            };
+            apiHistory.push(continueContent);
+            currentResponseMsg.apiSequence = [...(currentResponseMsg.apiSequence || []), continueContent];
+        }
+
         while (loopCount < MAX_LOOPS) {
             if (abortSignal?.aborted) {
                 throw new DOMException('Aborted', 'AbortError');
@@ -151,6 +228,9 @@ export class AgenticEngine {
             
             loopCount++;
             const loopStartTime = Date.now();
+            
+            // Prune history to prevent token explosion during long tasks
+            this.pruneApiHistory(apiHistory);
             
             if (apiHistory.length === 0) {
                 currentResponseMsg.runningTime = (currentResponseMsg.runningTime || 0) + (Date.now() - startTime);
@@ -163,10 +243,38 @@ export class AgenticEngine {
                 let retryCount = 0;
                 const MAX_RETRIES = 3; // Increased for better stability
                 
+                let systemInstruction = this.systemInstructionBase + "\n\n**重要提示：**\n1. **记忆功能 (memory_save)**：这帮助你记录重要的阶段性结论或备忘，避免丢失上下文。记忆不需要读取，它始终会包含在你的上下文中。\n";
+
+                let activeTools = this.toolDeclarations;
+
+                if (this.thread.pathway === 'complex') {
+                    systemInstruction += "2. **复杂长任务处理 (Plan-and-Solve)**：这是一个复杂长任务，你必须使用 `update_task_state` 工具来维护一个全局状态机。在开始前，先制定一个计划（plan）。每完成一步，更新 currentStepIndex 和 completedSteps。将中间结果保存在 intermediateResults 中。这能保证即使对话意外中断，你也能知道当前进展到哪一步。花时间钻研，给出有深度的结论，而不是敷衍了事。";
+                    if (this.thread.taskState) {
+                        systemInstruction += `\n\n**当前长任务状态 (Global State)：**\n\`\`\`json\n${JSON.stringify(this.thread.taskState, null, 2)}\n\`\`\`\n请根据此状态继续执行你的任务。`;
+                    }
+                } else {
+                    systemInstruction += "2. **简单查询任务 (Fast Pathway)**：这是一个简单查询任务，请直接调用相关工具获取数据并快速回答，无需制定复杂计划或更新任务状态。";
+                    activeTools = this.toolDeclarations.filter(t => t.name !== 'update_task_state');
+                }
+
+                const aiConfig = getAIConfig();
+                let toolsConfig: any[] = [];
+                if (activeTools && activeTools.length > 0) {
+                    toolsConfig.push({ functionDeclarations: activeTools });
+                }
+
                 const modelConfig: any = {
-                    systemInstruction: "你是一个专业的 CS2 战术助手。你可以通过调用工具来查询战术、道具、比赛数据或记录记忆。请尽量通过工具获取真实数据后再回答用户。数据来源是用户自行上传的demo。对于不包含注册玩家的比赛，不返回比赛结果。如果需要多次调用工具才能完成任务，请分步进行。你的回答应该专业、简洁且富有洞察力。\n\n**重要提示：你可以正常输出文本来回复用户。当所有的操作和回复都彻底完成后，必须调用 finish 工具来结束当前回合。**",
-                    tools: [{ functionDeclarations: toolDeclarations }],
+                    systemInstruction: systemInstruction,
+                    tools: toolsConfig,
                 };
+                
+                // Keep toolConfig but do not inject googleSearch or include_server_side_tool_invocations 
+                // which causes INVALID_ARGUMENT and PERMISSION_DENIED on some keys
+                if (aiConfig.provider === 'google' || this.modelName.includes('gemini')) {
+                    modelConfig.toolConfig = { 
+                        functionCallingConfig: { mode: 'AUTO' }
+                    };
+                }
 
                 if (this.modelName.includes('gemini-3')) {
                     let level = this.thinkingLevel as ThinkingLevel;
@@ -182,7 +290,7 @@ export class AgenticEngine {
                         const aiConfig = getAIConfig();
                         if (aiConfig.provider !== 'google') {
                             // OpenAI / DeepSeek / Custom API integration
-                            if (!this.apiKey) throw new Error(`${aiConfig.provider} API key is not configured.`);
+                            if (!aiConfig.apiKey) throw new Error(`${aiConfig.provider} API key is not configured.`);
                             
                             const messages = convertGeminiHistoryToOpenAI(apiHistory);
                             
@@ -194,17 +302,17 @@ export class AgenticEngine {
                                 });
                             }
 
-                            const tools = convertGeminiToolsToOpenAI(toolDeclarations);
+                            const tools = convertGeminiToolsToOpenAI(activeTools);
                             const baseUrl = aiConfig.baseUrl.replace(/\/$/, "") + "/chat/completions";
 
                             const res = await fetch(baseUrl, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${this.apiKey}`
+                                    'Authorization': `Bearer ${aiConfig.apiKey}`
                                 },
                                 body: JSON.stringify({
-                                    model: this.modelName,
+                                    model: aiConfig.model,
                                     messages: messages,
                                     tools: tools,
                                     temperature: modelConfig.temperature,
@@ -250,8 +358,9 @@ export class AgenticEngine {
                                 }]
                             };
                         } else {
-                            const stream = await this.ai.models.generateContentStream({
-                                model: this.modelName,
+                            const dynamicAi = new GoogleGenAI({ apiKey: aiConfig.apiKey });
+                            const stream = await dynamicAi.models.generateContentStream({
+                                model: aiConfig.model,
                                 contents: apiHistory,
                                 config: modelConfig
                             });
@@ -413,28 +522,8 @@ export class AgenticEngine {
 
                     const toolResponseParts: Part[] = [];
                     const newToolResults: ToolResult[] = [];
-                    let hasFinishTool = false;
 
                     for (const call of newToolCalls) {
-                        if (call.name === 'finish') {
-                            hasFinishTool = true;
-                            if (call.args && call.args.message) {
-                                const finishMsg = call.args.message;
-                                // Deduplicate: if the message is already in currentText (or very similar), don't append it again.
-                                // Some models output the exact same text in the text part and the finish tool message.
-                                const isDuplicate = currentText && (currentText.includes(finishMsg) || finishMsg.includes(currentText));
-                                
-                                if (!isDuplicate) {
-                                    currentResponseMsg.text = (currentResponseMsg.text ? currentResponseMsg.text + '\n\n' : '') + finishMsg;
-                                    currentResponseMsg.steps = [...(currentResponseMsg.steps || []), {
-                                        id: `step_${Date.now()}_reply_finish`,
-                                        type: 'reply',
-                                        content: finishMsg
-                                    }];
-                                }
-                            }
-                        }
-
                         const handler = this.handlers[call.name];
                         const result = await this.executeTool(call, handler);
                         newToolResults.push(result);
@@ -473,6 +562,14 @@ export class AgenticEngine {
                     currentResponseMsg.steps = [...currentResponseMsg.steps!];
                     onUpdate({ ...currentResponseMsg });
 
+                    // Check for infinite loop and inject warning if needed
+                    if (this.checkInfiniteLoop(currentResponseMsg)) {
+                        const lastPart = toolResponseParts[toolResponseParts.length - 1];
+                        if (lastPart.functionResponse && lastPart.functionResponse.response) {
+                            lastPart.functionResponse.response._SYSTEM_WARNING = "INFINITE LOOP DETECTED. You are repeating the exact same tool call with the same arguments multiple times. Please STOP repeating this action. Try a different approach, use a different tool, or ask the user for clarification.";
+                        }
+                    }
+
                     const userContent: Content = {
                         role: 'user',
                         parts: toolResponseParts
@@ -480,25 +577,18 @@ export class AgenticEngine {
                     apiHistory.push(userContent);
                     currentResponseMsg.apiSequence = [...(currentResponseMsg.apiSequence || []), userContent];
 
-                    onThreadUpdate({ memory: this.thread.memory });
-                    
-                    if (hasFinishTool) {
-                        currentResponseMsg.status = 'completed';
-                        currentResponseMsg.endTime = Date.now();
-                        currentResponseMsg.runningTime = (currentResponseMsg.runningTime || 0) + (Date.now() - startTime);
-                        onUpdate({ ...currentResponseMsg });
-                        break;
-                    }
+                    onThreadUpdate({ memory: this.thread.memory, taskState: this.thread.taskState });
                     
                     continue;
                 }
 
-                const hasFinishTool = currentResponseMsg.toolCalls?.some(tc => tc.name === 'finish');
-                
-                if (!hasFinishTool) {
-                    currentResponseMsg.status = 'error';
-                    currentResponseMsg.errorType = 'retryable';
-                    currentResponseMsg.errorMessage = 'Copilot 未调用完成工具，可能意外中断。';
+                // If there are no tool calls, the model naturally finished its turn.
+                // Check if it hit the token limit
+                const finishReason = candidate?.finishReason;
+                if (finishReason === 'MAX_TOKENS') {
+                    currentResponseMsg.status = 'interrupted';
+                } else if (loopCount >= MAX_LOOPS - 1) {
+                    currentResponseMsg.status = 'interrupted';
                 } else {
                     currentResponseMsg.status = 'completed';
                 }
@@ -509,6 +599,17 @@ export class AgenticEngine {
                 break;
 
             } catch (error: any) {
+                if (error.name === 'AbortError') {
+                    currentResponseMsg.runningTime = (currentResponseMsg.runningTime || 0) + (Date.now() - startTime);
+                    onUpdate({ 
+                        ...currentResponseMsg, 
+                        status: 'aborted', 
+                        errorMessage: '已停止生成。',
+                        endTime: Date.now()
+                    });
+                    break;
+                }
+
                 console.error("Agentic Engine Error:", error);
                 
                 let errorMessage = error.message || "未知错误";
@@ -540,6 +641,46 @@ export class AgenticEngine {
                 break;
             }
         }
+    }
+
+    private pruneApiHistory(apiHistory: Content[]) {
+        if (apiHistory.length <= 12) return;
+        
+        for (let i = 1; i < apiHistory.length - 10; i++) {
+            const content = apiHistory[i];
+            if (content.role === 'user') {
+                for (const part of content.parts) {
+                    if (part.functionResponse && part.functionResponse.response) {
+                        const jsonStr = JSON.stringify(part.functionResponse.response);
+                        if (jsonStr.length > 500) {
+                            part.functionResponse.response = {
+                                _truncated: `Data omitted to save tokens.`,
+                                _preview: jsonStr.substring(0, 500) + '...'
+                            };
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private checkInfiniteLoop(currentResponseMsg: CopilotMessage): boolean {
+        if (!currentResponseMsg.toolCalls || currentResponseMsg.toolCalls.length < 5) return false;
+        
+        const calls = currentResponseMsg.toolCalls;
+        const last1 = calls[calls.length - 1];
+        const last2 = calls[calls.length - 2];
+        const last3 = calls[calls.length - 3];
+        
+        if (last1.name === last2.name && last2.name === last3.name) {
+            const str1 = JSON.stringify(last1.args);
+            const str2 = JSON.stringify(last2.args);
+            const str3 = JSON.stringify(last3.args);
+            if (str1 === str2 && str2 === str3) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private createNewModelMessage(startTime: number): CopilotMessage {

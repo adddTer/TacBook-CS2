@@ -2,14 +2,10 @@ import { Match, PlayerMatchStats, MatchBon } from '../types';
 import { getAllPlayers, getTeams } from './teamLoader';
 import { MAPS } from '../constants/maps';
 
-/**
- * Determines if a match involves the "Main Roster" (My Team).
- * Returns true if ANY player in the match is found in the defined getAllPlayers().
- */
-export const isMyTeamMatch = (match: Match): boolean => {
-    // Check both 'players' and 'enemyPlayers' arrays
-    return [...match.players, ...match.enemyPlayers].some(p => {
-        return getAllPlayers().some(r => {
+const isPlayerInUserTeam = (p: PlayerMatchStats): boolean => {
+    const userTeams = getTeams().filter(t => t.type === 'user');
+    return userTeams.some(team => {
+        return team.players.some(r => {
             if (r.id === p.playerId || r.name === p.playerId) return true;
             if (!p.steamid) return false;
             
@@ -23,12 +19,23 @@ export const isMyTeamMatch = (match: Match): boolean => {
                 const accountId = parseInt(pSteamIdStr, 10);
                 const base = BigInt('76561197960265728');
                 const convertedId = (base + BigInt(accountId)).toString();
-                isMatch = r.steamids?.includes(convertedId);
+                isMatch = r.steamids?.includes(convertedId) || false;
             }
             
             return isMatch;
         });
     });
+};
+
+/**
+ * Determines if a match involves the "Main Roster" (My Team).
+ * Returns true ONLY if exactly one team has registered players from a 'user' team.
+ */
+export const isMyTeamMatch = (match: Match): boolean => {
+    const team1HasUserRoster = match.players.some(isPlayerInUserTeam);
+    const team2HasUserRoster = match.enemyPlayers.some(isPlayerInUserTeam);
+    
+    return (team1HasUserRoster && !team2HasUserRoster) || (!team1HasUserRoster && team2HasUserRoster);
 };
 
 /**

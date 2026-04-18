@@ -5,8 +5,6 @@ import { generateId } from '../utils/idGenerator';
 import { getRoles } from '../constants/roles';
 import { ALL_TAGS } from '../constants/tags';
 import { UTILITIES } from '../data/utilities';
-import { AiConfigModal } from './AiConfigModal';
-import { CopilotChat } from './ai/CopilotChat';
 import { MapViewer } from './MapViewer';
 import { compressImage } from '../utils/imageHelper';
 import { exportTacticToZip } from '../utils/exportHelper';
@@ -58,8 +56,6 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
   const [targetGroupId, setTargetGroupId] = useState<string>('');
 
   // --- View State ---
-  const [isAiOpen, setIsAiOpen] = useState(false); // Controls AI Sidebar on Desktop / Modal on Mobile
-  const [isAiMaximized, setIsAiMaximized] = useState(false); // New: Controls PC Fullscreen
   
   // --- Image State ---
   const [mapImagePreview, setMapImagePreview] = useState<string>('');
@@ -68,9 +64,6 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
   const [showUtilityModal, setShowUtilityModal] = useState<string | null>(null);
   const [utilitySearchQuery, setUtilitySearchQuery] = useState('');
 
-  // --- AI State ---
-  const [showAiConfig, setShowAiConfig] = useState(false);
-  
   // --- Share State ---
   const [showShareModal, setShowShareModal] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -284,23 +277,16 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
     <div className="fixed inset-0 z-[100] bg-white dark:bg-neutral-950 flex flex-col md:flex-row animate-in slide-in-from-bottom-10 duration-300">
         
         {/* Main Editor Area - Always rendered to prevent background flash, obscured when AI is maximized */}
-        <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isAiOpen && !isAiMaximized ? 'mr-0 md:mr-96' : ''}`}>
+        <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md sticky top-0 z-20">
                 <button onClick={onCancel} className="text-neutral-500 font-bold hover:text-neutral-900 dark:hover:text-white transition-colors">
                     取消
                 </button>
                 
-                {/* Center: Copilot Button (Visible & Centered on Mobile) - Temporarily Removed for Global Copilot Update
+                {/* Center: Copilot Button (Visible & Centered on Mobile) - Temporarily Removed for Global Copilot Update */}
+                {/* 
                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                     <button 
-                        onClick={() => { setIsAiOpen(!isAiOpen); setIsAiMaximized(false); }} 
-                        className={`text-sm font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${isAiOpen ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'}`}
-                    >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        <span>Copilot</span>
-                    </button>
-                </div>
                 */}
 
                 <div className="flex items-center gap-2">
@@ -589,25 +575,6 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
             </div>
         </div>
 
-        {/* AI Sidebar (Desktop Slide-over / Mobile Fullscreen) */}
-        <div 
-            className={`
-                fixed inset-y-0 right-0 z-[110] bg-white dark:bg-neutral-950 shadow-2xl transform transition-all duration-300 ease-in-out border-l border-neutral-200 dark:border-neutral-800
-                ${isAiOpen ? 'translate-x-0' : 'translate-x-full'}
-                ${isAiMaximized ? 'w-full' : 'w-full md:w-96'}
-            `}
-        >
-            <CopilotChat 
-                currentTactic={formData}
-                onApplySnapshot={(snap) => setFormData(prev => ({...prev, ...snap}))}
-                onUpdateTactic={(newTactic) => setFormData(prev => ({...prev, ...newTactic}))}
-                onOpenConfig={() => setShowAiConfig(true)}
-                onClose={() => setIsAiOpen(false)}
-                isMaximized={isAiMaximized}
-                onToggleMaximize={() => setIsAiMaximized(!isAiMaximized)}
-            />
-        </div>
-
         {/* Utility Modal */}
         {showUtilityModal && (
             <div className="absolute inset-0 z-[150] bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md animate-in zoom-in-95 duration-200 flex flex-col p-4">
@@ -646,8 +613,6 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                 </div>
             </div>
         )}
-
-        {showAiConfig && <AiConfigModal onClose={() => setShowAiConfig(false)} onSave={() => setShowAiConfig(false)} />}
         
         <ShareOptionsModal 
             isOpen={showShareModal}

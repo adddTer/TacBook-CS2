@@ -148,16 +148,6 @@ export class WPAEngine {
             if (this.roundResult && this.roundResult.winner === 'CT') {
                 isScenario1 = true;
             }
-            
-            // Debug Log for Scene Logic
-            if (Math.random() < 0.1) {
-                 console.log(`[WPA_DEBUG] Post-Plant Calc:
-                    Winner: ${this.roundResult?.winner}
-                    Scenario1 (Defuse): ${isScenario1}
-                    TimeRemaining: ${this.roundTime.toFixed(1)}
-                    EffAlive: T=${effT.toFixed(2)}, CT=${effCT.toFixed(2)}
-                 `);
-            }
 
             const timePassed = Math.max(0, COEFF.C4_TIME - this.roundTime);
             
