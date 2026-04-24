@@ -157,10 +157,10 @@ export const getTeamNames = (match: Match): { teamA: string, teamB: string } => 
     ));
 
     if (!teamA) {
-        teamA = isTeamAUs ? '我方' : (isTeamBUs ? '敌方' : 'Team A');
+        teamA = 'Team A';
     }
     if (!teamB) {
-        teamB = isTeamBUs ? '我方' : (isTeamAUs ? '敌方' : 'Team B');
+        teamB = 'Team B';
     }
 
     return { teamA, teamB };

@@ -260,7 +260,9 @@ export class WPAEngine {
         isBot: boolean = false, // NEW
         contributorSides: Map<string, 'T' | 'CT'> = new Map(), // NEW
         survivingKillerTeam: string[] = [], // NEW
-        tradeCompensation: { sid: string, weight: number }[] = [] // NEW
+        tradeCompensation: { sid: string, weight: number }[] = [], // NEW
+        fallbackKillerTeam?: string,
+        fallbackOpposingTeam?: string
     ): WPAUpdate[] {
         // 1. Process time decay BEFORE the kill
         const timeUpdates = this.handleTimeUpdate(timeElapsed, allTs, allCTs);
@@ -320,7 +322,7 @@ export class WPAEngine {
             
             // Reward the opposing team
             const opposingTeam = attackerSide === 'T' ? allCTs : allTs;
-            this.distributeToSide(opposingTeamGain, opposingTeam, updates);
+            this.distributeToSide(opposingTeamGain, opposingTeam, updates, fallbackOpposingTeam);
             
             return [...timeUpdates, ...updates];
         }
@@ -332,7 +334,9 @@ export class WPAEngine {
             allTs, allCTs,
             'kill',
             { killerSid, attackerSide, damageContributors, assisters, contributorSides, survivingKillerTeam, tradeCompensation },
-            currentTick
+            currentTick,
+            fallbackKillerTeam,
+            fallbackOpposingTeam
         );
         
         return [...timeUpdates, ...killUpdates];
@@ -470,7 +474,9 @@ export class WPAEngine {
             survivingKillerTeam?: string[],
             tradeCompensation?: { sid: string, weight: number }[]
         },
-        currentTick: number = 0
+        currentTick: number = 0,
+        fallbackKillerTeam?: string,
+        fallbackOpposingTeam?: string
     ): WPAUpdate[] {
         const prevProb = this.currentWinProb;
         const newProb = this.calculateWinProb();
@@ -623,6 +629,10 @@ export class WPAEngine {
                          if (existing) existing.delta += rewardPerPlayer;
                          else updates.push({ sid, delta: rewardPerPlayer, ...debugInfo });
                      });
+                 } else if (fallbackKillerTeam) {
+                     const existing = updates.find(u => u.sid === fallbackKillerTeam);
+                     if (existing) existing.delta += totalPenaltyToRedistribute;
+                     else updates.push({ sid: fallbackKillerTeam, delta: totalPenaltyToRedistribute, ...debugInfo });
                  }
              }
              
@@ -706,8 +716,13 @@ export class WPAEngine {
         return updates;
     }
 
-    private distributeToSide(amount: number, players: string[], updates: WPAUpdate[]) {
-        if (!players || players.length === 0) return;
+    private distributeToSide(amount: number, players: string[], updates: WPAUpdate[], fallbackPlayer?: string) {
+        if (!players || players.length === 0) {
+            if (fallbackPlayer) {
+                updates.push({ sid: fallbackPlayer, delta: amount });
+            }
+            return;
+        }
         const share = amount / players.length;
         players.forEach(sid => {
             updates.push({ sid, delta: share });

@@ -5,7 +5,6 @@ import { generateId } from '../utils/idGenerator';
 import { getRoles } from '../constants/roles';
 import { ALL_TAGS } from '../constants/tags';
 import { UTILITIES } from '../data/utilities';
-import { MapViewer } from './MapViewer';
 import { compressImage } from '../utils/imageHelper';
 import { exportTacticToZip } from '../utils/exportHelper';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
@@ -16,7 +15,7 @@ import { safeStorage } from '../utils/storage';
 interface TacticEditorProps {
   initialTactic?: Tactic;
   onCancel: () => void;
-  onSave: (tactic: Tactic, targetGroupId: string) => void;
+  onSave: (tactic: Tactic, targetGroupId: string, description?: string) => void;
   currentMapId: MapId;
   currentSide: Side;
   writableGroups: ContentGroup[];
@@ -54,9 +53,10 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
 
   // Target Group selection
   const [targetGroupId, setTargetGroupId] = useState<string>('');
+  const [saveDescription, setSaveDescription] = useState<string>('');
 
   // --- View State ---
-  
+
   // --- Image State ---
   const [mapImagePreview, setMapImagePreview] = useState<string>('');
   
@@ -176,7 +176,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
 
   const handleSaveToGroup = () => {
       if (!validate()) return;
-      onSave(formData as Tactic, targetGroupId);
+      onSave(formData as Tactic, targetGroupId, saveDescription);
       if (!initialTactic) safeStorage.removeItem(DRAFT_KEY);
   };
 
@@ -318,13 +318,24 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                              </button>
                          </div>
                      ) : (
-                         <div className="mb-6 flex items-center justify-end no-capture">
-                             <div className="flex items-center gap-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-1 pr-3">
+                         <div className="mb-6 flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3 no-capture">
+                             <div className="flex items-center gap-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-1.5 px-3 w-full sm:w-auto">
+                                 <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                 <input 
+                                     type="text" 
+                                     placeholder="版本备注 (选填)"
+                                     value={saveDescription}
+                                     onChange={e => setSaveDescription(e.target.value)}
+                                     className="bg-transparent border-none outline-none text-xs text-neutral-900 dark:text-white w-full sm:w-48 placeholder:text-neutral-400"
+                                     maxLength={60}
+                                 />
+                             </div>
+                             <div className="flex items-center gap-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-1 pr-3 w-full sm:w-auto">
                                  <div className="bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded text-[10px] font-bold text-neutral-500 uppercase">保存到</div>
                                  <select 
                                     value={targetGroupId}
                                     onChange={(e) => setTargetGroupId(e.target.value)}
-                                    className="bg-transparent text-xs font-bold text-neutral-900 dark:text-white outline-none cursor-pointer min-w-[100px]"
+                                    className="bg-transparent text-xs font-bold text-neutral-900 dark:text-white outline-none cursor-pointer flex-1 min-w-[100px]"
                                  >
                                      {writableGroups.map(g => (
                                          <option key={g.metadata.id} value={g.metadata.id}>{g.metadata.name}</option>
@@ -427,13 +438,11 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                                         </>
                                     ) : (
                                         <>
-                                            <div className="absolute inset-0 opacity-50 grayscale group-hover:grayscale-0 transition-all">
-                                                <MapViewer mapId={formData.mapId} className="w-full h-full pointer-events-none" />
+                                            <div className="absolute inset-0 opacity-50 grayscale group-hover:grayscale-0 transition-all bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center">
                                             </div>
                                             <div className="relative z-10 text-center text-neutral-400 group-hover:text-blue-500 transition-colors bg-white/80 dark:bg-black/80 p-4 rounded-xl backdrop-blur-sm shadow-sm">
                                                 <svg className="w-8 h-8 mx-auto mb-1 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                                 <span className="text-xs font-bold">点击上传自定义图片</span>
-                                                <div className="text-[9px] mt-1 opacity-70">或使用默认地图背景</div>
                                             </div>
                                         </>
                                     )}

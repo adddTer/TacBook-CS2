@@ -13,7 +13,9 @@ import {
     EyeOff, 
     SquareArrowRight, 
     Cloud,
-    Bomb
+    Bomb,
+    PersonStanding,
+    UserMinus
 } from 'lucide-react';
 
 // --- Mappings ---
@@ -183,6 +185,8 @@ export const Icons = {
     Bomb: ({ className }: IconProps) => <Bomb className={className || "w-3.5 h-3.5"} strokeWidth={2.5} />,
     Defuse: ({ className }: IconProps) => <Scissors className={className || "w-3.5 h-3.5"} strokeWidth={2.5} />,
     Explode: ({ className }: IconProps) => <Bomb className={className || "w-3.5 h-3.5 text-white"} strokeWidth={2.5} />,
+    HostageRescued: ({ className }: IconProps) => <PersonStanding className={className || "w-3.5 h-3.5 text-white"} strokeWidth={2.5} />,
+    HostageKilled: ({ className }: IconProps) => <UserMinus className={className || "w-3.5 h-3.5 text-white"} strokeWidth={2.5} />,
     Flag: ({ className }: IconProps) => <Flag className={className || "w-3.5 h-3.5 text-white"} strokeWidth={2.5} />,
     Timer: ({ className }: IconProps) => <Timer className={className || "w-3.5 h-3.5 text-neutral-400"} strokeWidth={2.5} />,
     Target: ({ className }: IconProps) => <Target className={className || "w-3.5 h-3.5 text-neutral-400"} strokeWidth={2.5} />

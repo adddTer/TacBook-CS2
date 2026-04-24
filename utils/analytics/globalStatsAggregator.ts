@@ -20,6 +20,12 @@ export interface GlobalStats {
   avgScoreUtility: number;
 
   details: Record<string, number>;
+  detailsStdDev: Record<string, number>;
+  detailsMin: Record<string, number>;
+  detailsMax: Record<string, number>;
+  detailsP10: Record<string, number>;
+  detailsP50: Record<string, number>;
+  detailsP90: Record<string, number>;
   totalPlayers: number;
   totalRounds: number;
 
@@ -89,6 +95,7 @@ export function calculateGlobalStats(allMatches: Match[]): GlobalStats | null {
 
   const detailsAcc: Record<string, number> = {};
   const detailsWeight: Record<string, number> = {};
+  const detailsAllValues: Record<string, number[]> = {};
 
   aggregated.forEach((p) => {
     const rounds = p.basic.r3_rounds_played || 1;
@@ -140,8 +147,12 @@ export function calculateGlobalStats(allMatches: Match[]): GlobalStats | null {
         detailsAcc[key] = 0;
         detailsWeight[key] = 0;
       }
+      if (!detailsAllValues[key]) {
+        detailsAllValues[key] = [];
+      }
       detailsAcc[key] += val * rounds;
       detailsWeight[key] += rounds;
+      detailsAllValues[key].push(val);
     });
   });
 
@@ -149,6 +160,60 @@ export function calculateGlobalStats(allMatches: Match[]): GlobalStats | null {
   Object.keys(detailsAcc).forEach((key) => {
     avgDetails[key] =
       detailsWeight[key] > 0 ? detailsAcc[key] / detailsWeight[key] : 0;
+  });
+
+  const detailsVarianceAcc: Record<string, number> = {};
+  aggregated.forEach((p) => {
+    const rounds = p.basic.r3_rounds_played || 1;
+    const f = p.full.filtered;
+
+    const isUtilityBroken =
+      (f.details.totalFlashes > 5 && f.details.totalBlinded === 0) ||
+      (f.details.totalFlashAssists > 0 && f.details.totalBlinded === 0);
+
+    Object.entries(f.details).forEach(([key, val]) => {
+      if (val === null || val === undefined || typeof val !== "number" || isNaN(val)) return;
+      
+      const isUtilityField = [
+        "utilDmgPerRound", "utilKillsPer100", "flashesPerRound", "flashAssistsPerRound", 
+        "blindTimePerRound", "totalFlashes", "totalBlinded", "totalFlashAssists",
+      ].includes(key);
+      if (isUtilityField && isUtilityBroken) return;
+
+      if (!detailsVarianceAcc[key]) detailsVarianceAcc[key] = 0;
+      
+      const diff = val - avgDetails[key];
+      detailsVarianceAcc[key] += (diff * diff) * rounds;
+    });
+  });
+
+  const detailsStdDev: Record<string, number> = {};
+  Object.keys(detailsVarianceAcc).forEach((key) => {
+    detailsStdDev[key] =
+      detailsWeight[key] > 0 ? Math.sqrt(detailsVarianceAcc[key] / detailsWeight[key]) : 0;
+  });
+
+  const detailsMin: Record<string, number> = {};
+  const detailsMax: Record<string, number> = {};
+  const detailsP10: Record<string, number> = {};
+  const detailsP50: Record<string, number> = {};
+  const detailsP90: Record<string, number> = {};
+
+  Object.keys(detailsAllValues).forEach((key) => {
+    const sorted = [...detailsAllValues[key]].sort((a, b) => a - b);
+    if (sorted.length === 0) return;
+    
+    detailsMin[key] = sorted[0];
+    detailsMax[key] = sorted[sorted.length - 1];
+    
+    // Simple percentile index selection
+    const p10Idx = Math.max(0, Math.floor(sorted.length * 0.1) - 1);
+    const p50Idx = Math.max(0, Math.floor(sorted.length * 0.5) - 1);
+    const p90Idx = Math.max(0, Math.floor(sorted.length * 0.9) - 1);
+    
+    detailsP10[key] = sorted[p10Idx];
+    detailsP50[key] = sorted[p50Idx];
+    detailsP90[key] = sorted[p90Idx];
   });
 
   // Helper to get percentile
@@ -256,6 +321,12 @@ export function calculateGlobalStats(allMatches: Match[]): GlobalStats | null {
     avgScoreUtility: totalRounds > 0 ? sumScoreUtility / totalRounds : 0,
 
     details: avgDetails,
+    detailsStdDev: detailsStdDev,
+    detailsMin,
+    detailsMax,
+    detailsP10,
+    detailsP50,
+    detailsP90,
     totalPlayers: aggregated.length,
     totalRounds,
 

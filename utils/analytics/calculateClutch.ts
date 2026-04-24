@@ -1,14 +1,8 @@
+import { mapScore } from "./scoreMapper";
+
 /**
- * Calculates Clutch Score (0-100).
- *
- * Target: Professional Average ~ 50 Points.
- *
- * Components:
- * 1. Clutch Points Per Round (50%): Target 0.10 (Significantly Easier)
- * 2. 1v1 Win % (30%): Target 75% (Easier)
- * 3. Last Alive % (10%): Target 20% (Easier)
- * 4. Time Alive per Round (5%): Target 95s (Easier)
- * 5. Saves per Loss (5%): Target 30% (Easier)
+ * Calculates Clutch Score (0-100) using Piecewise Scaling.
+ * Target: Average ~ 50 Points.
  */
 export const calculateClutch = (
   clutchPoints: number,
@@ -22,38 +16,30 @@ export const calculateClutch = (
 ): number => {
   if (rounds === 0) return 0;
 
-  // 1. Clutch Points Per Round (50%)
   const cpPerRound = clutchPoints / rounds;
-  const scoreCP = (cpPerRound / 0.1) * 50;
+  const scoreCP = mapScore(cpPerRound, 0, 0.014, 0.054, 50); // P10 0, P50 0.014, P90 0.054
 
-  // 2. 1v1 Win Rate (30%) - Dynamic Weighting
   const total1v1 = w1v1 + l1v1;
   let scoreWinRate = 0;
-  let weightTotal = 70; // 50(CP) + 10(LastAlive) + 5(Time) + 5(Save)
+  let weightTotal = 50 + 10 + 5 + 5; // CP(50) + LastAlive(10) + Time(5) + Save(5)
 
   if (total1v1 > 0) {
     const winRate = w1v1 / total1v1;
-    scoreWinRate = (winRate / 0.75) * 30;
-    weightTotal += 30; // Add weight if applicable
+    scoreWinRate = mapScore(winRate, 0.33, 0.666, 0.85, 30); // P50 0.666, adjusted good/min
+    weightTotal += 30; 
   }
 
-  // 3. Last Alive % (10%)
   const lastAliveRate = roundsLastAlive / rounds;
-  const scoreLastAlive = (lastAliveRate / 0.2) * 10;
+  const scoreLastAlive = mapScore(lastAliveRate, 0.03, 0.10, 0.146, 10); // P10 0.03, P50 0.10, P90 0.146
 
-  // 4. Time Alive per Round (5%)
   const avgTimeAlive = totalTimeAlive / rounds;
-  const scoreTime = (avgTimeAlive / 95) * 5;
+  const scoreTime = mapScore(avgTimeAlive, 66, 77.5, 82.6, 5); // P10 66, P50 77.5, P90 82.6
 
-  // 5. Saves per Loss (5%)
   const saveRate = roundsLost > 0 ? savesInLosses / roundsLost : 0;
-  const scoreSave = (saveRate / 0.3) * 5;
+  const scoreSave = mapScore(saveRate, 0.046, 0.088, 0.155, 5); // P10 0.046, P50 0.088, P90 0.155
 
-  const rawTotalScore =
-    scoreCP + scoreWinRate + scoreLastAlive + scoreTime + scoreSave;
-
-  // Normalize to 100 based on active weights
+  const rawTotalScore = scoreCP + scoreWinRate + scoreLastAlive + scoreTime + scoreSave;
   const finalScore = (rawTotalScore / weightTotal) * 100;
 
-  return Math.round(Math.max(0, finalScore));
+  return Math.min(100, Math.round(finalScore));
 };

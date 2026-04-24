@@ -206,6 +206,15 @@ export class RatingEngine {
         this.wpaEngine.initializeRound(4000, 4000); 
     }
 
+    private getLastDeadPlayerSide(side: 'T' | 'CT'): string | null {
+        for (let i = this.recentDeaths.length - 1; i >= 0; i--) {
+            const vic = this.recentDeaths[i].victim;
+            if (side === 'T' && this.knownRoundTs.has(vic)) return vic;
+            if (side === 'CT' && this.knownRoundCTs.has(vic)) return vic;
+        }
+        return null;
+    }
+
     public handleEvent(
         event: any, 
         currentRound: number, 
@@ -642,6 +651,9 @@ export class RatingEngine {
                 }
                 
                 if (attackerSide) {
+                    const fallbackKillerTeam = this.getLastDeadPlayerSide(attackerSide) || undefined;
+                    const fallbackOpposingTeam = this.getLastDeadPlayerSide(attackerSide === 'T' ? 'CT' : 'T') || undefined;
+
                     const updates = this.wpaEngine.handleKill(
                         att, vic, victimSide, attackerSide, assisters, timeElapsed,
                         tPlayers, ctPlayers,
@@ -651,7 +663,9 @@ export class RatingEngine {
                         isBot, // NEW
                         contributorSides, // NEW
                         survivingKillerTeam, // NEW
-                        tradeCompensation // NEW
+                        tradeCompensation, // NEW
+                        fallbackKillerTeam,
+                        fallbackOpposingTeam
                     );
                     eventUpdates.push(...updates);
                     this.commitWPAUpdates(updates, tick);
@@ -798,6 +812,13 @@ export class RatingEngine {
                                 const oppStats = this.getRoundStats(oppSid);
                                 oppStats.killShareRating += rewardPerPlayer;
                             });
+                        } else {
+                            // Fallback: Give it to the last dead opposing player
+                            const fallbackOppside = attackerSide === 'T' ? 'CT' : 'T';
+                            const fallbackSid = this.getLastDeadPlayerSide(fallbackOppside);
+                            if (fallbackSid) {
+                                this.getRoundStats(fallbackSid).killShareRating += totalPenalty;
+                            }
                         }
                     } else if (totalPenalty > 0) {
                         // If it's a normal kill, but there were friendly fire contributors,
@@ -817,6 +838,12 @@ export class RatingEngine {
                             survivingKillerTeam.forEach(sid => {
                                 this.getRoundStats(sid).killShareRating += rewardPerPlayer;
                             });
+                        } else {
+                            // Fallback: Give it to the last dead player on the killer's team
+                            const fallbackSid = this.getLastDeadPlayerSide(attackerSide);
+                            if (fallbackSid) {
+                                this.getRoundStats(fallbackSid).killShareRating += totalPenalty;
+                            }
                         }
                     }
                 }

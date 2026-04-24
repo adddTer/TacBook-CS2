@@ -9,7 +9,7 @@ import { safeStorage } from '../utils/storage';
 interface UtilityEditorProps {
   initialUtility?: Utility;
   onCancel: () => void;
-  onSave: (utility: Utility, targetGroupId: string) => void;
+  onSave: (utility: Utility, targetGroupId: string, description?: string) => void;
   currentMapId: MapId;
   currentSide: Side;
   writableGroups: ContentGroup[];
@@ -39,6 +39,7 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
   });
 
   const [targetGroupId, setTargetGroupId] = useState<string>('');
+  const [saveDescription, setSaveDescription] = useState<string>('');
   const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
@@ -104,7 +105,7 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
           alert("请选择保存分组");
           return;
       }
-      onSave(formData, targetGroupId);
+      onSave(formData, targetGroupId, saveDescription);
   };
 
   const prepareExport = () => {
@@ -160,13 +161,24 @@ export const UtilityEditor: React.FC<UtilityEditorProps> = ({
             <div className="max-w-7xl mx-auto p-4 lg:p-8">
                  {/* Group Selector */}
                  {writableGroups.length > 0 ? (
-                     <div className="mb-6 flex items-center justify-end">
-                         <div className="flex items-center gap-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-1 pr-3">
+                     <div className="mb-6 flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3">
+                         <div className="flex items-center gap-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-1.5 px-3 w-full sm:w-auto">
+                             <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                             <input 
+                                 type="text" 
+                                 placeholder="版本备注 (选填)"
+                                 value={saveDescription}
+                                 onChange={e => setSaveDescription(e.target.value)}
+                                 className="bg-transparent border-none outline-none text-xs text-neutral-900 dark:text-white w-full sm:w-48 placeholder:text-neutral-400"
+                                 maxLength={60}
+                             />
+                         </div>
+                         <div className="flex items-center gap-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-1 pr-3 w-full sm:w-auto">
                              <div className="bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded text-[10px] font-bold text-neutral-500 uppercase">保存到</div>
                              <select 
                                 value={targetGroupId}
                                 onChange={(e) => setTargetGroupId(e.target.value)}
-                                className="bg-transparent text-xs font-bold text-neutral-900 dark:text-white outline-none cursor-pointer min-w-[100px]"
+                                className="bg-transparent text-xs font-bold text-neutral-900 dark:text-white outline-none cursor-pointer flex-1 min-w-[100px]"
                              >
                                  {writableGroups.map(g => (
                                      <option key={g.metadata.id} value={g.metadata.id}>{g.metadata.name}</option>

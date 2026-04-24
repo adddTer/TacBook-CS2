@@ -1,5 +1,7 @@
 import { FunctionDeclaration, Type } from "@google/genai";
 import { getTeams } from "../../../utils/teamLoader";
+import { calculateTeamRating, calculateTeamWinRateMatrix } from '../../../utils/analytics/teamStatsCalculator';
+import { saveVersion } from "../../../utils/versionDb";
 
 export const toolDeclarations: FunctionDeclaration[] = [
     {
@@ -135,7 +137,7 @@ export const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: "query_team_stats",
-        description: "查询指定战队的整体统计数据。队伍判定依据：一局比赛的一方至少3人属于该队伍。",
+        description: "查询指定战队的整体统计数据（包括：总胜率、平均Rating、以及XvY不同人数优势下的阵型回合胜率矩阵）。队伍判定依据：一局比赛的一方至少3人属于该队伍。",
         parameters: {
             type: Type.OBJECT,
             properties: {
@@ -235,12 +237,13 @@ export const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: "update_database_item",
-        description: "更新或创建数据库中的项目（战术、道具、比赛等）。",
+        description: "更新战术或道具数据库。如果修改或创建战术/道具，必须遵循用户的语言（中文）。\n注意：创建战术('tactics')时，item必须是一个完整的Tactic对象。对象结构尽量包含: mapId, title, side ('T'|'CT'), site ('A'|'B'|'Mid'|'All'), tags (数组，包含{label, category}), loadout (数组，包含{role, equipment}), actions (数组，包含{id, who, content, time}), metadata (包含{author, lastUpdated})等字段。避免传入空对象。",
         parameters: {
             type: Type.OBJECT,
             properties: {
                 collection: { type: Type.STRING, description: "集合名称 ('tactics', 'utilities', 'matches')" },
-                item: { type: Type.OBJECT, description: "要更新或创建的完整项目对象。必须包含 id。" }
+                item: { type: Type.OBJECT, description: "要更新或创建的完整项目对象。必须至少包含 id。若是新建战术，务必填充完整的字段如 title, mapId, side, site, tags[], loadout[], actions[], metadata 等。" },
+                edit_summary: { type: Type.STRING, description: "本次修改的内容摘要，必须用中文详细说明修改了哪些地方、起到了什么作用。例如：加入了A大爆烟、修改了B区突破站位。" }
             },
             required: ["collection", "item"]
         }
@@ -270,8 +273,8 @@ export const createToolHandlers = (context: {
     updateMemory: (key: string, value: any) => void,
     updateTaskState?: (state: any) => void,
     isAdmin?: boolean,
-    onSaveTactic?: (tactic: any) => Promise<void> | void,
-    onSaveUtility?: (utility: any) => Promise<void> | void,
+    onSaveTactic?: (tactic: any, description?: string, author?: string) => Promise<void> | void,
+    onSaveUtility?: (utility: any, description?: string, author?: string) => Promise<void> | void,
     onSaveMatch?: (match: any) => Promise<void> | void,
     onDeleteTactic?: (tactic: any) => Promise<void> | void,
     onDeleteUtility?: (utility: any) => Promise<void> | void,
@@ -359,7 +362,21 @@ export const createToolHandlers = (context: {
             const playerStats: any[] = [];
             
             matches.forEach(m => {
-                const p = m.players.find((ps: any) => ps.playerId === playerId || ps.steamid === steamid);
+                const searchStr = playerId?.toLowerCase();
+                const steamSearch = steamid?.toLowerCase();
+                
+                let p = m.players.find((ps: any) => 
+                    (searchStr && ps.playerId?.toLowerCase().includes(searchStr)) || 
+                    (steamSearch && ps.steamid?.toLowerCase().includes(steamSearch))
+                );
+                
+                if (!p && m.enemyPlayers) {
+                    p = m.enemyPlayers.find((ps: any) => 
+                        (searchStr && ps.playerId?.toLowerCase().includes(searchStr)) || 
+                        (steamSearch && ps.steamid?.toLowerCase().includes(steamSearch))
+                    );
+                }
+
                 if (p) {
                     const { r3_wpa_accum, r3_impact_accum, r3_econ_accum, r3_rounds_played, kastSum, headshots, ...cleanP } = p as any;
                     playerStats.push({ matchId: m.id, date: m.date, mapId: m.mapId, ...cleanP });
@@ -389,7 +406,21 @@ export const createToolHandlers = (context: {
             const playerMatches: any[] = [];
             
             matches.forEach(m => {
-                const p = m.players.find((ps: any) => ps.playerId === playerId || ps.steamid === steamid);
+                const searchStr = playerId?.toLowerCase();
+                const steamSearch = steamid?.toLowerCase();
+                
+                let p = m.players.find((ps: any) => 
+                    (searchStr && ps.playerId?.toLowerCase().includes(searchStr)) || 
+                    (steamSearch && ps.steamid?.toLowerCase().includes(steamSearch))
+                );
+                
+                if (!p && m.enemyPlayers) {
+                    p = m.enemyPlayers.find((ps: any) => 
+                        (searchStr && ps.playerId?.toLowerCase().includes(searchStr)) || 
+                        (steamSearch && ps.steamid?.toLowerCase().includes(steamSearch))
+                    );
+                }
+
                 if (p) {
                     playerMatches.push({
                         matchId: m.id,
@@ -415,20 +446,85 @@ export const createToolHandlers = (context: {
             if (!targetTeam) return { error: `未找到战队: ${teamName}` };
 
             const teamPlayerIds = new Set(targetTeam.players.map(p => p.id));
+            const teamPlayerSteamIds = new Set(targetTeam.players.flatMap(p => p.steamids || []));
             
             const matches = context.allMatches.filter(m => {
                 let teamMembersInMatch = 0;
-                m.players.forEach((p: any) => {
-                    if (teamPlayerIds.has(p.playerId) || teamPlayerIds.has(p.name)) {
+                const allPlayers = [...(m.players || []), ...(m.enemyPlayers || [])];
+                
+                // Track user names to avoid double counting if duplicate stats exist
+                const countedPlayerKeys = new Set<string>();
+                
+                allPlayers.forEach((p: any) => {
+                    const matchIdKey = p.playerId || p.name;
+                    const matchSteamKey = p.steamid?.toString();
+                    
+                    if (countedPlayerKeys.has(matchIdKey)) return;
+
+                    let isMatch = false;
+                    // Exact name/id check
+                    if (teamPlayerIds.has(matchIdKey)) {
+                        isMatch = true;
+                    } 
+                    // SteamID check with robust parsing
+                    else if (matchSteamKey) {
+                        for (const teamSteamStr of teamPlayerSteamIds) {
+                            if (teamSteamStr === matchSteamKey || 
+                                teamSteamStr.includes(matchSteamKey) || 
+                                matchSteamKey.includes(teamSteamStr)) {
+                                isMatch = true;
+                                break;
+                            }
+                            
+                            // 64-bit conversion check (rough approximation)
+                            if (/^\d+$/.test(matchSteamKey) && matchSteamKey.length < 16) {
+                                const accountId = parseInt(matchSteamKey, 10);
+                                const base = BigInt('76561197960265728');
+                                const convertedId = (base + BigInt(accountId)).toString();
+                                if (teamSteamStr === convertedId) {
+                                    isMatch = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (isMatch) {
                         teamMembersInMatch++;
+                        countedPlayerKeys.add(matchIdKey);
                     }
                 });
+                
                 return teamMembersInMatch >= 3;
             });
 
-            const wins = matches.filter(m => m.result === 'WIN').length;
-            const losses = matches.filter(m => m.result === 'LOSS').length;
-            const ties = matches.filter(m => m.result === 'TIE').length;
+            // Correct match win logic for 'us' vs 'them' based on the team's side or players.
+            // Since `m.result` is typically relative to the US team (user's team), we need to ensure the team was actually on the "us" side to count the result correctly. 
+            // In typical match storage, if it's a known user team, m.players = US, m.enemyPlayers = THEM.
+            // We'll count wins based on whether they were on the winning side.
+            let wins = 0;
+            let losses = 0;
+            let ties = 0;
+            
+            matches.forEach(m => {
+                // Determine if our target team is predominantly in `m.players`
+                let teamInUssers = 0;
+                m.players.forEach((p: any) => {
+                    if (teamPlayerIds.has(p.playerId) || teamPlayerIds.has(p.name) || (p.steamid && teamPlayerSteamIds.has(p.steamid.toString()))) {
+                        teamInUssers++;
+                    }
+                });
+
+                const isTargetOnUsSide = teamInUssers >= 3 || (teamInUssers > 0 && teamInUssers >= (m.players.length / 2));
+
+                if (m.result === 'TIE') {
+                    ties++;
+                } else if ((m.result === 'WIN' && isTargetOnUsSide) || (m.result === 'LOSS' && !isTargetOnUsSide)) {
+                    wins++;
+                } else if ((m.result === 'LOSS' && isTargetOnUsSide) || (m.result === 'WIN' && !isTargetOnUsSide)) {
+                    losses++;
+                }
+            });
             
             const mapStats: Record<string, { wins: number, losses: number }> = {};
             matches.forEach(m => {
@@ -437,6 +533,12 @@ export const createToolHandlers = (context: {
                 if (m.result === 'LOSS') mapStats[m.mapId].losses++;
             });
             
+            // Dynamic Team Calculation via existing utilities
+            const teamRating = calculateTeamRating(targetTeam.players, matches);
+            const winRateMatrixAll = calculateTeamWinRateMatrix(targetTeam.players, matches, 'ALL').matrix;
+            const winRateMatrixT = calculateTeamWinRateMatrix(targetTeam.players, matches, 'T').matrix;
+            const winRateMatrixCT = calculateTeamWinRateMatrix(targetTeam.players, matches, 'CT').matrix;
+            
             return {
                 teamName: targetTeam.name,
                 totalMatches: matches.length,
@@ -444,7 +546,13 @@ export const createToolHandlers = (context: {
                 losses,
                 ties,
                 winRate: matches.length > 0 ? (wins / matches.length) * 100 : 0,
-                mapStats
+                mapStats,
+                teamRating,
+                winRateMatrix: {
+                    all: winRateMatrixAll,
+                    t: winRateMatrixT,
+                    ct: winRateMatrixCT
+                }
             };
         },
         list_registered_teams: async () => {
@@ -612,20 +720,60 @@ export const createToolHandlers = (context: {
                 return { error: `执行代码时出错: ${e.message}\n请检查代码语法或逻辑。` };
             }
         },
-        update_database_item: async ({ collection, item }: { collection: string, item: any }) => {
+        update_database_item: async (args: { collection: string, item: any, edit_summary?: string }) => {
+            const { collection, item, edit_summary } = args;
             checkPermission("修改数据库");
             if (!item || !item.id) return { error: "项目必须包含 id" };
             
             try {
-                if (collection === 'tactics' && context.onSaveTactic) {
-                    await context.onSaveTactic(item);
-                    return { status: "success", message: `已更新战术: ${item.id}` };
-                } else if (collection === 'utilities' && context.onSaveUtility) {
-                    await context.onSaveUtility(item);
-                    return { status: "success", message: `已更新道具: ${item.id}` };
-                } else if (collection === 'matches' && context.onSaveMatch) {
-                    await context.onSaveMatch(item);
-                    return { status: "success", message: `已更新比赛: ${item.id}` };
+                let snapshot = null;
+                const authorStr = 'Copilot AI';
+                const descStr = edit_summary || 'AI 自动生成/修改';
+
+                if (collection === 'tactics') {
+                    // Provide defaults to prevent UI crashes if AI generates incomplete objects
+                    item.tags = item.tags || [];
+                    item.loadout = item.loadout || [];
+                    item.actions = item.actions || [];
+                    item.metadata = item.metadata || {};
+                    item.metadata.author = authorStr;
+                    // Force using the current system time to prevent AI from fabricating times
+                    item.metadata.lastUpdated = new Date().toISOString();
+                    item.title = item.title || 'Untitled Tactic';
+                    item.mapId = item.mapId || 'mirage';
+                    item.side = item.side || 'T';
+                    item.site = item.site || 'All';
+
+                    snapshot = context.allTactics.find(t => t.id === item.id);
+                    if (snapshot) saveVersion(snapshot, '系统自动', 'AI 修改前系统自动备份');
+                    if (context.onSaveTactic) {
+                        await context.onSaveTactic(item, descStr, authorStr);
+                        return { status: "success", message: `已更新战术: ${item.id}`, snapshot, updated: item };
+                    }
+                } else if (collection === 'utilities') {
+                    // Provide defaults for utilities
+                    item.title = item.title || 'Untitled Utility';
+                    item.mapId = item.mapId || 'mirage';
+                    item.side = item.side || 'T';
+                    item.site = item.site || 'All';
+                    item.type = item.type || 'smoke';
+                    item.content = item.content || '';
+                    item.metadata = item.metadata || {};
+                    item.metadata.author = authorStr;
+                    item.metadata.lastUpdated = new Date().toISOString();
+
+                    snapshot = context.allUtilities.find(u => u.id === item.id);
+                    if (snapshot) saveVersion(snapshot, '系统自动', 'AI 修改前系统自动备份');
+                    if (context.onSaveUtility) {
+                        await context.onSaveUtility(item, descStr, authorStr);
+                        return { status: "success", message: `已更新道具: ${item.id}`, snapshot, updated: item };
+                    }
+                } else if (collection === 'matches') {
+                    snapshot = context.allMatches.find(m => m.id === item.id);
+                    if (context.onSaveMatch) {
+                        await context.onSaveMatch(item);
+                        return { status: "success", message: `已更新比赛: ${item.id}`, snapshot, updated: item };
+                    }
                 }
                 return { error: `不支持的集合或未提供保存回调: ${collection}` };
             } catch (e: any) {

@@ -269,8 +269,8 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
                             const stage = tournament.stages.find(s => s.id === activeStageId);
                             if (!stage) return null;
 
-                            const isSwiss = stage.format.includes('瑞士轮') || stage.matches?.length === 33;
-                            const isSingleElim = stage.format.includes('淘汰') || [3, 7, 15].includes(stage.matches?.length || 0);
+                            const isSwiss = stage.format.includes('瑞士轮') || [22, 33, 44].includes(stage.matches?.length || 0);
+                            const isSingleElim = stage.format.includes('淘汰') || stage.matches?.length === 3 || stage.matches?.length === 7 || stage.matches?.length === 15 || stage.matches?.length === 4 || stage.matches?.length === 8 || stage.matches?.length === 16;
 
                             return (
                                 <>
@@ -278,26 +278,53 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
                                         <h3 className="text-lg font-bold text-neutral-900 dark:text-white">{stage.name}</h3>
                                         <p className="text-sm text-neutral-500 whitespace-pre-line mt-1">{stage.format}</p>
                                     </div>
-                                    <div className="bg-neutral-50/50 dark:bg-neutral-900/50">
+                                    <div className="bg-neutral-50/50 dark:bg-neutral-900/50 flex-1 overflow-hidden relative group/bracket">
                                         {stage.matches && stage.matches.length > 0 ? (
-                                            isSwiss ? <SwissBracket matches={stage.matches} />
-                                            : isSingleElim ? <SingleElimBracket matches={stage.matches} />
+                                            isSwiss ? <SwissBracket matches={stage.matches} onNodeClick={(stageMatch) => {
+                                                // Try to locate a corresponding real match
+                                                // Real matches might just have the same team names
+                                                const realMatch = tournamentMatches.find(m => 
+                                                    (m.teamNameUs === stageMatch.team1 && m.teamNameThem === stageMatch.team2) ||
+                                                    (m.teamNameUs === stageMatch.team2 && m.teamNameThem === stageMatch.team1)
+                                                );
+                                                if (realMatch) {
+                                                    window.dispatchEvent(new CustomEvent('open-match', { detail: realMatch.id }));
+                                                }
+                                            }} />
+                                            : isSingleElim ? <SingleElimBracket matches={stage.matches} onNodeClick={(stageMatch) => {
+                                                const realMatch = tournamentMatches.find(m => 
+                                                    (m.teamNameUs === stageMatch.team1 && m.teamNameThem === stageMatch.team2) ||
+                                                    (m.teamNameUs === stageMatch.team2 && m.teamNameThem === stageMatch.team1)
+                                                );
+                                                if (realMatch) {
+                                                    window.dispatchEvent(new CustomEvent('open-match', { detail: realMatch.id }));
+                                                }
+                                            }} />
                                             : (
                                                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                    {stage.matches.map(match => (
-                                                        <div key={match.id} className="flex flex-col gap-1 p-2 rounded-lg bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-800/50 dark:hover:bg-neutral-800 transition-colors text-sm cursor-default border border-neutral-200 dark:border-neutral-700">
-                                                            {match.date && <div className="text-xs text-neutral-400 font-medium">{match.date}</div>}
+                                                    {stage.matches.map(stageMatch => {
+                                                        const realMatch = tournamentMatches.find(m => 
+                                                            (m.teamNameUs === stageMatch.team1 && m.teamNameThem === stageMatch.team2) ||
+                                                            (m.teamNameUs === stageMatch.team2 && m.teamNameThem === stageMatch.team1)
+                                                        );
+                                                        return (
+                                                        <div 
+                                                            key={stageMatch.id} 
+                                                            onClick={realMatch ? () => window.dispatchEvent(new CustomEvent('open-match', { detail: realMatch.id })) : undefined}
+                                                            className={`flex flex-col gap-1 p-2 rounded-lg transition-colors text-sm border border-neutral-200 dark:border-neutral-700 ${realMatch ? 'bg-white cursor-pointer hover:bg-neutral-100 shadow-sm dark:bg-neutral-800 dark:hover:bg-neutral-700' : 'bg-neutral-50 dark:bg-neutral-800/50 cursor-default'}`}
+                                                        >
+                                                            {stageMatch.date && <div className="text-xs text-neutral-400 font-medium">{stageMatch.date}</div>}
                                                             <div className="flex justify-between items-center">
                                                                 <div className="flex items-center gap-2 flex-1">
-                                                                    <span className="font-medium text-neutral-900 dark:text-white truncate">{match.team1}</span>
+                                                                    <span className="font-medium text-neutral-900 dark:text-white truncate">{stageMatch.team1}</span>
                                                                 </div>
                                                                 <div className="px-2 font-mono text-neutral-400">vs</div>
                                                                 <div className="flex items-center gap-2 flex-1 justify-end">
-                                                                    <span className="font-medium text-neutral-900 dark:text-white truncate">{match.team2}</span>
+                                                                    <span className="font-medium text-neutral-900 dark:text-white truncate">{stageMatch.team2}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    ))}
+                                                    )})}
                                                 </div>
                                             )
                                         ) : (
@@ -373,7 +400,9 @@ export const TournamentDetail: React.FC<TournamentDetailProps> = ({
 
           <MatchList
             matches={tournamentMatches}
-            onSelectMatch={() => {}} // We might need to handle this if we want to view match details from here
+            onSelectMatch={(match) => {
+              window.dispatchEvent(new CustomEvent('open-match', { detail: match.id }));
+            }}
             onBatchDelete={(items) => {
               items.forEach((item) => {
                 const match = tournamentMatches.find((m) => m.id === item.id);

@@ -1,14 +1,8 @@
+import { mapScore } from "./scoreMapper";
+
 /**
- * Calculates Entry (Sacrifice) Score (0-100).
- *
- * Target: Professional Average ~ 45 Points.
- *
- * Components:
- * 1. Opening Death Traded % (30%): Target 70% (Avg ~50% -> 21pts)
- * 2. Traded Deaths % (20%): Target 60% (Avg ~40% -> 13pts)
- * 3. Traded Deaths per Round (20%): Target 0.25 (Avg ~0.10 -> 40pts) (This is the volume metric)
- * 4. Saved by Teammate per Round (15%): Target 0.20 (Avg ~0.08 -> 40pts)
- * 5. Support Rounds % (15%): Target 40% (Avg ~20% -> 50pts)
+ * Calculates Entry (Sacrifice) Score (0-100) using Piecewise Scaling.
+ * Target: Average ~ 50 Points.
  */
 export const calculateEntry = (
   tradedDeaths: number,
@@ -22,29 +16,21 @@ export const calculateEntry = (
 ): number => {
   if (rounds === 0) return 0;
 
-  // 1. Opening Death Traded % (30%)
-  const odTradeRate =
-    openingDeaths > 0 ? openingDeathsTraded / openingDeaths : 0;
-  const scoreODT = (odTradeRate / 0.7) * 30;
+  const odTradeRate = openingDeaths > 0 ? openingDeathsTraded / openingDeaths : 0;
+  const scoreODT = mapScore(odTradeRate, 0.0, 0.31, 0.50, 30); // P10 0.0, P50 0.31, P90 0.50
 
-  // 2. Traded Deaths % (20%)
   const tdRate = totalDeaths > 0 ? tradedDeaths / totalDeaths : 0;
-  const scoreTDPct = (tdRate / 0.6) * 20;
+  const scoreTDPct = mapScore(tdRate, 0.20, 0.276, 0.36, 20); // P10 0.20, P50 0.276, P90 0.36
 
-  // 3. Traded Deaths per Round (20%)
-  // Volume of sacrifice
   const tradedDeathPerRound = tradedDeaths / rounds;
-  const scoreTDPR = (tradedDeathPerRound / 0.25) * 20;
+  const scoreTDPR = mapScore(tradedDeathPerRound, 0.12, 0.18, 0.27, 20); // P10 0.12, P50 0.18, P90 0.27
 
-  // 4. Saved by Teammate per Round (15%)
   const savedRate = savedByTeammate / rounds;
-  const scoreSaved = (savedRate / 0.2) * 15;
+  const scoreSaved = mapScore(savedRate, 0.14, 0.21, 0.29, 15); // P10 0.14, P50 0.21, P90 0.29
 
-  // 5. Support Round % (15%)
   const suppRoundRate = supportRounds / rounds;
-  const scoreSupp = (suppRoundRate / 0.4) * 15;
+  const scoreSupp = mapScore(suppRoundRate, 0.10, 0.26, 0.66, 15); // Adjusted P50 to 0.26
 
   const totalScore = scoreODT + scoreTDPct + scoreTDPR + scoreSaved + scoreSupp;
-
-  return Math.round(Math.max(0, totalScore));
+  return Math.min(100, Math.round(totalScore));
 };

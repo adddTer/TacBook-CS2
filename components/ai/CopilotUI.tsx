@@ -12,6 +12,7 @@ import rehypeRaw from 'rehype-raw';
 import 'katex/dist/katex.min.css';
 import { AiConfigModal } from '../AiConfigModal';
 import { FunctionDeclaration } from '@google/genai';
+import { Gamepad2, User, Lightbulb, Target, ArrowRight } from 'lucide-react';
 
 // Global lock for DB writes to prevent IDB races
 let dbSavePromise: Promise<void> = Promise.resolve();
@@ -99,6 +100,57 @@ const MessageCopyButton = ({ text }: { text: string }) => {
                 )}
                 {copied ? '已复制' : '复制'}
             </button>
+        </div>
+    );
+};
+
+const ItemDiffViewer = ({ snapshot, updated, onRollback }: { snapshot: any, updated: any, onRollback: () => void }) => {
+    // Determine which fields changed
+    const changedKeys = Object.keys(updated).filter(k => JSON.stringify(snapshot[k]) !== JSON.stringify(updated[k]));
+
+    return (
+        <div className="mt-2 w-full flex flex-col gap-2 p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl border border-neutral-200 dark:border-neutral-700 relative group/diff">
+            <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                    数据已更改 ({changedKeys.length} 项)
+                </span>
+                {snapshot && (
+                    <button 
+                        onClick={onRollback}
+                        className="px-2 py-1 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 text-[10px] font-bold rounded-lg transition-colors border border-red-200 dark:border-red-900"
+                    >
+                        撤销此时修改
+                    </button>
+                )}
+            </div>
+            {changedKeys.length > 0 && (
+                <div className="text-[10px] text-neutral-500 flex flex-wrap gap-1">
+                    {changedKeys.map(k => (
+                        <span key={k} className="px-1.5 py-0.5 bg-white dark:bg-neutral-900 rounded border border-neutral-200 dark:border-neutral-700">
+                            {k}
+                        </span>
+                    ))}
+                </div>
+            )}
+            <div className="absolute top-full left-0 mt-1 w-[280px] sm:w-[400px] z-50 hidden group-hover/diff:block shadow-2xl rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
+                <div className="flex bg-neutral-100 dark:bg-neutral-800/50 px-3 py-1.5 border-b border-neutral-200 dark:border-neutral-800">
+                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Diff 直观显示</span>
+                </div>
+                <div className="grid grid-cols-2 text-[10px] max-h-[300px] overflow-y-auto slim-scrollbar">
+                    <div className="p-2 border-r border-neutral-200 dark:border-neutral-800">
+                        <div className="font-bold text-red-500 mb-1 border-b border-red-100 dark:border-red-900/30 pb-1">旧快照</div>
+                        <pre className="text-neutral-600 dark:text-neutral-400 whitespace-pre-wrap word-break-all font-mono">
+                            {JSON.stringify(changedKeys.reduce((acc, k) => ({ ...acc, [k]: snapshot[k] }), {}), null, 2)}
+                        </pre>
+                    </div>
+                    <div className="p-2">
+                        <div className="font-bold text-green-500 mb-1 border-b border-green-100 dark:border-green-900/30 pb-1">新更改</div>
+                        <pre className="text-neutral-600 dark:text-neutral-400 whitespace-pre-wrap word-break-all font-mono">
+                            {JSON.stringify(changedKeys.reduce((acc, k) => ({ ...acc, [k]: updated[k] }), {}), null, 2)}
+                        </pre>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
@@ -191,6 +243,12 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
     }, [currentThreadId, threads, isOpen]);
+
+    const handleRollback = (collection: string, snapshot: any) => {
+        const text = `请调用 update_database_item 恢复 ${collection} 集合中的项目为以下快照：\n\`\`\`json\n${JSON.stringify({collection, item: snapshot}, null, 2)}\n\`\`\``;
+        setInputText(text);
+        setTimeout(() => handleSend(), 100);
+    };
 
     const currentThread = threads.find(t => t.id === currentThreadId);
 
@@ -439,104 +497,150 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
         a: ({node, href, children, ...props}: any) => {
             if (href?.startsWith('#match/')) {
                 const matchId = href.replace('#match/', '');
+                const isValid = context?.allMatches ? context.allMatches.some((m: any) => m.id === matchId) : true;
                 return (
                     <a 
                         href={href}
                         onClick={(e) => {
                             e.preventDefault();
+                            if (!isValid) return;
                             window.location.hash = `match/${matchId}`;
                             setIsOpen(false);
                         }}
-                        className="flex items-center justify-between p-3 my-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors no-underline group"
+                        className={`flex items-center justify-between p-4 my-3 border rounded-xl no-underline group transition-all duration-200 ${
+                            isValid 
+                                ? 'bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 shadow-sm hover:shadow hover:border-blue-300 dark:hover:border-blue-600/50 cursor-pointer overflow-hidden relative' 
+                                : 'bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 opacity-60 cursor-not-allowed'
+                        }`}
+                        title={!isValid ? '目标数据已失效或被删除' : ''}
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                        {/* Accent left border */}
+                        {isValid && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-xl"></div>}
+                        
+                        <div className="flex flex-1 items-center gap-4 w-0 min-w-0 pl-1">
+                            <div className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center ${isValid ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'}`}>
+                                <Gamepad2 className="w-5 h-5" />
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-neutral-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{children}</span>
-                                <span className="text-[10px] text-neutral-500 uppercase tracking-widest mt-0.5">点击查看比赛数据</span>
+                            <div className="flex flex-col flex-1 min-w-0">
+                                <span className={`text-sm font-semibold truncate transition-colors ${isValid ? 'text-neutral-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400' : 'text-neutral-500 line-through'}`}>{children}</span>
+                                <span className="text-[11px] text-neutral-500 font-medium tracking-wide mt-0.5">{isValid ? '查看比赛数据' : '数据已失效'}</span>
                             </div>
                         </div>
-                        <svg className="w-4 h-4 text-blue-400 group-hover:translate-x-1 transition-transform shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                        {isValid && <div className="w-8 h-8 rounded-full bg-neutral-50 dark:bg-neutral-800 flex items-center justify-center group-hover:bg-blue-50 dark:group-hover:bg-blue-500/20 transition-colors ml-2 shrink-0">
+                            <ArrowRight className="w-4 h-4 text-neutral-400 group-hover:text-blue-500 transition-colors" />
+                        </div>}
                     </a>
                 );
             }
             if (href?.startsWith('#player/')) {
                 const playerId = href.replace('#player/', '');
+                // Player matching might be hard, so assume valid or we can do a quick check if possible
+                const isValid = true; 
                 return (
                     <a 
                         href={href}
                         onClick={(e) => {
                             e.preventDefault();
+                            if (!isValid) return;
                             window.location.hash = `player/${playerId}`;
                             setIsOpen(false);
                         }}
-                        className="flex items-center justify-between p-3 my-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors no-underline group"
+                        className={`flex items-center justify-between p-4 my-3 border rounded-xl no-underline group transition-all duration-200 ${
+                            isValid 
+                                ? 'bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 shadow-sm hover:shadow hover:border-amber-300 dark:hover:border-amber-600/50 cursor-pointer overflow-hidden relative' 
+                                : 'bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 opacity-60 cursor-not-allowed'
+                        }`}
+                        title={!isValid ? '目标数据已失效或被删除' : ''}
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-neutral-600 dark:text-neutral-400 shrink-0">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                        {/* Accent left border */}
+                        {isValid && <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 rounded-l-xl"></div>}
+                        
+                        <div className="flex flex-1 items-center gap-4 w-0 min-w-0 pl-1">
+                            <div className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center ${isValid ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'}`}>
+                                <User className="w-5 h-5 focus:outline-none" />
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-neutral-900 dark:text-white transition-colors">{children}</span>
-                                <span className="text-[10px] text-neutral-500 uppercase tracking-widest mt-0.5">点击查看玩家数据</span>
+                            <div className="flex flex-col flex-1 min-w-0">
+                                <span className={`text-sm font-semibold truncate transition-colors ${isValid ? 'text-neutral-900 dark:text-white' : 'text-neutral-500 line-through'}`}>{children}</span>
+                                <span className="text-[11px] text-neutral-500 font-medium tracking-wide mt-0.5">{isValid ? '查看玩家数据' : '数据已失效'}</span>
                             </div>
                         </div>
-                        <svg className="w-4 h-4 text-neutral-400 group-hover:translate-x-1 transition-transform shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        {isValid && <div className="w-8 h-8 rounded-full bg-neutral-50 dark:bg-neutral-800 flex items-center justify-center group-hover:bg-amber-50 dark:group-hover:bg-amber-500/20 transition-colors ml-2 shrink-0">
+                            <ArrowRight className="w-4 h-4 text-neutral-400 group-hover:text-amber-500 transition-colors" />
+                        </div>}
                     </a>
                 );
             }
             if (href?.startsWith('#tactic/')) {
                 const tacticId = href.replace('#tactic/', '');
+                const isValid = context?.allTactics ? context.allTactics.some((m: any) => m.id === tacticId) : true;
                 return (
                     <a 
                         href={href}
                         onClick={(e) => {
                             e.preventDefault();
-                            // Dispatch custom event to let App/Global Copilot know they want to view a tactic. 
-                            // Since routing to tactic detail isn't immediately obvious via hash (usually handles it globally), 
-                            // we can try dispatching a globally understandable event. Let's assume standard behavior is to open a modal.
+                            if (!isValid) return;
                             window.dispatchEvent(new CustomEvent('open-tactic', { detail: tacticId }));
                             setIsOpen(false);
                         }}
-                        className="flex items-center justify-between p-3 my-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors no-underline group"
+                        className={`flex items-center justify-between p-4 my-3 border rounded-xl no-underline group transition-all duration-200 ${
+                            isValid 
+                                ? 'bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 shadow-sm hover:shadow hover:border-emerald-300 dark:hover:border-emerald-600/50 cursor-pointer overflow-hidden relative' 
+                                : 'bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 opacity-60 cursor-not-allowed'
+                        }`}
+                        title={!isValid ? '目标数据已失效或被删除' : ''}
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                        {/* Accent left border */}
+                        {isValid && <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500 rounded-l-xl"></div>}
+                        
+                        <div className="flex flex-1 items-center gap-4 w-0 min-w-0 pl-1">
+                            <div className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center ${isValid ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'}`}>
+                                <Lightbulb className="w-5 h-5 focus:outline-none" />
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-neutral-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{children}</span>
-                                <span className="text-[10px] text-neutral-500 uppercase tracking-widest mt-0.5">点击查看战术板</span>
+                            <div className="flex flex-col flex-1 min-w-0">
+                                <span className={`text-sm font-semibold truncate transition-colors ${isValid ? 'text-neutral-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400' : 'text-neutral-500 line-through'}`}>{children}</span>
+                                <span className="text-[11px] text-neutral-500 font-medium tracking-wide mt-0.5">{isValid ? '查看战术板' : '数据已失效'}</span>
                             </div>
                         </div>
-                        <svg className="w-4 h-4 text-emerald-400 group-hover:translate-x-1 transition-transform shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                        {isValid && <div className="w-8 h-8 rounded-full bg-neutral-50 dark:bg-neutral-800 flex items-center justify-center group-hover:bg-emerald-50 dark:group-hover:bg-emerald-500/20 transition-colors ml-2 shrink-0">
+                            <ArrowRight className="w-4 h-4 text-neutral-400 group-hover:text-emerald-500 transition-colors" />
+                        </div>}
                     </a>
                 );
             }
             if (href?.startsWith('#utility/')) {
                 const utilityId = href.replace('#utility/', '');
+                const isValid = context?.allUtilities ? context.allUtilities.some((m: any) => m.id === utilityId) : true;
                 return (
                     <a 
                         href={href}
                         onClick={(e) => {
                             e.preventDefault();
+                            if (!isValid) return;
                             window.dispatchEvent(new CustomEvent('open-utility', { detail: utilityId }));
                             setIsOpen(false);
                         }}
-                        className="flex items-center justify-between p-3 my-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors no-underline group"
+                        className={`flex items-center justify-between p-4 my-3 border rounded-xl no-underline group transition-all duration-200 ${
+                            isValid 
+                                ? 'bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 shadow-sm hover:shadow hover:border-purple-300 dark:hover:border-purple-600/50 cursor-pointer overflow-hidden relative' 
+                                : 'bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 opacity-60 cursor-not-allowed'
+                        }`}
+                        title={!isValid ? '目标数据已失效或被删除' : ''}
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-800 flex items-center justify-center text-purple-600 dark:text-purple-400 shrink-0">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" /></svg>
+                        {/* Accent left border */}
+                        {isValid && <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500 rounded-l-xl"></div>}
+                        
+                        <div className="flex flex-1 items-center gap-4 w-0 min-w-0 pl-1">
+                            <div className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center ${isValid ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'}`}>
+                                <Target className="w-5 h-5 focus:outline-none" />
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-neutral-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">{children}</span>
-                                <span className="text-[10px] text-neutral-500 uppercase tracking-widest mt-0.5">点击查看投掷道具</span>
+                            <div className="flex flex-col flex-1 min-w-0">
+                                <span className={`text-sm font-semibold truncate transition-colors ${isValid ? 'text-neutral-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400' : 'text-neutral-500 line-through'}`}>{children}</span>
+                                <span className="text-[11px] text-neutral-500 font-medium tracking-wide mt-0.5">{isValid ? '查看投掷道具' : '数据已失效'}</span>
                             </div>
                         </div>
-                        <svg className="w-4 h-4 text-purple-400 group-hover:translate-x-1 transition-transform shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                        {isValid && <div className="w-8 h-8 rounded-full bg-neutral-50 dark:bg-neutral-800 flex items-center justify-center group-hover:bg-purple-50 dark:group-hover:bg-purple-500/20 transition-colors ml-2 shrink-0">
+                            <ArrowRight className="w-4 h-4 text-neutral-400 group-hover:text-purple-500 transition-colors" />
+                        </div>}
                     </a>
                 );
             }
@@ -567,7 +671,8 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                 );
             }
             return <a href={href} {...props} className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>;
-        }
+        },
+        p: ({node, ...props}: any) => <div className="mb-4 last:mb-0" {...props} />
     };
 
     if (!isOpen) {
@@ -869,6 +974,15 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                                                                                                 </pre>
                                                                                             </div>
                                                                                         )}
+                                                                                        {tc.name === 'update_database_item' && result?.result?.snapshot && result?.result?.updated && (
+                                                                                            <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5 mt-1">
+                                                                                                <ItemDiffViewer 
+                                                                                                    snapshot={result.result.snapshot} 
+                                                                                                    updated={result.result.updated} 
+                                                                                                    onRollback={() => handleRollback(tc.args.collection, result.result.snapshot)} 
+                                                                                                />
+                                                                                            </div>
+                                                                                        )}
                                                                                     </div>
                                                                                 );
                                                                             });
@@ -938,6 +1052,15 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                                                                                             <pre className="text-[9px] text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 p-1.5 rounded overflow-x-auto">
                                                                                                 {result.logs}
                                                                                             </pre>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {tc.name === 'update_database_item' && result?.result?.snapshot && result?.result?.updated && (
+                                                                                        <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5 mt-1">
+                                                                                            <ItemDiffViewer 
+                                                                                                snapshot={result.result.snapshot} 
+                                                                                                updated={result.result.updated} 
+                                                                                                onRollback={() => handleRollback(tc.args.collection, result.result.snapshot)} 
+                                                                                            />
                                                                                         </div>
                                                                                     )}
                                                                                 </div>

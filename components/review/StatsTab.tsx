@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Match } from '../../types';
 import { calculateGlobalStats, GlobalStats } from '../../utils/analytics/globalStatsAggregator';
 import { PlayerStatsGrid } from './player_detail/PlayerStatsGrid';
@@ -12,34 +12,12 @@ interface StatsTabProps {
 
 export const StatsTab: React.FC<StatsTabProps> = ({ allMatches }) => {
     const [selectedAbility, setSelectedAbility] = useState<AbilityType>('firepower');
-    const [stats, setStats] = useState<GlobalStats | null>(null);
-    const [isCalculating, setIsCalculating] = useState(false);
-
-    const calculateStats = useCallback(() => {
-        if (allMatches.length === 0) return;
-        setIsCalculating(true);
-
-        setTimeout(() => {
-            const globalStats = calculateGlobalStats(allMatches);
-            setStats(globalStats);
-            setIsCalculating(false);
-        }, 10);
+    const stats = useMemo(() => {
+        if (allMatches.length === 0) return null;
+        return calculateGlobalStats(allMatches);
     }, [allMatches]);
 
-    // Initial load
-    useEffect(() => {
-        if (allMatches.length > 0 && !stats && !isCalculating) {
-            calculateStats();
-        }
-    }, [allMatches.length]);
-
-    if (!stats && !isCalculating) return <div className="p-4 text-neutral-500">暂无比赛数据</div>;
-    if (isCalculating) return (
-        <div className="p-12 flex flex-col items-center justify-center text-neutral-500">
-            <RefreshCw className="w-8 h-8 animate-spin mb-4 text-blue-500" />
-            <div>正在计算全局数据分布...</div>
-        </div>
-    );
+    if (!stats) return <div className="p-4 text-neutral-500">暂无比赛数据</div>;
 
     const abilities = [
         { id: 'firepower' as AbilityType, label: '火力', value: stats.avgScoreFirepower }, 
@@ -65,13 +43,6 @@ export const StatsTab: React.FC<StatsTabProps> = ({ allMatches }) => {
                         基于 {stats.totalPlayers} 名玩家，共计 {stats.totalPlayerRounds} 个玩家回合的统计数据
                     </div>
                 </div>
-                <button 
-                    onClick={calculateStats}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm font-medium"
-                >
-                    <RefreshCw className="w-4 h-4" />
-                    刷新数据
-                </button>
             </div>
 
             {/* Core Stats */}
@@ -136,6 +107,62 @@ export const StatsTab: React.FC<StatsTabProps> = ({ allMatches }) => {
                 onSelectAbility={setSelectedAbility}
                 detailData={stats.details}
             />
+
+            {/* Debugging Tool: Seven-Dimensional Data Exporter */}
+            {(process.env.NODE_ENV === 'development' || (typeof import.meta !== 'undefined' && import.meta.env?.DEV)) && (
+                <div className="mt-12 p-6 border-2 border-red-500/20 bg-red-500/5 rounded-2xl">
+                    <h3 className="text-lg font-bold text-red-500 mb-2 flex items-center gap-2">
+                        <span>[Debug] 七维数据标定调试工具</span>
+                    </h3>
+                    <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                        仅在开发模式显示。此工具汇总了所有已导入Demo（基于 {stats.totalPlayers} 位玩家样本）中各项核心子属性的 <strong>均值(Mean)</strong> 和 <strong>标准差(StdDev)</strong>。可以作为您使用 Z-Score 或重置 Sigmoid 基线的真实参考系。
+                    </p>
+                    <div className="bg-neutral-900 text-neutral-100 p-4 rounded-xl font-mono text-xs overflow-auto max-h-96">
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="border-b border-neutral-800 text-neutral-400">
+                                    <th className="pb-2 font-medium">Metric / Data Dimension</th>
+                                    <th className="pb-2 font-medium text-right">Mean</th>
+                                    <th className="pb-2 font-medium text-right">StdDev (σ)</th>
+                                    <th className="pb-2 font-medium text-right">Min</th>
+                                    <th className="pb-2 font-medium text-right">P10</th>
+                                    <th className="pb-2 font-medium text-right">Median(P50)</th>
+                                    <th className="pb-2 font-medium text-right">P90</th>
+                                    <th className="pb-2 font-medium text-right">Max</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {Object.keys(stats.details).sort().map(key => (
+                                    <tr key={key} className="border-b border-neutral-800/50 hover:bg-white/5">
+                                        <td className="py-2 text-blue-400">{key}</td>
+                                        <td className="py-2 text-right text-emerald-400">
+                                            {stats.details[key]?.toFixed(4)}
+                                        </td>
+                                        <td className="py-2 text-right text-purple-400">
+                                            {stats.detailsStdDev?.[key]?.toFixed(4) || '0.0000'}
+                                        </td>
+                                        <td className="py-2 text-right text-neutral-400">
+                                            {stats.detailsMin?.[key]?.toFixed(4) || '0.0000'}
+                                        </td>
+                                        <td className="py-2 text-right text-neutral-400">
+                                            {stats.detailsP10?.[key]?.toFixed(4) || '0.0000'}
+                                        </td>
+                                        <td className="py-2 text-right text-neutral-400">
+                                            {stats.detailsP50?.[key]?.toFixed(4) || '0.0000'}
+                                        </td>
+                                        <td className="py-2 text-right text-neutral-400">
+                                            {stats.detailsP90?.[key]?.toFixed(4) || '0.0000'}
+                                        </td>
+                                        <td className="py-2 text-right text-neutral-400">
+                                            {stats.detailsMax?.[key]?.toFixed(4) || '0.0000'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -74,7 +74,7 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
         if (isRoster) rosterSteamIds.add(sid);
     });
 
-    // Helper to get numeric team ID
+    // Helper to get explicit team ID
     const steamIdLooseEqual = (a?: string, b?: string) => {
         if (!a || !b) return false;
         if (a === b) return true;
@@ -85,22 +85,23 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
         return false;
     };
 
-    const getNumericTeamForSid = (sid: string): string | undefined => {
+    const getExplicitTeamForSid = (sid: string): string | undefined => {
         const raw = steamIdToTeamId.get(sid);
         if (raw !== undefined && raw !== null) {
-            const t = String(raw).trim();
-            if (/^\d+$/.test(t)) return t;
+            return String(raw).trim();
         }
         if (!Array.isArray(data) && Array.isArray((data as any).players)) {
             for (const p of (data as any).players) {
                 const psid = normalizeSteamId(p.steamid);
                 if (psid === sid || steamIdLooseEqual(psid, sid)) {
+                    if (p.team_name) {
+                        steamIdToTeamId.set(sid, String(p.team_name));
+                        return String(p.team_name);
+                    }
                     if (p.team_number !== undefined && p.team_number !== null) {
                         const tn = String(p.team_number).trim();
-                        if (/^\d+$/.test(tn)) {
-                            steamIdToTeamId.set(sid, tn);
-                            return tn;
-                        }
+                        steamIdToTeamId.set(sid, tn);
+                        return tn;
                     }
                     break;
                 }
@@ -109,19 +110,29 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
         return undefined;
     };
 
-    // 2. Identify "My Team" ID based on metadata
-    const teamCounts = new Map<string | number, number>();
-    rosterSteamIds.forEach(sid => {
-        let tid = steamIdToTeamId.get(sid);
-        if (tid === undefined) {
-            tid = getNumericTeamForSid(sid);
+    // 2. Map all known teams
+    const sidToResolvedTeam = new Map<string, string>();
+    activeSteamIds.forEach(sid => {
+        const t = getExplicitTeamForSid(sid);
+        if (t) sidToResolvedTeam.set(sid, t);
+    });
+    allSteamIds.forEach(sid => {
+        if (!sidToResolvedTeam.has(sid)) {
+            const t = getExplicitTeamForSid(sid);
+            if (t) sidToResolvedTeam.set(sid, t);
         }
+    });
+
+    // 3. Identify "My Team" ID based on metadata
+    const teamCounts = new Map<string, number>();
+    rosterSteamIds.forEach(sid => {
+        const tid = sidToResolvedTeam.get(sid);
         if (tid !== undefined) {
             teamCounts.set(tid, (teamCounts.get(tid) || 0) + 1);
         }
     });
 
-    let myTeamIdentifier: string | number | null = null;
+    let myTeamIdentifier: string | null = null;
     let maxCount = 0;
     
     teamCounts.forEach((count, tid) => {
@@ -131,56 +142,41 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
         }
     });
 
-    // 3. Build Initial Teammate Set
+    // 4. Build Initial Teammate Set
     const teammateSteamIds = new Set<string>();
     
     if (myTeamIdentifier !== null) {
         allSteamIds.forEach(sid => {
-            let tid = steamIdToTeamId.get(sid);
-            if (tid === undefined) {
-                tid = getNumericTeamForSid(sid);
-            }
-            if (tid === myTeamIdentifier) {
+            if (sidToResolvedTeam.get(sid) === myTeamIdentifier) {
                 teammateSteamIds.add(sid);
             }
         });
     } else if (rosterSteamIds.size > 0) {
-        teammateSteamIds.add(Array.from(rosterSteamIds)[0]);
+        // If we have roster players but NO team numbers in the demo somehow
+        const firstRoster = Array.from(rosterSteamIds)[0];
+        teammateSteamIds.add(firstRoster);
     } else {
         // Fallback: 5-man stack logic
         const numTeamGroups = new Map<string, Set<string>>();
 
         activeSteamIds.forEach(sid => {
-            const tn = getNumericTeamForSid(sid);
+            const tn = sidToResolvedTeam.get(sid);
             if (!tn) return;
             if (!numTeamGroups.has(tn)) numTeamGroups.set(tn, new Set());
             numTeamGroups.get(tn)!.add(sid);
         });
 
         let chosenGroup: Set<string> | null = null;
-        const sortedTeamKeys = Array.from(numTeamGroups.keys()).sort((a, b) => Number(a) - Number(b));
+        let maxSize = 0;
 
-        for (const key of sortedTeamKeys) {
-            const grp = numTeamGroups.get(key)!;
-            if (grp.size === 5) { 
-                chosenGroup = grp; 
-                break; 
+        for (const [key, grp] of numTeamGroups.entries()) {
+            if (grp.size === 5) {
+                chosenGroup = grp;
+                break;
             }
-        }
-
-        if (!chosenGroup && sortedTeamKeys.length > 0) {
-            let maxSize = 0;
-            let bestKey = sortedTeamKeys[0];
-            
-            for (const key of sortedTeamKeys) {
-                const grp = numTeamGroups.get(key)!;
-                if (grp.size > maxSize) {
-                    maxSize = grp.size;
-                    bestKey = key;
-                }
-            }
-            if (maxSize > 0) {
-                chosenGroup = numTeamGroups.get(bestKey)!;
+            if (grp.size > maxSize) {
+                maxSize = grp.size;
+                chosenGroup = grp;
             }
         }
 
@@ -192,9 +188,21 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
         chosenGroup.forEach(sid => teammateSteamIds.add(sid));
     }
 
-    // 4. Interaction Propagation
+    // 5. Interaction Propagation ONLY for unknown players
+    // If a player ALREADY has an explicit team identifier, DO NOT overwrite it.
     const knownFriends = new Set<string>(teammateSteamIds);
     const knownEnemies = new Set<string>();
+    
+    // Anyone explicitly on another team is a known enemy
+    if (myTeamIdentifier !== null) {
+        allSteamIds.forEach(sid => {
+            const t = sidToResolvedTeam.get(sid);
+            if (t !== undefined && t !== myTeamIdentifier) {
+                knownEnemies.add(sid);
+            }
+        });
+    }
+
     let changed = true;
     let iterations = 0;
     while (changed && iterations < 5) {
@@ -204,21 +212,25 @@ export const determineTeammates = (data: DemoData, events: any[]): TeamAnalysisR
                 const vic = normalizeSteamId(e.user_steamid);
                 const att = normalizeSteamId(e.attacker_steamid);
                 if (att && vic && att !== vic && att !== 'BOT' && vic !== 'BOT') {
-                    if (knownFriends.has(att) && !knownEnemies.has(vic) && !knownFriends.has(vic)) {
-                        knownEnemies.add(vic);
-                        changed = true;
-                    }
-                    if (knownFriends.has(vic) && !knownEnemies.has(att) && !knownFriends.has(att)) {
-                        knownEnemies.add(att);
-                        changed = true;
-                    }
-                    if (knownEnemies.has(att) && !knownFriends.has(vic) && !knownEnemies.has(vic)) {
-                        knownFriends.add(vic);
-                        changed = true;
-                    }
-                    if (knownEnemies.has(vic) && !knownFriends.has(att) && !knownEnemies.has(att)) {
-                        knownFriends.add(att);
-                        changed = true;
+                    // Only propagate if we don't have explicit teams for both. If we trust explicit teams, we skip.
+                    // Actually, if we have explicit teams, we shouldn't guess.
+                    if (!sidToResolvedTeam.has(att) || !sidToResolvedTeam.has(vic)) {
+                        if (knownFriends.has(att) && !knownEnemies.has(vic) && !knownFriends.has(vic)) {
+                            knownEnemies.add(vic);
+                            changed = true;
+                        }
+                        if (knownFriends.has(vic) && !knownEnemies.has(att) && !knownFriends.has(att)) {
+                            knownEnemies.add(att);
+                            changed = true;
+                        }
+                        if (knownEnemies.has(att) && !knownFriends.has(vic) && !knownEnemies.has(vic)) {
+                            knownFriends.add(vic);
+                            changed = true;
+                        }
+                        if (knownEnemies.has(vic) && !knownFriends.has(att) && !knownEnemies.has(att)) {
+                            knownFriends.add(att);
+                            changed = true;
+                        }
                     }
                 }
             }

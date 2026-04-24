@@ -2,11 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { Tactic } from '../types';
 import { ActionList } from './ActionList';
-import { MapViewer } from './MapViewer';
 import { calculateLoadoutCost } from '../utils/economyHelper';
 import { exportTacticToZip } from '../utils/exportHelper';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
 import { ShareOptionsModal } from './ShareOptionsModal';
+import { VersionHistoryModal } from './VersionHistoryModal';
 import html2canvas from 'html2canvas';
 
 interface TacticDetailViewProps {
@@ -14,25 +14,27 @@ interface TacticDetailViewProps {
   onBack: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onRestoreVersion?: (data: Tactic, timestamp: number) => void;
   highlightRole?: string;
 }
 
-export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBack, onEdit, onDelete, highlightRole }) => {
+export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBack, onEdit, onDelete, onRestoreVersion, highlightRole }) => {
   const [isMapZoomed, setIsMapZoomed] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showVersionModal, setShowVersionModal] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   // Calculate costs
   const { loadoutCosts, totalTeamCost } = useMemo(() => {
       if (!tactic.loadout) return { loadoutCosts: [], totalTeamCost: 0 };
-      const costs = tactic.loadout.map(item => calculateLoadoutCost(item.equipment));
+      const costs = (tactic.loadout || []).map(item => calculateLoadoutCost(item.equipment));
       const total = costs.reduce((a, b) => a + b, 0);
       return { loadoutCosts: costs, totalTeamCost: total };
   }, [tactic.loadout]);
 
   const createExportBlob = async () => {
       const blob = await exportTacticToZip(tactic);
-      const safeTitle = tactic.title.replace(/\s+/g, '_');
+      const safeTitle = (tactic.title || (tactic as any).name || 'untitled').replace(/\s+/g, '_');
       const filename = `${tactic.mapId}_${tactic.side}_${safeTitle}_${tactic.id}.tactic`;
       return { blob, filename };
   };
@@ -40,7 +42,7 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
   const handleShareFile = async () => {
       try {
           const { blob, filename } = await createExportBlob();
-          await shareFile(blob, filename, "分享战术", `CS2战术：${tactic.title}`);
+          await shareFile(blob, filename, "分享战术", `CS2战术：${tactic.title || (tactic as any).name || '无标题'}`);
           setShowShareModal(false);
       } catch (e) {
           console.error("Share failed", e);
@@ -103,15 +105,15 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
 
   const handleShareImage = () => {
       generateImage(async (blob) => {
-          const safeTitle = tactic.title.replace(/\s+/g, '_');
+          const safeTitle = (tactic.title || (tactic as any).name || 'untitled').replace(/\s+/g, '_');
           const filename = `${safeTitle}_card.png`;
-          await shareFile(blob, filename, "分享战术图片", `CS2战术：${tactic.title}`);
+          await shareFile(blob, filename, "分享战术图片", `CS2战术：${tactic.title || (tactic as any).name || '无标题'}`);
       });
   };
 
   const handleDownloadImage = () => {
       generateImage((blob) => {
-          const safeTitle = tactic.title.replace(/\s+/g, '_');
+          const safeTitle = (tactic.title || (tactic as any).name || 'untitled').replace(/\s+/g, '_');
           const filename = `${safeTitle}_card.png`;
           downloadBlob(blob, filename);
       });
@@ -128,7 +130,7 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
             
             <div className="flex items-center gap-2 max-w-[50%]">
                 <h2 className="font-bold text-neutral-900 dark:text-white text-sm truncate text-center">
-                    {tactic.title}
+                    {tactic.title || (tactic as any).name || '无标题战术'}
                 </h2>
             </div>
 
@@ -146,6 +148,17 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                         className="text-blue-600 dark:text-blue-400 text-xs font-bold px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 transition-colors whitespace-nowrap"
                     >
                         编辑
+                    </button>
+                )}
+                {onRestoreVersion && (
+                    <button 
+                        onClick={() => setShowVersionModal(true)}
+                        className="p-2 text-neutral-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        title="版本历史"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                     </button>
                 )}
                 {onDelete && (
@@ -167,8 +180,8 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
              {/* Header Info */}
              <div className="mb-6">
                 <div className="flex flex-wrap gap-2 mb-3">
-                    {tactic.tags.map(tag => (
-                    <span key={tag.label} className={`
+                    {(tactic.tags || []).map((tag, index) => (
+                    <span key={`${tag.label}-${index}`} className={`
                         text-[10px] font-extrabold uppercase tracking-wider px-2 py-1 rounded
                         ${tag.category === 'economy' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                         tag.category === 'playstyle' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
@@ -179,16 +192,16 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                     ))}
                 </div>
                 
-                <h1 className="text-2xl font-black text-neutral-900 dark:text-white mb-2 leading-tight">{tactic.title}</h1>
+                <h1 className="text-2xl font-black text-neutral-900 dark:text-white mb-2 leading-tight">{tactic.title || (tactic as any).name || '无标题战术'}</h1>
                 
                 <div className="flex items-center gap-4 text-xs text-neutral-500 font-medium">
                     <span className="flex items-center gap-1">
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                        {tactic.metadata.author}
+                        {tactic.metadata?.author || 'Unknown'}
                     </span>
                     <span>•</span>
-                    <span>{tactic.metadata.lastUpdated}</span>
-                     {tactic.metadata.difficulty && (
+                    <span>{tactic.metadata?.lastUpdated || ''}</span>
+                     {tactic.metadata?.difficulty && (
                         <>
                             <span>•</span>
                             <span className={`
@@ -213,7 +226,7 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                         </div>
                      </div>
                      <div className="space-y-2">
-                        {tactic.loadout.map((item, idx) => (
+                        {(tactic.loadout || []).map((item, idx) => (
                             <div key={idx} className="flex items-start text-xs relative">
                                 <span className={`font-bold w-16 shrink-0 ${highlightRole === item.role ? 'text-blue-500' : 'text-neutral-600 dark:text-neutral-400'}`}>
                                     {item.role}
@@ -231,7 +244,7 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
             )}
 
             {/* Map Visual */}
-            {tactic.map_visual ? (
+            {tactic.map_visual && (
               <div className="relative mb-8 rounded-2xl overflow-hidden bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 shadow-sm">
                   <div 
                       className="aspect-video w-full cursor-zoom-in relative group"
@@ -239,7 +252,7 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                   >
                       <img 
                           src={tactic.map_visual} 
-                          alt={tactic.title} 
+                          alt={tactic.title || 'Tactic Image'} 
                           className="w-full h-full object-cover"
                       />
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10 dark:bg-black/40">
@@ -248,10 +261,6 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                           </span>
                       </div>
                   </div>
-              </div>
-            ) : (
-              <div className="relative mb-8 rounded-2xl overflow-hidden bg-neutral-100 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 shadow-sm aspect-video">
-                  <MapViewer mapId={tactic.mapId} className="w-full h-full" />
               </div>
             )}
 
@@ -262,7 +271,7 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
                     战术流程
                 </h4>
                 <ActionList 
-                    actions={tactic.actions} 
+                    actions={tactic.actions || []} 
                     highlightRole={highlightRole}
                 />
             </div>
@@ -299,9 +308,19 @@ export const TacticDetailView: React.FC<TacticDetailViewProps> = ({ tactic, onBa
             onDownloadFile={handleDownloadFile}
             onShareImage={handleShareImage}
             onDownloadImage={handleDownloadImage}
-            title={`分享 "${tactic.title}"`}
+            title={`分享 "${tactic.title || (tactic as any).name || '无标题战术'}"`}
             isGenerating={isGeneratingImage}
         />
+
+        {onRestoreVersion && (
+            <VersionHistoryModal 
+                isOpen={showVersionModal}
+                onClose={() => setShowVersionModal(false)}
+                itemId={tactic.id}
+                currentItem={tactic}
+                onRestore={onRestoreVersion}
+            />
+        )}
     </div>
   );
 };

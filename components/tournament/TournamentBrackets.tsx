@@ -2,50 +2,109 @@ import React from 'react';
 import { TournamentStageMatch } from '../../types';
 import { BracketMatchNode } from './MatchNode';
 
-export const SwissBracket: React.FC<{ matches: TournamentStageMatch[] }> = ({ matches }) => {
-    // Fallback list layout if it's not exactly 33 matches of a standard major
-    if (matches.length !== 33) {
-        return <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
-            {matches.map(m => <BracketMatchNode key={m.id} match={m} />)}
-        </div>
-    }
-
-    const r1 = matches.slice(0, 8);
-    const r2_high = matches.slice(8, 12);
-    const r2_low = matches.slice(12, 16);
-    const r3_high = matches.slice(16, 18);
-    const r3_mid = matches.slice(18, 22);
-    const r3_low = matches.slice(22, 24);
-    const r4_high = matches.slice(24, 27);
-    const r4_low = matches.slice(27, 30);
-    const r5 = matches.slice(30, 33);
-
+export const SwissBracket: React.FC<{ matches: TournamentStageMatch[], onNodeClick?: (m: TournamentStageMatch) => void }> = ({ matches, onNodeClick }) => {
+    // If we have explicit groupLabels from our generator, reconstruct the Swiss rounds dynamically!
     interface GroupData {
          label: string;
          wrapperClass: string;
          labelClass: string;
+         displayLabel: string;
          matches: TournamentStageMatch[];
     }
 
-    const colProps = {
-        r1: [ { label: '0-0', wrapperClass: 'bg-neutral-50 dark:bg-neutral-800/20 border-neutral-200 dark:border-neutral-800/50', labelClass: 'text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700', matches: r1 } ],
-        r2: [
-            { label: '高分组 1-0', wrapperClass: 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30', labelClass: 'text-green-600 dark:text-green-400 border-green-200 dark:border-green-800/50', matches: r2_high },
-            { label: '低分组 0-1', wrapperClass: 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30', labelClass: 'text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50', matches: r2_low },
-        ],
-        r3: [
-            { label: '晋级战 2-0', wrapperClass: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-900/30', labelClass: 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50', matches: r3_high },
-            { label: '中间组 1-1', wrapperClass: 'bg-neutral-50 dark:bg-neutral-800/20 border-neutral-200 dark:border-neutral-800/50', labelClass: 'text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700', matches: r3_mid },
-            { label: '淘汰战 0-2', wrapperClass: 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-900/30', labelClass: 'text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/50', matches: r3_low },
-        ],
-        r4: [
-            { label: '晋级战 2-1', wrapperClass: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-900/30', labelClass: 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50', matches: r4_high },
-            { label: '淘汰战 1-2', wrapperClass: 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-900/30', labelClass: 'text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/50', matches: r4_low },
-        ],
-        r5: [
-            { label: '生死战 2-2', wrapperClass: 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-900/30', labelClass: 'text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800/50', matches: r5 },
-        ]
+    const roundMap = new Map<number, GroupData[]>();
+    let hasGroupLabels = false;
+
+    const applyColors = (label: string): { wrapperClass: string, labelClass: string, displayLabel: string } => {
+        if (label === '0-0' || label === '1-1' || label.startsWith('常规')) {
+            return {
+                displayLabel: label === '0-0' ? '0-0' : label === '1-1' ? '中间组 1-1' : label,
+                wrapperClass: 'bg-neutral-50 dark:bg-neutral-800/20 border-neutral-200 dark:border-neutral-800/50',
+                labelClass: 'text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700'
+            }
+        }
+        
+        const parts = label.split('-');
+        const w = Number(parts[0]);
+        const l = Number(parts[1]);
+        
+        // High vs Low
+        if (l === 0) {
+            return { displayLabel: `高分组 ${label}`, wrapperClass: 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30', labelClass: 'text-green-600 dark:text-green-400 border-green-200 dark:border-green-800/50' };
+        } else if (w === 0) {
+            return { displayLabel: `低分组 ${label}`, wrapperClass: 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30', labelClass: 'text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50' };
+        }
+        
+        // Promotion matches
+        if (w >= l && w >= 2) {
+            return { displayLabel: `晋级战 ${label}`, wrapperClass: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-900/30', labelClass: 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50' };
+        }
+        
+        // Elimination matches
+        if (l > w || l >= 2) {
+             return { displayLabel: `淘汰战 ${label}`, wrapperClass: 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-900/30', labelClass: 'text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/50' };
+        }
+        
+        // Catch-all
+        return { displayLabel: `生死战 ${label}`, wrapperClass: 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-900/30', labelClass: 'text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800/50' };
     };
+
+    matches.forEach(m => {
+        if (!m.groupLabel || !m.groupLabel.includes('-')) return;
+
+        hasGroupLabels = true;
+        const [w, l] = m.groupLabel.split('-').map(Number);
+        if (isNaN(w) || isNaN(l)) return;
+
+        const roundNum = w + l + 1;
+        if (!roundMap.has(roundNum)) roundMap.set(roundNum, []);
+        
+        const rGrp = roundMap.get(roundNum)!;
+        let cGrp = rGrp.find(g => g.label === m.groupLabel);
+        if (!cGrp) {
+            const colors = applyColors(m.groupLabel);
+            cGrp = {
+                label: m.groupLabel,
+                wrapperClass: colors.wrapperClass,
+                labelClass: colors.labelClass,
+                matches: [],
+                displayLabel: colors.displayLabel
+            };
+            rGrp.push(cGrp);
+        }
+        cGrp.matches.push(m);
+    });
+
+    if (!hasGroupLabels && matches.length === 33) {
+        // Safe standard fallback mapping for legacy missing groupLabels
+        const r1 = matches.slice(0, 8);
+        const r2_high = matches.slice(8, 12);
+        const r2_low = matches.slice(12, 16);
+        const r3_high = matches.slice(16, 18);
+        const r3_mid = matches.slice(18, 22);
+        const r3_low = matches.slice(22, 24);
+        const r4_high = matches.slice(24, 27);
+        const r4_low = matches.slice(27, 30);
+        const r5 = matches.slice(30, 33);
+        const mapLegacy = (rndNum: number, mArr: TournamentStageMatch[], lbl: string) => {
+             if (!roundMap.has(rndNum)) roundMap.set(rndNum, []);
+             const clrs = applyColors(lbl);
+             roundMap.get(rndNum)!.push({ label: lbl, displayLabel: clrs.displayLabel, wrapperClass: clrs.wrapperClass, labelClass: clrs.labelClass, matches: mArr });
+        };
+        mapLegacy(1, r1, '0-0');
+        mapLegacy(2, r2_high, '1-0'); mapLegacy(2, r2_low, '0-1');
+        mapLegacy(3, r3_high, '2-0'); mapLegacy(3, r3_mid, '1-1'); mapLegacy(3, r3_low, '0-2');
+        mapLegacy(4, r4_high, '2-1'); mapLegacy(4, r4_low, '1-2');
+        mapLegacy(5, r5, '2-2');
+    }
+
+    if (roundMap.size === 0) {
+        return <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
+            {matches.map(m => <BracketMatchNode key={m.id} match={m} onClick={() => onNodeClick?.(m)} />)}
+        </div>
+    }
+
+    const sortedRounds = Array.from(roundMap.keys()).sort((a,b) => a-b);
 
     const RenderCol = ({ title, groups }: { title: string, groups: GroupData[] }) => (
         <div className="flex flex-col gap-6 w-[180px] shrink-0">
@@ -53,12 +112,16 @@ export const SwissBracket: React.FC<{ matches: TournamentStageMatch[] }> = ({ ma
                 {title}
             </div>
             <div className="flex flex-col gap-8 flex-1">
-                {groups.map((g, idx) => (
+                {groups.sort((a,b) => {
+                    const [wA] = a.label.split('-');
+                    const [wB] = b.label.split('-');
+                    return Number(wB) - Number(wA);
+                }).map((g, idx) => (
                     <div key={idx} className={`p-2 pt-4 rounded-xl border flex flex-col items-center gap-3 relative ${g.wrapperClass}`}>
                         <div className={`absolute -top-2.5 bg-white dark:bg-neutral-900 px-2 text-[10px] font-bold border rounded-full ${g.labelClass}`}>
-                            {g.label}
+                            {g.displayLabel}
                         </div>
-                        {g.matches.map(m => <BracketMatchNode key={m.id} match={m} />)}
+                        {g.matches.map(m => <BracketMatchNode key={m.id} match={m} shadowColor="hover:shadow" onClick={() => onNodeClick?.(m)} />)}
                     </div>
                 ))}
             </div>
@@ -68,27 +131,28 @@ export const SwissBracket: React.FC<{ matches: TournamentStageMatch[] }> = ({ ma
     return (
         <div className="w-full overflow-x-auto py-8 px-8 hide-scrollbar">
             <div className="flex justify-start lg:justify-center items-stretch font-sans gap-8 pb-4 min-w-max mx-auto">
-                <RenderCol title="第1轮" groups={colProps.r1} />
-                <RenderCol title="第2轮" groups={colProps.r2} />
-                <RenderCol title="第3轮" groups={colProps.r3} />
-                <RenderCol title="第4轮" groups={colProps.r4} />
-                <RenderCol title="第5轮" groups={colProps.r5} />
+                {sortedRounds.map(rNum => (
+                    <RenderCol key={rNum} title={`第${rNum}轮`} groups={roundMap.get(rNum)!} />
+                ))}
             </div>
         </div>
     );
-}
+};
 
-export const SingleElimBracket: React.FC<{ matches: TournamentStageMatch[] }> = ({ matches }) => {
+export const SingleElimBracket: React.FC<{ matches: TournamentStageMatch[], onNodeClick?: (m: TournamentStageMatch) => void }> = ({ matches, onNodeClick }) => {
     const nodeWidth = 180;
     const nodeHeight = 80;
     const colGap = 40;
     const rowGap = 24;
 
-    const totalMatches = matches.length;
+    const mainMatches = matches.filter(m => !m.isThirdPlace && !m.isShowmatch);
+    const extraMatches = matches.filter(m => m.isThirdPlace || m.isShowmatch);
+    const totalMatches = mainMatches.length;
+
     // Support 2, 4, 8, 16 team brackets directly. (1, 3, 7, 15 matches)
     if (![1, 3, 7, 15].includes(totalMatches)) {
         return <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
-            {matches.map(m => <BracketMatchNode key={m.id} match={m} />)}
+            {matches.map(m => <BracketMatchNode key={m.id} match={m} onClick={() => onNodeClick?.(m)} />)}
         </div>
     }
 
@@ -96,7 +160,7 @@ export const SingleElimBracket: React.FC<{ matches: TournamentStageMatch[] }> = 
     
     // Create grids of nodes
     const rounds: TournamentStageMatch[][] = [];
-    let remainingMatches = [...matches];
+    let remainingMatches = [...mainMatches];
     for (let i = 0; i < cols; i++) {
         const matchesInThisRound = Math.pow(2, cols - 1 - i);
         rounds.push(remainingMatches.slice(0, matchesInThisRound));
@@ -117,7 +181,9 @@ export const SingleElimBracket: React.FC<{ matches: TournamentStageMatch[] }> = 
     }
 
     const svgWidth = cols * nodeWidth + (cols - 1) * colGap;
-    const svgHeight = Math.pow(2, cols - 1) * (nodeHeight + rowGap) - rowGap;
+    const baseSvgHeight = Math.pow(2, cols - 1) * (nodeHeight + rowGap) - rowGap;
+    const extraSvgHeight = extraMatches.length * (nodeHeight + rowGap);
+    const svgHeight = baseSvgHeight + extraSvgHeight;
 
     const roundNames: string[] = [];
     if (cols === 4) roundNames.push("1/8 决赛", "1/4 决赛", "半决赛", "总决赛");
@@ -212,11 +278,32 @@ export const SingleElimBracket: React.FC<{ matches: TournamentStageMatch[] }> = 
                           <BracketMatchNode 
                               match={m} 
                               shadowColor={r === cols - 1 ? "shadow-[0_0_20px_rgba(245,158,11,0.15)] dark:shadow-[0_0_20px_rgba(245,158,11,0.08)] hover:shadow-[0_0_25px_rgba(245,158,11,0.25)] dark:hover:shadow-[0_0_25px_rgba(245,158,11,0.15)]" : undefined}
+                              onClick={() => onNodeClick?.(m)}
                           />
                       </div>
                   ))}
               </React.Fragment>
           ))}
+          {/* Draw Extra Matches (3rd Place, Showmatches) */}
+          {extraMatches.map((m, idx) => {
+              const r = cols - 1; // Align horizontally with the finals
+              const topBase = Math.max(baseSvgHeight, positions[r] ? positions[r][0] + nodeHeight + rowGap : 0);
+              const extraTop = topBase + idx * (nodeHeight + rowGap) + 16;
+              
+              return (
+                <div 
+                    key={`node-extra-${idx}`}
+                    className="absolute"
+                    style={{
+                        left: `${r * (nodeWidth + colGap)}px`,
+                        top: `${extraTop}px`,
+                        width: `${nodeWidth}px`
+                    }}
+                >
+                    <BracketMatchNode match={m} shadowColor="shadow-none border-dashed border-neutral-300 dark:border-neutral-700 opacity-80 hover:opacity-100" onClick={() => onNodeClick?.(m)} />
+                </div>
+              );
+          })}
         </div>
       </div>
     );

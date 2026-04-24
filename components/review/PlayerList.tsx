@@ -41,7 +41,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({ playerStats, onSelectPla
                             <div className={`text-2xl font-black tracking-tighter ${getRatingColorClass(Number(player.avgRating))}`}>
                                 {player.avgRating}
                             </div>
-                            <div className="text-[10px] text-neutral-400">{player.matches} 场数据</div>
+                            <div className="text-[10px] text-neutral-400">{player.matches} {player.dataTypeLabel || "场"}数据</div>
                         </div>
                     </div>
                 );

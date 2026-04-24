@@ -34,7 +34,9 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         'player_death': 3,
         'bomb_planted': 4,
         'bomb_defused': 5,
+        'hostage_rescued': 5,
         'bomb_exploded': 6,
+        'hostage_killed': 6,
         'round_end': 7,
         'round_officially_ended': 8
     };
@@ -370,8 +372,34 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         teammateSteamIds, 
         steamIdToName, 
         activeSteamIds, 
-        allSteamIds 
+        allSteamIds,
+        steamIdToTeamId
     } = determineTeammates(data, teamLogicEvents);
+
+    let teamNameUs: string | undefined;
+    let teamNameThem: string | undefined;
+
+    const steamIdsUs = Array.from(teammateSteamIds);
+    const steamIdsThem = Array.from(activeSteamIds).filter(sid => !teammateSteamIds.has(sid));
+
+    const checkTeamName = (steamIds: string[]) => {
+        const counts = new Map<string, number>();
+        steamIds.forEach(sid => {
+            const t = steamIdToTeamId.get(sid);
+            if (t && typeof t === 'string' && !/^\d+$/.test(t)) {
+                counts.set(t, (counts.get(t) || 0) + 1);
+            }
+        });
+        let maxT = undefined;
+        let maxC = 0;
+        counts.forEach((v, k) => {
+            if (v>maxC){maxT=k; maxC=v;}
+        });
+        return maxC >= Math.min(3, Math.max(1, steamIds.length - 2)) ? maxT : undefined;
+    };
+
+    teamNameUs = checkTeamName(steamIdsUs);
+    teamNameThem = checkTeamName(steamIdsThem);
 
     // --- PHASE 5: Determine Starting Side (Extracted) ---
     const initialRosterSide = determineStartingSide(teamLogicEvents, teammateSteamIds);
@@ -1349,6 +1377,35 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
                 wpaUpdates: wpaUpdates || undefined
             });
         }
+        else if (type === 'hostage_rescued') {
+            const anyE = e as any;
+            const sid = normalizeSteamId(anyE.user_steamid || anyE.userid);
+            const getTimelineInfo = (s: string) => {
+                const n = steamIdToName.get(s) || "Unknown";
+                return { steamid: s, name: n, side: 'CT' as Side };
+            };
+            currentRoundEvents.push({
+                tick, seconds: 0, type: 'hostage_rescued', subject: getTimelineInfo(sid),
+                winProb: ratingEngine.getRoundWinProb(),
+                wpaUpdates: wpaUpdates || undefined
+            });
+        }
+        else if (type === 'hostage_killed') {
+            const anyE = e as any;
+            const sid = normalizeSteamId(anyE.user_steamid || anyE.userid);
+            const getTimelineInfo = (s: string) => {
+                const n = steamIdToName.get(s) || "Unknown";
+                const isTM = teammateSteamIds.has(s);
+                const currentRosterSide = getRoundSide(currentRound, initialRosterSide);
+                const side = isTM ? currentRosterSide : (currentRosterSide === 'T' ? 'CT' : 'T');
+                return { steamid: s, name: n, side: side };
+            };
+            currentRoundEvents.push({
+                tick, seconds: 0, type: 'hostage_killed', subject: getTimelineInfo(sid),
+                winProb: ratingEngine.getRoundWinProb(),
+                wpaUpdates: wpaUpdates || undefined
+            });
+        }
     }
 
     if (pendingRoundEnd) {
@@ -1373,9 +1430,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
 
         if (stats.kills === 0 && stats.deaths === 0 && stats.assists === 0 && stats.total_damage === 0 && stats.utility_count === 0) return;
         
-        const isRosterByName = getAllPlayers().some(r => r.id === stats.playerId);
-
-        if (teammateSteamIds.has(sid) || isRosterByName) ourPlayers.push(stats);
+        if (teammateSteamIds.has(sid)) ourPlayers.push(stats);
         else enemyPlayers.push(stats);
     });
 
@@ -1393,6 +1448,8 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         serverName: meta.server_name, 
         rank: 'N/A',
         result: finalScoreUs > finalScoreThem ? 'WIN' : finalScoreUs < finalScoreThem ? 'LOSS' : 'TIE',
+        teamNameUs,
+        teamNameThem,
         startingSide: initialRosterSide,
         score: { 
             us: finalScoreUs, 

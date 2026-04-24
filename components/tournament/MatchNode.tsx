@@ -1,7 +1,7 @@
 import React from 'react';
 import { TournamentStageMatch } from '../../types';
 
-export const BracketMatchNode = ({ match, shadowColor }: { match?: TournamentStageMatch, shadowColor?: string }) => {
+export const BracketMatchNode = ({ match, shadowColor, onClick }: { match?: TournamentStageMatch, shadowColor?: string, onClick?: () => void }) => {
     if (!match) return <div className="w-[180px] h-[80px] bg-neutral-100 dark:bg-neutral-800/50 rounded-lg border border-neutral-200 dark:border-neutral-700/50 opacity-50" />;
     
     const statusMap: Record<string, string> = {
@@ -14,10 +14,14 @@ export const BracketMatchNode = ({ match, shadowColor }: { match?: TournamentSta
 
     return (
       <div 
+        onClick={onClick}
         className={`w-[180px] h-[80px] bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg shadow-sm overflow-hidden flex flex-col justify-between relative z-10 transition-transform hover:-translate-y-0.5 cursor-pointer ${shadowColor || 'hover:shadow-md'}`}
       >
         <div className="flex justify-between items-center px-2 py-1 bg-neutral-50 dark:bg-neutral-800 border-b border-neutral-100 dark:border-neutral-800/50">
-            <span className="text-[10px] text-neutral-500 font-medium tracking-wider">{match.date || 'BO3'}</span>
+            <span className="text-[10px] text-neutral-500 font-medium tracking-wider">
+                {match.isThirdPlace ? '季军赛 ' : match.isShowmatch ? '表演赛 ' : ''}
+                {match.date ? `${match.date}` : match.bestOf ? `BO${match.bestOf}` : 'BO3'}
+            </span>
             <span className={`text-[9px] uppercase font-bold px-1.5 py-px rounded ${
                 match.status === 'completed' ? 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300' : 
                 match.status === 'live' ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400' : 

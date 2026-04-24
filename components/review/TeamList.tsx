@@ -1,17 +1,35 @@
-import React from 'react';
-import { TeamProfile } from '../../types';
+import React, { useMemo } from 'react';
+import { Match, TeamProfile } from '../../types';
 import { getTeams } from '../../utils/teamLoader';
+import { calculateTeamRating } from '../../utils/analytics/teamStatsCalculator';
+import { getRatingStyle } from '../../utils/styleConstants';
 
 interface TeamListProps {
     onSelectTeam: (team: TeamProfile) => void;
+    matches: Match[];
 }
 
-export const TeamList: React.FC<TeamListProps> = ({ onSelectTeam }) => {
+export const TeamList: React.FC<TeamListProps> = ({ onSelectTeam, matches }) => {
     const teams = getTeams();
+
+    const sortedTeams = useMemo(() => {
+        return [...teams].sort((a, b) => {
+            // Priority 1: User teams come first
+            if (a.type === 'user' && b.type !== 'user') return -1;
+            if (a.type !== 'user' && b.type === 'user') return 1;
+            // Priority 2: Alphabetical sort
+            return a.name.localeCompare(b.name);
+        });
+    }, [teams]);
+
+    const getTeamRating = (teamPlayers: any[]) => {
+        const rating = calculateTeamRating(teamPlayers, matches);
+        return rating > 0 ? rating.toFixed(2) : '-';
+    };
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teams.map(team => (
+            {sortedTeams.map(team => (
                 <div 
                     key={team.id} 
                     onClick={() => onSelectTeam(team)}
@@ -24,10 +42,18 @@ export const TeamList: React.FC<TeamListProps> = ({ onSelectTeam }) => {
                             </div>
                             <div>
                                 <h4 className="font-bold text-base text-neutral-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">{team.name}</h4>
-                                <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mt-0.5">{team.players.length} 名队员</div>
+                                <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mt-0.5 flex items-center gap-2">
+                                    <span>{team.players.length} 名队员</span>
+                                    {getTeamRating(team.players) !== '-' && (
+                                        <>
+                                            <span className="w-1 h-1 rounded-full bg-neutral-300 dark:bg-neutral-600"></span>
+                                            <span className={getRatingStyle(Number(getTeamRating(team.players)), 'text')}>Rating {getTeamRating(team.players)}</span>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${team.type === 'user' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/50' : 'bg-neutral-50 text-neutral-500 border-neutral-200 dark:bg-neutral-800 dark:text-neutral-400 dark:border-neutral-700'}`}>
+                        <span className={`shrink-0 text-[10px] font-bold px-2 py-1 rounded-md border ${team.type === 'user' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/50' : 'bg-neutral-50 text-neutral-500 border-neutral-200 dark:bg-neutral-800 dark:text-neutral-400 dark:border-neutral-700'}`}>
                             {team.type === 'user' ? '用户队伍' : '职业队伍'}
                         </span>
                     </div>

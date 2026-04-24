@@ -19,8 +19,8 @@ export const getTeams = (): TeamProfile[] => {
 export const getAllPlayers = (): import('../types').PlayerProfile[] => {
     const teams = getTeams();
     const players: import('../types').PlayerProfile[] = [];
-    teams.forEach(team => {
-        team.players.forEach(p => {
+    teams?.forEach(team => {
+        team.players?.forEach(p => {
             if (!players.find(existing => existing.id === p.id)) {
                 players.push(p);
             }

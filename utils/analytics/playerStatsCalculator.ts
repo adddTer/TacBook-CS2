@@ -292,6 +292,15 @@ export const calculatePlayerStats = (
 
   // 5. Prepare Detailed Metrics
   const details = {
+    // Overall Scores (For Debug/Distribution Analysis)
+    _scoreFirepower: scoreFirepower,
+    _scoreEntry: scoreEntry,
+    _scoreTrade: scoreTrade,
+    _scoreOpening: scoreOpening,
+    _scoreClutch: scoreClutch,
+    _scoreSniper: scoreSniper,
+    _scoreUtility: scoreUtility,
+
     // Firepower
     kpr: kpr,
     roundsWithKills: safeDiv(stats.roundsWithKills, rounds) * 100,

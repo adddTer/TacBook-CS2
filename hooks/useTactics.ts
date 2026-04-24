@@ -28,8 +28,8 @@ export const useTactics = (
     const rolesSet = new Set<string>();
 
     baseTactics.forEach((t) => {
-      t.tags.forEach((tag) => tagsMap.set(tag.label, tag));
-      t.actions.forEach((a) => rolesSet.add(a.who));
+      t.tags?.forEach((tag) => tagsMap.set(tag.label, tag));
+      t.actions?.forEach((a) => rolesSet.add(a.who));
     });
 
     return {
@@ -49,7 +49,7 @@ export const useTactics = (
 
       // Tag Filter (AND logic: must contain ALL selected tags)
       if (filter.selectedTags.length > 0) {
-        const tacticTagLabels = t.tags.map((tag) => tag.label);
+        const tacticTagLabels = (t.tags || []).map((tag) => tag.label);
         const hasAllTags = filter.selectedTags.every((st) =>
           tacticTagLabels.includes(st),
         );
@@ -58,7 +58,7 @@ export const useTactics = (
 
       // Role Filter (Does this tactic involve the specific role?)
       if (filter.specificRole) {
-        const hasRole = t.actions.some((a) => a.who === filter.specificRole);
+        const hasRole = (t.actions || []).some((a) => a.who === filter.specificRole);
         if (!hasRole) return false;
       }
 
@@ -66,7 +66,7 @@ export const useTactics = (
       if (filter.timePhase) {
         // Logic: Check if tactic has meaningful action in this phase
         // Early: > 1:40, Mid: 1:40 - 0:40, Late: < 0:40
-        const hasPhaseAction = t.actions.some((a) => {
+        const hasPhaseAction = (t.actions || []).some((a) => {
           const time = parseTime(a.time);
           if (filter.timePhase === "early") return time > 100; // > 1:40
           if (filter.timePhase === "mid") return time <= 100 && time > 40;
@@ -80,10 +80,10 @@ export const useTactics = (
       if (filter.searchQuery) {
         const q = filter.searchQuery.toLowerCase();
         const inTitle = t.title.toLowerCase().includes(q);
-        const inTags = t.tags.some((tag) =>
+        const inTags = (t.tags || []).some((tag) =>
           tag.label.toLowerCase().includes(q),
         );
-        const inActions = t.actions.some(
+        const inActions = (t.actions || []).some(
           (a) =>
             a.content.toLowerCase().includes(q) ||
             a.who.toLowerCase().includes(q),

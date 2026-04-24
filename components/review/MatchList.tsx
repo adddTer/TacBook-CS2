@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Match } from '../../types';
 import { SourceBadge, getMapDisplayName, getMapEnName } from './ReviewShared';
-import { isMyTeamMatch, calculateScoreFromRounds } from '../../utils/matchHelpers';
+import { isMyTeamMatch, calculateScoreFromRounds, getTeamNames } from '../../utils/matchHelpers';
 import { CURRENT_PARSER_VERSION } from '../../utils/demoParser';
 import { MatchFilterBar, FilterState } from './MatchFilterBar';
 
@@ -198,7 +198,7 @@ export const MatchList: React.FC<MatchListProps> = ({
                     <p className="text-xs mt-1">请尝试调整筛选条件</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-3">
                     {items.map(item => {
                     const isSelected = selectedIds.has(item.id);
 
@@ -214,76 +214,97 @@ export const MatchList: React.FC<MatchListProps> = ({
                     // Use calculated score for robustness
                     const displayScore = calculateScoreFromRounds(match);
 
-                    let barColor = 'bg-neutral-400';
+                    const { teamA, teamB } = getTeamNames(match);
+
+                    let statusText = '赛事数据';
+                    let statusColor = 'text-neutral-500 bg-neutral-100 dark:bg-neutral-800';
+                    let rowBorder = 'border-neutral-200 dark:border-neutral-800';
+                    let indicatorColor = 'bg-neutral-400';
+
                     if (isMine) {
-                        if (isWin) barColor = 'bg-green-500';
-                        else if (isTie) barColor = 'bg-yellow-500';
-                        else barColor = 'bg-red-500';
+                        if (isWin) {
+                            statusText = '胜利';
+                            statusColor = 'text-green-700 bg-green-100 dark:text-green-400 dark:bg-green-500/20';
+                            rowBorder = 'border-green-200 dark:border-green-800/50';
+                            indicatorColor = 'bg-green-500';
+                        }
+                        else if (isTie) {
+                            statusText = '平局';
+                            statusColor = 'text-yellow-700 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-500/20';
+                            rowBorder = 'border-yellow-200 dark:border-yellow-800/50';
+                            indicatorColor = 'bg-yellow-500';
+                        }
+                        else {
+                            statusText = '战败';
+                            statusColor = 'text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-500/20';
+                            rowBorder = 'border-red-200 dark:border-red-800/50';
+                            indicatorColor = 'bg-red-500';
+                        }
                     }
 
                     return (
                         <div 
                             key={match.id} 
                             onClick={() => isSelectMode ? toggleSelection(match.id) : onSelectMatch(match)}
-                            className={`relative overflow-hidden rounded-2xl cursor-pointer group transition-all duration-300 bg-white dark:bg-neutral-900 border shadow-sm
-                                ${isSelected ? 'border-blue-500 ring-2 ring-blue-500 transform scale-[0.98]' : 'border-neutral-200 dark:border-neutral-800 hover:shadow-md active:scale-[0.98]'}
+                            className={`relative flex items-center p-3 sm:px-5 sm:py-4 cursor-pointer transition-all duration-200 bg-white dark:bg-[#111] border rounded-xl
+                                ${isSelected ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/10' : `${rowBorder} hover:shadow-md hover:border-neutral-300 dark:hover:border-neutral-600`}
                             `}
                         >
-                            {/* Selection Overlay */}
+                            {/* Left indicator strip */}
+                            <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${indicatorColor}`} />
+
+                            {/* Selection Overlay Checkbox */}
                             {isSelectMode && (
-                                <div className={`absolute inset-0 z-30 bg-black/10 flex items-center justify-center backdrop-blur-[1px] transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 hover:opacity-100'}`}>
-                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'bg-black/50 border-white text-transparent'}`}>
-                                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                <div className="mr-4">
+                                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-neutral-300 dark:border-neutral-600'}`}>
+                                        {isSelected && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                                     </div>
                                 </div>
                             )}
 
-                            {/* Status Bar */}
-                            <div className={`absolute left-0 top-0 bottom-0 w-1.5 z-10 ${barColor}`}></div>
-
-                            <div className="p-5 pl-7 relative z-0">
-                                {/* Header */}
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h3 className="text-xl font-black text-neutral-900 dark:text-white leading-none">{mapName}</h3>
-                                        <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-1">{mapEn}</p>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-1">
-                                        <SourceBadge source={match.source} />
-                                        {match.source === 'Demo' && match.parserVersion !== CURRENT_PARSER_VERSION && (
-                                            <span 
-                                                className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-[10px] font-bold rounded uppercase tracking-wider"
-                                                title={!match.rawDemoJson ? "缺少原始数据，无法自动升级，请重新导入" : "数据过期，等待自动升级"}
-                                            >
-                                                {!match.rawDemoJson ? "需重新导入" : "数据过期"}
-                                            </span>
-                                        )}
+                            {/* Main Content */}
+                            <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center justify-between gap-4 pl-2">
+                                
+                                {/* Info section (Map, Status) */}
+                                <div className="flex flex-col gap-1.5 w-full md:w-[15%] shrink-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-base font-bold text-neutral-900 dark:text-white leading-none whitespace-nowrap">{mapName}</span>
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm whitespace-nowrap ${statusColor}`}>
+                                            {statusText}
+                                        </span>
                                     </div>
                                 </div>
 
-                                {/* Score Content */}
-                                <div className="flex items-end justify-between">
-                                    <div>
-                                        <div className="flex items-baseline gap-1 mb-1">
-                                             <span className="text-[10px] font-bold text-neutral-500 dark:text-neutral-400">SCORE</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className={`text-3xl font-black font-mono tracking-tighter ${isMine && isWin ? 'text-green-600 dark:text-green-400' : 'text-neutral-800 dark:text-neutral-200'}`}>
-                                                {displayScore.us}
-                                            </span>
-                                            <span className="text-xl text-neutral-400/50 font-light">:</span>
-                                            <span className={`text-3xl font-black font-mono tracking-tighter ${isMine && !isWin && !isTie ? 'text-red-600 dark:text-red-400' : 'text-neutral-800 dark:text-neutral-200'}`}>
-                                                {displayScore.them}
-                                            </span>
-                                        </div>
+                                {/* Score section */}
+                                <div className="flex items-center justify-center gap-2 sm:gap-4 flex-1 min-w-0 lg:px-4">
+                                    <div className="flex-1 flex justify-end min-w-0">
+                                        <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 truncate" title={teamA}>{teamA}</span>
                                     </div>
-                                    
-                                    <div className="text-right">
-                                         {match.serverName && <div className="text-[10px] font-bold text-neutral-400 mb-1 truncate max-w-[120px]" title={match.serverName}>{match.serverName}</div>}
-                                         <button className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                             查看详情 &rarr;
-                                         </button>
+                                    <div className="px-3 py-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg flex items-center justify-center gap-2 font-mono font-bold text-lg min-w-[70px] shrink-0">
+                                        <span className={isMine && isWin ? 'text-green-600 dark:text-green-400' : ''}>{displayScore.us}</span>
+                                        <span className="text-neutral-400 text-sm">:</span>
+                                        <span className={isMine && !isWin && !isTie ? 'text-red-600 dark:text-red-400' : ''}>{displayScore.them}</span>
                                     </div>
+                                    <div className="flex-1 flex justify-start min-w-0">
+                                        <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 truncate" title={teamB}>{teamB}</span>
+                                    </div>
+                                </div>
+
+                                {/* Meta section (Source, Server) */}
+                                <div className="flex flex-col items-start md:items-end w-full md:w-[25%] shrink-0 min-w-0 text-[11px] gap-1">
+                                    <div className="flex items-center gap-2">
+                                        <SourceBadge source={match.source} />
+                                        {match.source === 'Demo' && match.parserVersion !== CURRENT_PARSER_VERSION && (
+                                            <span className="px-1.5 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-bold rounded" title={!match.rawDemoJson ? "需重新导入" : "旧版数据"}>
+                                                {!match.rawDemoJson ? "缺数据" : "版本旧"}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {match.serverName && (
+                                        <div className="text-neutral-400 truncate max-w-full text-left md:text-right" title={match.serverName}>
+                                            {match.serverName}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

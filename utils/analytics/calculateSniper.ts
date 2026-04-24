@@ -1,15 +1,8 @@
+import { mapScore } from "./scoreMapper";
+
 /**
- * Calculates Sniper Score (0-100).
- *
- * Target: Dedicated AWPer ~80, Hybrid ~45, Rifler ~0.
- * Adjusted: Stricter thresholds (Raised).
- *
- * Components:
- * 1. Sniper Ratio (30%): Target 0.90 (Harder)
- * 2. Sniper KPR (30%): Target 0.80 (Harder)
- * 3. Rounds w/ Sniper Kill % (15%): Target 60% (Harder)
- * 4. Multi-Kill Rounds (15%): Target 30% (Harder)
- * 5. Opening Kills (10%): Target 0.25 (Harder)
+ * Calculates Sniper Score (0-100) using Piecewise Scaling.
+ * Target: Average ~ 50 Points.
  */
 export const calculateSniper = (
   sniperKills: number,
@@ -21,27 +14,22 @@ export const calculateSniper = (
 ): number => {
   if (rounds === 0 || totalKills === 0) return 0;
 
-  // 1. Sniper Ratio (30%)
   const sniperRatio = sniperKills / totalKills;
-  const scoreRatio = (sniperRatio / 0.9) * 30;
+  const scoreRatio = mapScore(sniperRatio, 0.0, 0.15, 0.35, 30); // P90 was 0.348
 
-  // 2. Sniper KPR (30%)
   const sniperKpr = sniperKills / rounds;
-  const scoreKpr = (sniperKpr / 0.8) * 30;
+  const scoreKpr = mapScore(sniperKpr, 0.0, 0.10, 0.25, 30); // P90 was 0.21
 
-  // 3. Consistency (15%)
   const consistency = roundsWithSniperKills / rounds;
-  const scoreCons = (consistency / 0.6) * 15;
+  const scoreCons = mapScore(consistency, 0.0, 0.08, 0.18, 15); // P90 was 0.174
 
-  // 4. Multi-Kill (15%)
   const mkRate = sniperMultiKillRounds / rounds;
-  const scoreMk = (mkRate / 0.3) * 15;
+  const scoreMk = mapScore(mkRate, 0.0, 0.02, 0.05, 15); // P90 was ~0.02
 
-  // 5. Opening (10%)
   const opRate = sniperOpeningKills / rounds;
-  const scoreOp = (opRate / 0.25) * 10;
+  const scoreOp = mapScore(opRate, 0.0, 0.015, 0.03, 10); // P90 was 0.014
 
   const totalScore = scoreRatio + scoreKpr + scoreCons + scoreMk + scoreOp;
 
-  return Math.round(Math.max(0, totalScore));
+  return Math.min(100, Math.round(totalScore));
 };

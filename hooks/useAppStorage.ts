@@ -4,6 +4,7 @@ import { generateGroupId } from "../utils/idGenerator";
 import { loadGroupsFromDB, saveGroupsToDB } from "../utils/db";
 import { safeStorage } from "../utils/storage";
 import { permissionManager } from "../utils/permissionManager";
+import { saveVersion } from "../utils/versionDb";
 
 export const useAppStorage = () => {
   const [groups, setGroups] = useState<ContentGroup[]>([]);
@@ -160,25 +161,34 @@ export const useAppStorage = () => {
   const hasWritableGroups = writableGroups.length > 0;
 
   // --- Actions ---
-  const handleSaveTactic = (updatedTactic: Tactic, targetGroupId: string) => {
+  const handleSaveTactic = (
+    updatedTactic: Tactic, 
+    targetGroupId: string, 
+    options?: { description?: string, author?: string, skipVersionSave?: boolean }
+  ) => {
+    const tacticToSave = { ...updatedTactic };
+    if (!options?.skipVersionSave) {
+        delete (tacticToSave as any)._restoredFromTimestamp;
+        saveVersion(tacticToSave, options?.author || '用户 (手动/自动编辑)', options?.description || '已保存战术');
+    }
     setGroups((prevGroups) =>
       prevGroups.map((group) => {
         if (group.metadata.id === targetGroupId) {
           if (group.metadata.isReadOnly) return group;
 
           const existsIndex = group.tactics.findIndex(
-            (t) => t.id === updatedTactic.id,
+            (t) => t.id === tacticToSave.id,
           );
           
           permissionManager.enforce({
             action: existsIndex >= 0 ? 'edit' : 'add',
             dataType: 'tactic',
-            dataId: updatedTactic.id,
+            dataId: tacticToSave.id,
             groupId: targetGroupId
           });
 
           const newTactic = {
-            ...updatedTactic,
+            ...tacticToSave,
             groupId: targetGroupId,
             _isTemp: false,
           };
@@ -208,25 +218,31 @@ export const useAppStorage = () => {
   const handleSaveUtility = (
     updatedUtility: Utility,
     targetGroupId: string,
+    options?: { description?: string, author?: string, skipVersionSave?: boolean }
   ) => {
+    const utilityToSave = { ...updatedUtility };
+    if (!options?.skipVersionSave) {
+        delete (utilityToSave as any)._restoredFromTimestamp;
+        saveVersion(utilityToSave, options?.author || '用户 (手动/自动编辑)', options?.description || '已保存道具');
+    }
     setGroups((prevGroups) =>
       prevGroups.map((group) => {
         if (group.metadata.id === targetGroupId) {
           if (group.metadata.isReadOnly) return group;
 
           const existsIndex = group.utilities.findIndex(
-            (u) => u.id === updatedUtility.id,
+            (u) => u.id === utilityToSave.id,
           );
           
           permissionManager.enforce({
             action: existsIndex >= 0 ? 'edit' : 'add',
             dataType: 'utility',
-            dataId: updatedUtility.id,
+            dataId: utilityToSave.id,
             groupId: targetGroupId
           });
 
           const newUtil = {
-            ...updatedUtility,
+            ...utilityToSave,
             groupId: targetGroupId,
             _isTemp: false,
           };

@@ -127,7 +127,7 @@ export const TimelineBetaTab: React.FC<TimelineBetaTabProps> = ({ match }) => {
         }
         
         if (!showDetails) {
-            return result.filter(e => e.type === 'kill' || e.type === 'plant' || e.type === 'defuse' || e.type === 'explode' || e.type === 'round_end');
+            return result.filter(e => e.type === 'kill' || e.type === 'plant' || e.type === 'defuse' || e.type === 'explode' || e.type === 'round_end' || e.type === 'hostage_rescued');
         }
         return result;
     }, [selectedRound, showDetails, winProbSamples]);

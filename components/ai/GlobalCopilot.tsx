@@ -8,8 +8,9 @@ interface GlobalCopilotProps {
     allMatches: any[];
     allTournaments: any[];
     allBons: any[];
-    onSaveTactic?: (tactic: any) => void;
-    onSaveUtility?: (utility: any) => void;
+    isAdmin?: boolean;
+    onSaveTactic?: (tactic: any, description?: string, author?: string) => void;
+    onSaveUtility?: (utility: any, description?: string, author?: string) => void;
     onSaveMatch?: (match: any) => void;
     onDeleteTactic?: (tactic: any) => void;
     onDeleteUtility?: (utility: any) => void;

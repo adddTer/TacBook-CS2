@@ -15,7 +15,7 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick, onEdit,
   // Calculate costs for preview
   const { totalTeamCost } = useMemo(() => {
       if (!tactic.loadout) return { totalTeamCost: 0 };
-      const costs = tactic.loadout.map(item => calculateLoadoutCost(item.equipment));
+      const costs = (tactic.loadout || []).map(item => calculateLoadoutCost(item.equipment));
       const total = costs.reduce((a, b) => a + b, 0);
       return { totalTeamCost: total };
   }, [tactic.loadout]);
@@ -34,8 +34,8 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick, onEdit,
         <div className="flex justify-between items-start">
             <div className="flex-1 pr-4">
             <div className="flex flex-wrap gap-1.5 mb-2.5">
-                {tactic.tags.map(tag => (
-                <span key={tag.label} className={`
+                {(tactic.tags || []).map((tag, index) => (
+                <span key={`${tag.label}-${index}`} className={`
                     text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded
                     ${tag.category === 'economy' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                     tag.category === 'playstyle' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
@@ -58,7 +58,7 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick, onEdit,
             </div>
             <div className="flex items-start gap-1.5">
                 <h3 className="text-lg font-bold leading-tight text-neutral-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                    {tactic.title}
+                    {tactic.title || (tactic as any).name || '无标题战术'}
                 </h3>
             </div>
             
@@ -76,10 +76,10 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick, onEdit,
             </div>
             
             <div className="flex items-center gap-3 mt-2 text-[10px] text-neutral-400 font-medium">
-                <span>By {tactic.metadata.author}</span>
+                <span>By {tactic.metadata?.author || 'Unknown'}</span>
                 <span>•</span>
-                <span>{tactic.metadata.lastUpdated}</span>
-                {tactic.metadata.difficulty && (
+                <span>{tactic.metadata?.lastUpdated || ''}</span>
+                {tactic.metadata?.difficulty && (
                     <>
                         <span>•</span>
                         <span className={`

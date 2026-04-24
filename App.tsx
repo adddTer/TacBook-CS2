@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import './index.css';
 import { TacticCard } from './components/TacticCard';
 import { UtilityCard } from './components/UtilityCard';
-import { MapViewer } from './components/MapViewer';
 import { Header } from './components/Header';
 import { FilterPanel } from './components/FilterPanel';
 import { TacticEditor } from './components/TacticEditor';
@@ -55,7 +54,6 @@ const App: React.FC = () => {
   const [selectedTactic, setSelectedTactic] = useState<Tactic | null>(null);
   const [selectedUtility, setSelectedUtility] = useState<Utility | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isMapView, setIsMapView] = useState(false);
   
   // Confirm Modal
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -269,15 +267,15 @@ const App: React.FC = () => {
       });
   };
 
-  const onSaveTacticWrapper = (t: Tactic, gid: string) => {
-      handleSaveTactic(t, gid);
+  const onSaveTacticWrapper = (t: Tactic, gid: string, desc?: string) => {
+      handleSaveTactic(t, gid, { description: desc, author: '用户' });
       setActiveEditor(null);
       setEditingTactic(undefined);
       if (selectedTactic && selectedTactic.id === t.id) setSelectedTactic({ ...t, groupId: gid });
   };
 
-  const onSaveUtilityWrapper = (u: Utility, gid: string) => {
-      handleSaveUtility(u, gid);
+  const onSaveUtilityWrapper = (u: Utility, gid: string, desc?: string) => {
+      handleSaveUtility(u, gid, { description: desc, author: '用户' });
       setActiveEditor(null);
       setEditingUtility(undefined);
       if (selectedUtility && selectedUtility.id === u.id) setSelectedUtility({ ...u, groupId: gid });
@@ -333,16 +331,6 @@ const App: React.FC = () => {
                         )}
                     </div>
                     
-                    {viewMode === 'tactics' && (
-                        <button
-                            onClick={() => setIsMapView(!isMapView)}
-                            className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center transition-all relative mr-2 ${isMapView ? 'bg-blue-600 text-white shadow-md' : 'bg-neutral-100 dark:bg-neutral-900 text-neutral-500'}`}
-                            title="Toggle Map View"
-                        >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.806-.98l-4.553-2.276M15 7V3" /></svg>
-                        </button>
-                    )}
-                    
                     <button 
                         onClick={() => setIsFilterOpen(!isFilterOpen)}
                         className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center transition-all relative ${isFilterOpen || filterActive ? 'bg-blue-600 text-white shadow-md' : 'bg-neutral-100 dark:bg-neutral-900 text-neutral-500'}`}
@@ -376,14 +364,9 @@ const App: React.FC = () => {
           {/* Main Content Area */}
           <main className="px-4 lg:px-8 pb-32 max-w-[1920px] mx-auto pt-4">
             {viewMode === 'tactics' && (
-                isMapView ? (
-                    <div className="h-[calc(100vh-140px)] w-full max-w-[1920px] mx-auto rounded-xl overflow-hidden shadow-sm border border-neutral-200 dark:border-neutral-800">
-                        <MapViewer mapId={currentMap} />
-                    </div>
-                ) : (
-                    filteredTactics.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                            {filteredTactics.map((tactic) => (
+                filteredTactics.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                        {filteredTactics.map((tactic) => (
                             <div key={tactic.id} className="relative group">
                                 <button 
                                     onClick={(e) => handleCopyId(e, tactic.id)}
@@ -408,7 +391,6 @@ const App: React.FC = () => {
                             <p className="text-sm font-medium">{isDataLoaded ? `暂无战术` : '加载中...'}</p>
                         </div>
                     )
-                )
             )}
 
             {viewMode === 'utilities' && (
@@ -463,6 +445,11 @@ const App: React.FC = () => {
             highlightRole={filter.specificRole}
             onEdit={isItemEditable(selectedTactic.groupId) ? () => { setEditingTactic(selectedTactic); setActiveEditor('tactic'); } : undefined}
             onDelete={isItemEditable(selectedTactic.groupId) ? () => handleDeleteTactic(selectedTactic) : undefined}
+            onRestoreVersion={isItemEditable(selectedTactic.groupId) ? (data, timestamp) => {
+                const restoredData = { ...data, _restoredFromTimestamp: timestamp };
+                handleSaveTactic(restoredData, selectedTactic.groupId!, { skipVersionSave: true });
+                setSelectedTactic(restoredData); // update the immediate view
+            } : undefined}
           />
       )}
       {selectedUtility && (
@@ -473,6 +460,11 @@ const App: React.FC = () => {
             onSelectSibling={(sibling) => setSelectedUtility(sibling)}
             onEdit={isItemEditable(selectedUtility.groupId) ? () => { setEditingUtility(selectedUtility); setActiveEditor('utility'); } : undefined}
             onDelete={isItemEditable(selectedUtility.groupId) ? () => handleDeleteUtility(selectedUtility) : undefined}
+            onRestoreVersion={isItemEditable(selectedUtility.groupId) ? (data, timestamp) => {
+                const restoredData = { ...data, _restoredFromTimestamp: timestamp };
+                handleSaveUtility(restoredData, selectedUtility.groupId!, { skipVersionSave: true });
+                setSelectedUtility(restoredData);
+            } : undefined}
           />
       )}
       {activeEditor === 'tactic' && (
@@ -537,13 +529,14 @@ const App: React.FC = () => {
         allMatches={allMatches}
         allTournaments={allTournaments}
         allBons={allBons}
-        onSaveTactic={(tactic) => {
+        isAdmin={hasWritableGroups}
+        onSaveTactic={(tactic, desc, author) => {
           const groupId = tactic.groupId || (writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
-          if (groupId) handleSaveTactic(tactic, groupId);
+          if (groupId) handleSaveTactic(tactic, groupId, { description: desc, author });
         }}
-        onSaveUtility={(utility) => {
+        onSaveUtility={(utility, desc, author) => {
           const groupId = utility.groupId || (writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
-          if (groupId) handleSaveUtility(utility, groupId);
+          if (groupId) handleSaveUtility(utility, groupId, { description: desc, author });
         }}
         onSaveMatch={(match) => {
           const groupId = match.groupId || (writableGroups.length > 0 ? writableGroups[0].metadata.id : '');

@@ -4,11 +4,13 @@ import { Match, ContentGroup, PlayerMatchStats, Tournament, MatchBon } from '../
 import { getAllPlayers } from '../utils/teamLoader';
 import { resolveName } from '../utils/demo/helpers';
 import { MatchAggregator } from '../utils/analytics/matchAggregator';
-import { getMapDisplayName, getMapEnName, isMyTeamMatch, getTeamNames } from '../utils/matchHelpers';
+import { getTeamNames, isMyTeamMatch, getMapDisplayName, getMapEnName } from '../utils/matchHelpers';
+import { getTeams } from '../utils/teamLoader';
 import { CURRENT_PARSER_VERSION } from '../utils/demoParser';
 import { MatchList } from './review/MatchList';
 import { TeamList } from './review/TeamList';
 import { PlayerList } from './review/PlayerList';
+import { TeamDetail } from './review/TeamDetail';
 import { TeamProfile } from '../types';
 import { MatchDetail } from './review/MatchDetail';
 import { PlayerDetail } from './review/PlayerDetail';
@@ -392,6 +394,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     const pushCurrentStateToHistory = () => {
         if (selectedMatch) setHistoryStack(prev => [...prev, `match:${selectedMatch.id}`]);
         else if (selectedPlayerId) setHistoryStack(prev => [...prev, `player:${selectedPlayerId}`]);
+        else if (selectedTeam) setHistoryStack(prev => [...prev, `team:${selectedTeam.id}`]);
         else setHistoryStack(prev => [...prev, `tab:${activeTab}`]);
     };
 
@@ -461,9 +464,15 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             found = true;
         }
         else if (type === 'team') {
-            // We would need to find the team by ID. For now, just go back to the tab.
-            setActiveTab('players');
-            found = true;
+            const t = getTeams().find(t => t.id === id);
+            if (t) {
+                setSelectedTeam(t);
+                setActiveTab('players');
+                found = true;
+            } else {
+                setActiveTab('players');
+                found = true;
+            }
         }
         else if (type === 'tab') {
             setActiveTab(id as any);
@@ -710,27 +719,14 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
     }
 
     if (selectedTeam) {
-        // Filter playerStats to only include players in the selected team
-        const teamPlayerStats = playerStats.filter(p => selectedTeam.players.some(tp => tp.id === p.id));
         return (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
-                <div className="flex items-center gap-4 mb-6">
-                    <button 
-                        onClick={handleBack}
-                        className="w-10 h-10 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl flex items-center justify-center text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors shadow-sm"
-                    >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                    </button>
-                    <div>
-                        <h2 className="text-2xl font-black text-neutral-900 dark:text-white">{selectedTeam.name}</h2>
-                        <div className="text-sm text-neutral-500">{selectedTeam.type === 'user' ? '用户队伍' : '职业队伍'} · {selectedTeam.players.length} 名队员</div>
-                    </div>
-                </div>
-                <PlayerList 
-                    playerStats={teamPlayerStats} 
-                    onSelectPlayer={handlePlayerClick} 
-                />
-            </div>
+            <TeamDetail 
+                team={selectedTeam} 
+                playerStats={playerStats} 
+                matches={allMatches}
+                onSelectPlayer={handlePlayerClick} 
+                onBack={handleBack} 
+            />
         );
     }
 
@@ -902,7 +898,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
 
             {activeTab === 'players' && (
                 <div className="space-y-6">
-                    <TeamList onSelectTeam={handleTeamClick} />
+                    <TeamList onSelectTeam={handleTeamClick} matches={allMatches} />
                 </div>
             )}
 

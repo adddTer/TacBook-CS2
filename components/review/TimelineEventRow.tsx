@@ -155,6 +155,26 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
         iconBg = "bg-amber-500 text-white shadow-md shadow-amber-500/20 ring-2 ring-amber-500/10";
         icon = <Icons.Explode />;
         content = <div className="py-1.5"><span className="font-bold text-amber-600 dark:text-amber-400 text-xs uppercase tracking-wider">C4 爆炸</span></div>;
+    } else if (event.type === 'hostage_rescued') {
+        iconBg = "bg-blue-500 text-white shadow-md shadow-blue-500/20 ring-2 ring-blue-500/10";
+        icon = <Icons.HostageRescued />;
+        content = (
+            <div className="flex items-center gap-2 py-1.5 flex-wrap">
+                <span className="font-bold text-blue-600 dark:text-blue-400 text-[10px] uppercase tracking-wider bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">人质登机</span>
+                <span className="w-1 h-1 rounded-full bg-neutral-300 dark:bg-neutral-700"></span>
+                <span className={`text-xs font-bold ${getPColor(event.subject?.side)}`}>{getName(event.subject)}</span>
+            </div>
+        );
+    } else if (event.type === 'hostage_killed') {
+        iconBg = "bg-red-500 text-white shadow-md shadow-red-500/20 ring-2 ring-red-500/10";
+        icon = <Icons.HostageKilled />;
+        content = (
+            <div className="flex items-center gap-2 py-1.5 flex-wrap">
+                <span className="font-bold text-red-600 dark:text-red-400 text-[10px] uppercase tracking-wider bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded">伤害人质</span>
+                <span className="w-1 h-1 rounded-full bg-neutral-300 dark:bg-neutral-700"></span>
+                <span className={`text-xs font-bold ${getPColor(event.subject?.side)}`}>{getName(event.subject)}</span>
+            </div>
+        );
     } else if (event.type === 'assist' || event.type === 'flash_assist') {
         iconBg = "bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-sm";
         iconSize = "w-6 h-6"; // Slightly smaller

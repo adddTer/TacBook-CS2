@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Utility } from '../types';
 import { shareFile, downloadBlob } from '../utils/shareHelper';
 import { ShareOptionsModal } from './ShareOptionsModal';
+import { VersionHistoryModal } from './VersionHistoryModal';
 import html2canvas from 'html2canvas';
 
 interface UtilityDetailViewProps {
@@ -12,6 +13,7 @@ interface UtilityDetailViewProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onSelectSibling?: (sibling: Utility) => void;
+  onRestoreVersion?: (data: Utility, timestamp: number) => void;
 }
 
 const typeConfig = {
@@ -34,10 +36,12 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
     onBack, 
     onEdit,
     onDelete,
-    onSelectSibling
+    onSelectSibling,
+    onRestoreVersion
 }) => {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showVersionModal, setShowVersionModal] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   const config = typeConfig[utility.type];
@@ -166,6 +170,17 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
                         className="text-blue-600 dark:text-blue-400 text-xs font-bold px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 transition-colors whitespace-nowrap"
                     >
                         编辑
+                    </button>
+                )}
+                {onRestoreVersion && (
+                    <button 
+                        onClick={() => setShowVersionModal(true)}
+                        className="p-2 text-neutral-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        title="版本历史"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                     </button>
                 )}
                 {onDelete && (
@@ -389,9 +404,19 @@ export const UtilityDetailView: React.FC<UtilityDetailViewProps> = ({
             onDownloadFile={handleDownloadFile}
             onShareImage={handleShareImage}
             onDownloadImage={handleDownloadImage}
-            title={`分享 "${utility.title}"`}
+            title={`分享 "${utility.title || (utility as any).name || '无标题道具'}"`}
             isGenerating={isGeneratingImage}
         />
+
+        {onRestoreVersion && (
+            <VersionHistoryModal 
+                isOpen={showVersionModal}
+                onClose={() => setShowVersionModal(false)}
+                itemId={utility.id}
+                currentItem={utility}
+                onRestore={onRestoreVersion}
+            />
+        )}
     </div>
   );
 };

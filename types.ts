@@ -231,11 +231,13 @@ export interface PlayerRoundStats {
     survived: boolean;
 }
 
+export type TimelineEventType = 'damage' | 'kill' | 'assist' | 'flash_assist' | 'plant' | 'defuse' | 'explode' | 'round_end' | 'hostage_rescued' | 'hostage_killed';
+
 // Timeline event within a round
 export interface MatchTimelineEvent {
     tick: number;
     seconds: number; // Seconds from round start
-    type: 'damage' | 'kill' | 'assist' | 'flash_assist' | 'plant' | 'defuse' | 'explode' | 'round_end';
+    type: TimelineEventType;
     
     // Subject (Actor)
     subject?: { steamid: string; name: string; side: Side };
@@ -405,6 +407,10 @@ export interface TournamentStageMatch {
     score2?: number;
     status: 'pending' | 'live' | 'completed';
     date?: string;
+    bestOf?: number;
+    isThirdPlace?: boolean;
+    isShowmatch?: boolean;
+    groupLabel?: string; // e.g. "Group A"
 }
 
 export interface TournamentStage {
