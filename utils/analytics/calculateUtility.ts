@@ -20,16 +20,16 @@ export const calculateUtility = (
     (flashAssists > 0 && enemiesBlinded === 0);
 
   const faPerRound = flashAssists / rounds;
-  const scoreFA = mapScore(faPerRound, 0, 0.04, 0.08, 35); // mean 0.04 FA/round
+  const scoreFA = mapScore(faPerRound, 0, 0.04, 0.08, 30); // mean 0.04 FA/round
 
   let scoreBD = 0;
   if (!isFlashDataBroken) {
     const bdPerRound = blindDuration / rounds;
-    scoreBD = mapScore(bdPerRound, 0, 1.2, 2.0, 35); // mean ~1.2s per round
+    scoreBD = mapScore(bdPerRound, 0, 1.2, 2.0, 30); // mean ~1.2s per round
   }
 
   const udPerRound = utilityDamage / rounds;
-  const scoreUD = mapScore(udPerRound, 5, 18, 25, 20); // mean 18 UD/round
+  const scoreUD = mapScore(udPerRound, 5, 18, 25, 30); // mean 18 UD/round
 
   const ukPerRound = utilityKills / rounds;
   const scoreUK = mapScore(ukPerRound, 0, 0.015, 0.03, 5);
@@ -41,7 +41,7 @@ export const calculateUtility = (
   let totalScore = scoreFA + scoreBD + scoreUD + scoreUK + scoreFT;
 
   if (isFlashDataBroken) {
-    totalScore = totalScore / 0.65;
+    totalScore = totalScore / 0.70;
   }
 
   return Math.min(100, Math.round(totalScore));

@@ -223,7 +223,7 @@ export class RatingEngine {
         aliveCTs: Set<string>,
         roundTs: Set<string>, // Incoming T players (might be empty in R1)
         roundCTs: Set<string> // Incoming CT players (might be empty in R1)
-    ): { timeUpdates: any[], eventUpdates: any[], timeProbDelta: number, eventProbDelta: number, ratingUpdates: { steamid: string, ratingDelta: number }[], duelStats?: any } | void {
+    ): { timeUpdates: any[], eventUpdates: any[], timeProbDelta: number, eventProbDelta: number, ratingUpdates: { steamid: string, ratingDelta: number, playerSide?: 'T' | 'CT' }[], duelStats?: any } | void {
         const type = event.event_name;
         const tick = event.tick || 0;
         const TICK_RATE = 64; 
@@ -247,12 +247,12 @@ export class RatingEngine {
             this.lastRoundProcessed = currentRound;
         }
 
-        // Accumulate players into known sets
-        roundTs.forEach(id => this.knownRoundTs.add(id));
-        roundCTs.forEach(id => this.knownRoundCTs.add(id));
+        // Accumulate players into known sets and initialize their roundStats eagerly
+        roundTs.forEach(id => { this.knownRoundTs.add(id); this.getRoundStats(id); });
+        roundCTs.forEach(id => { this.knownRoundCTs.add(id); this.getRoundStats(id); });
         // Also capture alive players as they are definitely in the round (fixes R1 empty roster)
-        aliveTs.forEach(id => this.knownRoundTs.add(id));
-        aliveCTs.forEach(id => this.knownRoundCTs.add(id));
+        aliveTs.forEach(id => { this.knownRoundTs.add(id); this.getRoundStats(id); });
+        aliveCTs.forEach(id => { this.knownRoundCTs.add(id); this.getRoundStats(id); });
 
         // Build candidate set for ID resolution (Fuzzy Match Target)
         const allRoundPlayers = new Set<string>();
@@ -860,12 +860,13 @@ export class RatingEngine {
         const probAfterEvent = this.wpaEngine.getCurrentWinProb();
 
         const ratingsAfter = this.getCurrentRatings();
-        const ratingUpdates: { steamid: string, ratingDelta: number }[] = [];
+        const ratingUpdates: { steamid: string, ratingDelta: number, playerSide?: 'T' | 'CT' }[] = [];
         ratingsAfter.forEach((ratingAfter, sid) => {
             const ratingBefore = ratingsBefore.get(sid) || 0;
             const delta = ratingAfter - ratingBefore;
             if (Math.abs(delta) > 0.001) {
-                ratingUpdates.push({ steamid: sid, ratingDelta: delta });
+                const side = this.knownRoundTs.has(sid) ? 'T' : (this.knownRoundCTs.has(sid) ? 'CT' : undefined);
+                ratingUpdates.push({ steamid: sid, ratingDelta: delta, playerSide: side });
             }
         });
 

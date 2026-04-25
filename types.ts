@@ -264,7 +264,7 @@ export interface MatchTimelineEvent {
         eventUpdates: any[];
         timeProbDelta: number;
         eventProbDelta: number;
-        ratingUpdates?: { steamid: string, ratingDelta: number }[];
+        ratingUpdates?: { steamid: string, ratingDelta: number, playerSide?: Side }[];
     };
 
     // Duel Stats (for kills)

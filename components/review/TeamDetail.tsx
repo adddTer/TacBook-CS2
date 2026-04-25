@@ -5,6 +5,11 @@ import { calculateTeamRating, calculateTeamWinRateMatrix, calculateComprehensive
 import { getRatingStyle } from '../../utils/styleConstants';
 import { MATRIX_PRE } from '../../utils/rating3/wpa/constants';
 import { MAPS } from '../../constants';
+import { MatchAggregator } from '../../utils/analytics/matchAggregator';
+import { calculatePlayerStats } from '../../utils/analytics/playerStatsCalculator';
+import { resolveName } from '../../utils/demo/helpers';
+import { PlayerAbilitySection } from './player_detail/PlayerAbilitySection';
+import { AbilityType } from './player_detail/config';
 
 interface TeamDetailProps {
     team: TeamProfile;
@@ -18,6 +23,7 @@ export const TeamDetail: React.FC<TeamDetailProps> = ({ team, playerStats, match
     const [sideFilter, setSideFilter] = useState<'All' | 'T' | 'CT'>('All');
     const [minTeamMembers, setMinTeamMembers] = useState<number>(3);
     const [maxTeamMembers, setMaxTeamMembers] = useState<number>(5);
+    const [selectedAbility, setSelectedAbility] = useState<AbilityType>('firepower');
 
     // Filter playerStats to only include players in the selected team
     const teamPlayerStats = useMemo(() => {
@@ -143,6 +149,67 @@ export const TeamDetail: React.FC<TeamDetailProps> = ({ team, playerStats, match
         return calculateComprehensiveTeamStats(team.players, matches, internalSideFilter, minTeamMembers, maxTeamMembers);
     }, [team.players, matches, internalSideFilter, minTeamMembers, maxTeamMembers]);
 
+    // Build the team average 7-dim stats using logic consistent with Team Rating
+    const teamAbilitiesFilteredData = useMemo(() => {
+        let totalRounds = 0;
+        let sums: Record<string, number> = {};
+
+        team.players.forEach(player => {
+            const history = matches
+                .filter(m => [...m.players, ...m.enemyPlayers].some(px => resolveName(px.playerId) === resolveName(player.id) || resolveName(px.steamid) === resolveName(player.id)))
+                .map(m => {
+                    const rawStats = [...m.players, ...m.enemyPlayers].find(px => resolveName(px.playerId) === resolveName(player.id) || resolveName(px.steamid) === resolveName(player.id))!;
+                    const aggregatedStats = MatchAggregator.aggregateMatchBySide(m, [rawStats], 'ALL')[0];
+                    return { match: m, stats: aggregatedStats };
+                });
+
+            if (history.length === 0) return;
+
+            const fullStats = calculatePlayerStats(player.id, history, internalSideFilter as any);
+            const rounds = history.reduce((sum, h) => sum + (h.stats.r3_rounds_played || h.match.rounds?.length || Math.max(h.match.score.us + h.match.score.them, 1)), 0);
+
+            if (rounds > 0) {
+                totalRounds += rounds;
+                Object.entries(fullStats.filtered.details).forEach(([k, v]) => {
+                    if (typeof v === 'number') {
+                        sums[k] = (sums[k] || 0) + v * rounds;
+                    }
+                });
+                // Also add the primary scores if they are missing
+                sums['scoreFirepower'] = (sums['scoreFirepower'] || 0) + fullStats.filtered.scoreFirepower * rounds;
+                sums['scoreEntry'] = (sums['scoreEntry'] || 0) + fullStats.filtered.scoreEntry * rounds;
+                sums['scoreSniper'] = (sums['scoreSniper'] || 0) + fullStats.filtered.scoreSniper * rounds;
+                sums['scoreClutch'] = (sums['scoreClutch'] || 0) + fullStats.filtered.scoreClutch * rounds;
+                sums['scoreOpening'] = (sums['scoreOpening'] || 0) + fullStats.filtered.scoreOpening * rounds;
+                sums['scoreTrade'] = (sums['scoreTrade'] || 0) + fullStats.filtered.scoreTrade * rounds;
+                sums['scoreUtility'] = (sums['scoreUtility'] || 0) + fullStats.filtered.scoreUtility * rounds;
+            }
+        });
+
+        if (totalRounds === 0) return null;
+
+        const averagedFiltered: Record<string, number> = {};
+        Object.entries(sums).forEach(([k, v]) => {
+            averagedFiltered[k] = v / totalRounds;
+        });
+        
+        return averagedFiltered;
+    }, [team.players, matches, internalSideFilter]);
+
+    const teamAbilities = useMemo(() => {
+        if (!teamAbilitiesFilteredData) return null;
+        const sums = teamAbilitiesFilteredData;
+        return [
+            { id: 'firepower' as AbilityType, label: '火力', value: sums.scoreFirepower }, 
+            { id: 'entry' as AbilityType, label: '破点', value: sums.scoreEntry }, 
+            { id: 'sniper' as AbilityType, label: '狙击', value: sums.scoreSniper }, 
+            { id: 'clutch' as AbilityType, label: '残局', value: sums.scoreClutch }, 
+            { id: 'opening' as AbilityType, label: '开局', value: sums.scoreOpening, isPct: false }, 
+            { id: 'trade' as AbilityType, label: '补枪', value: sums.scoreTrade }, 
+            { id: 'utility' as AbilityType, label: '道具', value: sums.scoreUtility }, 
+        ];
+    }, [teamAbilitiesFilteredData]);
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
             {/* Header Section */}
@@ -246,6 +313,26 @@ export const TeamDetail: React.FC<TeamDetailProps> = ({ team, playerStats, match
                     ))}
                 </div>
             </div>
+
+            {/* Team Average Ability Scores */}
+            {teamAbilities && teamAbilitiesFilteredData && (
+                <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+                    <div className="p-4 sm:p-6 border-b border-neutral-100 dark:border-neutral-800/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-bold text-neutral-900 dark:text-white">队员平均能力维度</h3>
+                        </div>
+                    </div>
+                    <div className="p-0 sm:p-6">
+                        <PlayerAbilitySection 
+                            abilities={teamAbilities}
+                            selectedAbility={selectedAbility}
+                            onSelectAbility={setSelectedAbility}
+                            detailData={teamAbilitiesFilteredData}
+                            highPrecision={true}
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Comprehensive Stats Section */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">

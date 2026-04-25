@@ -674,7 +674,29 @@ export class WPAEngine {
             // Standard logic below distributes to primaryContributors (defuser).
         }
 
-        // --- Standard Logic for Plant/Defuse/Damage ---
+        // --- Plant Exception Logic ---
+        if (reason === 'plant') {
+            const tGain = probDelta; 
+            const totalGainPoints = tGain * COEFF.SCALING;
+            
+            const planterBonus = totalGainPoints * 0.35;
+            const sharedPool = totalGainPoints * 0.65;
+            
+            // Give 35% to the planter
+            primaryContributors.forEach(sid => {
+                updates.push({ sid, delta: planterBonus, ...debugInfo });
+            });
+            
+            // Provide remaining 65% evenly among all alive Ts (includes planter)
+            this.distributeToSide(sharedPool, allTs, updates);
+            
+            // Distribute the proportional loss to all alive CTs
+            this.distributeToSide(-totalGainPoints, allCTs, updates);
+            
+            return updates;
+        }
+
+        // --- Standard Logic for Damage ---
 
         let totalAssistWeight = 0;
         secondaryContributors.forEach(c => totalAssistWeight += c.weight);

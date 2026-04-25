@@ -17,11 +17,11 @@ export const calculateClutch = (
   if (rounds === 0) return 0;
 
   const cpPerRound = clutchPoints / rounds;
-  const scoreCP = mapScore(cpPerRound, 0, 0.014, 0.054, 50); // P10 0, P50 0.014, P90 0.054
+  const scoreCP = mapScore(cpPerRound, 0, 0.014, 0.054, 40); // P10 0, P50 0.014, P90 0.054
 
   const total1v1 = w1v1 + l1v1;
   let scoreWinRate = 0;
-  let weightTotal = 50 + 10 + 5 + 5; // CP(50) + LastAlive(10) + Time(5) + Save(5)
+  let weightTotal = 40 + 10 + 5 + 15; // CP(40) + LastAlive(10) + Time(5) + Save(15)
 
   if (total1v1 > 0) {
     const winRate = w1v1 / total1v1;
@@ -36,7 +36,7 @@ export const calculateClutch = (
   const scoreTime = mapScore(avgTimeAlive, 66, 77.5, 82.6, 5); // P10 66, P50 77.5, P90 82.6
 
   const saveRate = roundsLost > 0 ? savesInLosses / roundsLost : 0;
-  const scoreSave = mapScore(saveRate, 0.046, 0.088, 0.155, 5); // P10 0.046, P50 0.088, P90 0.155
+  const scoreSave = mapScore(saveRate, 0.046, 0.088, 0.155, 15); // P10 0.046, P50 0.088, P90 0.155
 
   const rawTotalScore = scoreCP + scoreWinRate + scoreLastAlive + scoreTime + scoreSave;
   const finalScore = (rawTotalScore / weightTotal) * 100;

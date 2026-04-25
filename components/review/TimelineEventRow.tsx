@@ -385,7 +385,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
                                             const isPositive = ru.ratingDelta > 0;
                                             
                                             // Robustly determine player side
-                                            let playerSide = event.wpaUpdates?.timeUpdates?.find((u: any) => u.sid === ru.steamid)?.playerSide || 
+                                            let playerSide = ru.playerSide || event.wpaUpdates?.timeUpdates?.find((u: any) => u.sid === ru.steamid)?.playerSide || 
                                                              event.wpaUpdates?.eventUpdates?.find((u: any) => u.sid === ru.steamid)?.playerSide;
                                             
                                             if (!playerSide) {
@@ -412,7 +412,7 @@ export const TimelineEventRow: React.FC<TimelineEventRowProps> = ({ event, assis
                                             const isPositive = ru.ratingDelta > 0;
                                             
                                             // Robustly determine player side
-                                            let playerSide = event.wpaUpdates?.timeUpdates?.find((u: any) => u.sid === ru.steamid)?.playerSide || 
+                                            let playerSide = ru.playerSide || event.wpaUpdates?.timeUpdates?.find((u: any) => u.sid === ru.steamid)?.playerSide || 
                                                              event.wpaUpdates?.eventUpdates?.find((u: any) => u.sid === ru.steamid)?.playerSide;
                                             
                                             if (!playerSide) {

@@ -193,8 +193,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
 
                 {/* Tab Navigation */}
                 <div className="flex p-1 bg-neutral-200 dark:bg-neutral-800 rounded-xl mb-6 sticky top-0 z-20 shadow-lg shadow-neutral-100/50 dark:shadow-black/20 overflow-x-auto hide-scrollbar">
-                      {['overview', 'performance', 'timeline', 'timeline_beta', 'duels', 'utility', 'clutches', 'wpa']
-                          .filter(t => match.mapId !== '全部地图' as any || (t !== 'timeline' && t !== 'timeline_beta'))
+                      {['overview', 'performance', 'timeline', 'duels', 'utility', 'clutches']
+                          .filter(t => match.mapId !== '全部地图' as any || t !== 'timeline')
                           .map((t) => (
                           <button
                             key={t}
@@ -202,7 +202,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                             className={`shrink-0 py-2.5 px-3 rounded-lg text-xs font-bold transition-all capitalize whitespace-nowrap
                                 ${detailTab === t ? 'bg-white dark:bg-neutral-700 shadow text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
                           >
-                              {t === 'overview' ? '战报' : t === 'performance' ? '表现' : t === 'timeline' ? '时间轴' : t === 'timeline_beta' ? '时间轴(BETA)' : t === 'duels' ? '对位' : t === 'utility' ? '道具' : t === 'clutches' ? '残局' : 'WPA+'}
+                              {t === 'overview' ? '战报' : t === 'performance' ? '表现' : t === 'timeline' ? '时间轴' : t === 'duels' ? '对位' : t === 'utility' ? '道具' : t === 'clutches' ? '残局' : ''}
                           </button>
                       ))}
                 </div>
@@ -242,7 +242,6 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                     {detailTab === 'duels' && <DuelsTab players={match.players} enemyPlayers={match.enemyPlayers} />}
                     {detailTab === 'utility' && <UtilityTab players={match.players} enemyPlayers={match.enemyPlayers} teamAName={teamA} teamBName={teamB} />}
                     {detailTab === 'clutches' && <ClutchesTab players={match.players} enemyPlayers={match.enemyPlayers} teamAName={teamA} teamBName={teamB} />}
-                    {detailTab === 'wpa' && <WPAPlusTab />}
                 </div>
 
             </div>

@@ -23,8 +23,9 @@ export const calculateOpening = (
   const okpr = openingKills / rounds;
   const scoreOKPR = mapScore(okpr, 0.029, 0.092, 0.125, 25); // P10 0.029, P50 0.092, P90 0.125
 
-  const winRate = openingKills > 0 ? roundsWonAfterEntry / openingKills : 0;
-  const scoreWinRate = mapScore(winRate, 0.434, 0.68, 0.875, 15); // P10 0.434, P50 0.68, P90 0.875
+  // Use a Bayesian smoothing prior (adding 1.4 wins, 2 total attempts roughly matches 70% average)
+  const smoothedWinRate = openingKills > 0 ? (roundsWonAfterEntry + 1.4) / (openingKills + 2) : 0;
+  const scoreWinRate = mapScore(smoothedWinRate, 0.50, 0.72, 0.85, 15); // Adjust threshold to smoothed values
 
   const totalScore = scoreSuccess + scoreAttempts + scoreOKPR + scoreWinRate;
 

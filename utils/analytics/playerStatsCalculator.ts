@@ -353,7 +353,7 @@ export const calculatePlayerStats = (
     sniperKillsPct: safeDiv(stats.sniperKills, stats.kills) * 100,
     roundsWithSniperKillsPct:
       safeDiv(stats.roundsWithSniperKills, rounds) * 100,
-    sniperMultiKillRounds: stats.sniperMultiKillRounds,
+    sniperMultiKillRounds: safeDiv(stats.sniperMultiKillRounds, rounds) * 100,
     sniperOpeningKillsPerRound: safeDiv(stats.sniperOpeningKills, rounds),
 
     // Utility

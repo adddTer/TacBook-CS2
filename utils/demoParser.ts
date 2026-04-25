@@ -9,7 +9,7 @@ import { normalizeSteamId, resolveName } from "./demo/helpers";
 import { determineTeammates } from "./demo/teamLogic";
 import { determineStartingSide } from "./demo/sideLogic";
 
-export const CURRENT_PARSER_VERSION = '1.1.13';
+export const CURRENT_PARSER_VERSION = '1.1.14';
 
 // Hitgroup mapping for JSON string values
 const HITGROUP_MAP: Record<string, number> = {
