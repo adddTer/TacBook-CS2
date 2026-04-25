@@ -40,10 +40,15 @@ export const saveGroupsToDB = async (groups: ContentGroup[]): Promise<void> => {
             const request = store.put(groups, KEY);
 
             request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
+            request.onerror = () => {
+                const error = request.error;
+                window.dispatchEvent(new CustomEvent('tacbook_db_error', { detail: { message: error?.message || '未知 IndexedDB 错误' } }));
+                reject(error);
+            };
         });
-    } catch (e) {
+    } catch (e: any) {
         console.error("IndexedDB Save Error:", e);
+        window.dispatchEvent(new CustomEvent('tacbook_db_error', { detail: { message: e?.message || '未知的存储引擎错误' } }));
     }
 };
 

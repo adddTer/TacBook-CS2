@@ -8,6 +8,7 @@ import { HealthTracker } from "./rating3/HealthTracker";
 import { normalizeSteamId, resolveName } from "./demo/helpers";
 import { determineTeammates } from "./demo/teamLogic";
 import { determineStartingSide } from "./demo/sideLogic";
+import { safeStorage } from "./storage";
 
 export const CURRENT_PARSER_VERSION = '1.1.14';
 
@@ -1439,6 +1440,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
 
     const finalScoreUs = s1 + s3 + otUs;
     const finalScoreThem = s2 + s4 + otThem;
+    const keepRawJson = safeStorage.getItem('keepRawDemoJson') === 'true';
     
     return {
         id: generateId('demo'),
@@ -1463,6 +1465,6 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
         enemyPlayers: enemyPlayers,
         rounds: matchRounds,
         parserVersion: CURRENT_PARSER_VERSION,
-        rawDemoJson: data
+        ...(keepRawJson ? { rawDemoJson: data } : {})
     };
 };

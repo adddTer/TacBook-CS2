@@ -19,6 +19,12 @@ export const BonCreatorModal: React.FC<BonCreatorModalProps> = ({ isOpen, onClos
     const [orderedMatches, setOrderedMatches] = useState<Match[]>([]);
 
     useEffect(() => {
+        if (!writableGroups.find(g => g.metadata.id === groupId)) {
+            setGroupId(writableGroups[0]?.metadata.id || '');
+        }
+    }, [writableGroups, groupId]);
+
+    useEffect(() => {
         if (isOpen && initialMatches && initialMatches.length > 0) {
             setOrderedMatches([...initialMatches]);
             

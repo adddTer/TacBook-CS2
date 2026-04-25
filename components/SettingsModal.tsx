@@ -30,12 +30,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [defaultAuthor, setDefaultAuthor] = useState('');
   const [autoUpdate, setAutoUpdate] = useState(true);
+  const [keepRawDemoJson, setKeepRawDemoJson] = useState(false);
 
   useEffect(() => {
       const saved = safeStorage.getItem('tacbook_default_author');
       if (saved) setDefaultAuthor(saved);
       const savedAutoUpdate = safeStorage.getItem('autoUpdateMatches');
       if (savedAutoUpdate !== null) setAutoUpdate(savedAutoUpdate === 'true');
+      const savedKeepRaw = safeStorage.getItem('keepRawDemoJson');
+      if (savedKeepRaw !== null) setKeepRawDemoJson(savedKeepRaw === 'true');
   }, [isOpen]);
 
   const handleAuthorChange = (val: string) => {
@@ -46,6 +49,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleAutoUpdateChange = (val: boolean) => {
       setAutoUpdate(val);
       safeStorage.setItem('autoUpdateMatches', val.toString());
+  };
+
+  const handleKeepRawChange = (val: boolean) => {
+      setKeepRawDemoJson(val);
+      safeStorage.setItem('keepRawDemoJson', val.toString());
   };
 
   if (!isOpen) return null;
@@ -149,6 +157,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className={`relative w-10 h-6 rounded-full transition-colors ${autoUpdate ? 'bg-blue-500' : 'bg-neutral-300 dark:bg-neutral-600'}`}
                 >
                     <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${autoUpdate ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+            </div>
+            
+            <div className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-800/50 p-3 rounded-xl">
+                <div>
+                    <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300 block">保留原始 Json 数据</label>
+                    <p className="text-[10px] text-neutral-500 mt-1">如果启用，将可以自动更新比赛数据。但可能占用大量储存空间。</p>
+                </div>
+                <button 
+                    onClick={() => handleKeepRawChange(!keepRawDemoJson)}
+                    className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ml-2 ${keepRawDemoJson ? 'bg-blue-500' : 'bg-neutral-300 dark:bg-neutral-600'}`}
+                >
+                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${keepRawDemoJson ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
             </div>
         </div>

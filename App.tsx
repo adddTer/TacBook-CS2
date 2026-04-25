@@ -17,6 +17,7 @@ import { InstallPrompt } from './components/InstallPrompt';
 import { SettingsModal } from './components/SettingsModal';
 import { GroupManagerModal } from './components/GroupManagerModal'; 
 import { ConfirmModal } from './components/ConfirmModal';
+import { AlertModal } from './components/AlertModal';
 import { AiConfigModal } from './components/AiConfigModal';
 import { LiquipediaScraper } from './components/LiquipediaScraper';
 import { GlobalCopilot } from './components/ai/GlobalCopilot';
@@ -60,10 +61,26 @@ const App: React.FC = () => {
       isOpen: boolean; title: string; message: string; onConfirm: () => void;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
+  const [alertConfig, setAlertConfig] = useState<{
+      isOpen: boolean; title: string; message: string; type: 'error'|'success'|'info';
+  }>({ isOpen: false, title: '', message: '', type: 'info' });
+
   // PWA Hook
   const { isIos, isInstallable, isStandalone, showPrompt, closePrompt, handleInstall } = useInstallPrompt();
 
   // --- Effects ---
+  useEffect(() => {
+    const handleDbError = (e: any) => {
+        setAlertConfig({
+            isOpen: true,
+            title: '存储数据失败',
+            message: e.detail?.message || '保存数据时 IndexedDB 发生错误，可能是由于空间超出限制或数据结构异常。建议在设置中关闭【保留原始解析 JSON】选项并重试。',
+            type: 'error'
+        });
+    };
+    window.addEventListener('tacbook_db_error', handleDbError);
+    return () => window.removeEventListener('tacbook_db_error', handleDbError);
+  }, []);
   
   // URL Hash Routing
   useEffect(() => {
@@ -520,6 +537,13 @@ const App: React.FC = () => {
         onConfirm={confirmConfig.onConfirm}
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
         isDangerous={true}
+      />
+      <AlertModal
+        isOpen={alertConfig.isOpen}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
       />
       <InstallPrompt isOpen={showPrompt} onClose={closePrompt} onInstall={handleInstall} isIos={isIos} isStandalone={isStandalone} />
       

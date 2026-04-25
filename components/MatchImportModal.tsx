@@ -15,6 +15,12 @@ export const MatchImportModal: React.FC<MatchImportModalProps> = ({
 }) => {
     const [selectedGroup, setSelectedGroup] = useState(writableGroups[0]?.metadata.id || '');
 
+    React.useEffect(() => {
+        if (!writableGroups.find(g => g.metadata.id === selectedGroup)) {
+            setSelectedGroup(writableGroups[0]?.metadata.id || '');
+        }
+    }, [writableGroups, selectedGroup]);
+
     if (!isOpen) return null;
 
     return (
@@ -46,7 +52,7 @@ export const MatchImportModal: React.FC<MatchImportModalProps> = ({
                         取消
                     </button>
                     <button 
-                        onClick={() => onConfirm(selectedGroup)}
+                        onClick={() => onConfirm(selectedGroup || (writableGroups[0] ? writableGroups[0].metadata.id : ''))}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-transform active:scale-95"
                     >
                         开始导入
