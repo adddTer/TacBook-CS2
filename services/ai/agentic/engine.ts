@@ -305,19 +305,23 @@ export class AgenticEngine {
                             const tools = convertGeminiToolsToOpenAI(activeTools);
                             const baseUrl = aiConfig.baseUrl.replace(/\/$/, "") + "/chat/completions";
 
+                            const reqBody: any = {
+                                model: aiConfig.model,
+                                messages: messages,
+                                temperature: modelConfig.temperature,
+                                max_tokens: modelConfig.maxOutputTokens,
+                            };
+                            if (tools && tools.length > 0) {
+                                reqBody.tools = tools;
+                            }
+
                             const res = await fetch(baseUrl, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'Authorization': `Bearer ${aiConfig.apiKey}`
                                 },
-                                body: JSON.stringify({
-                                    model: aiConfig.model,
-                                    messages: messages,
-                                    tools: tools,
-                                    temperature: modelConfig.temperature,
-                                    max_tokens: modelConfig.maxOutputTokens,
-                                }),
+                                body: JSON.stringify(reqBody),
                                 signal: abortSignal
                             });
 

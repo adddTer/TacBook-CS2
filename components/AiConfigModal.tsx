@@ -31,7 +31,7 @@ interface AiConfigModalProps {
 
 const PROVIDERS: { id: AIProvider, name: string, defaultBaseUrl: string }[] = [
     { id: 'google', name: 'Google Gemini', defaultBaseUrl: '' },
-    { id: 'deepseek', name: 'DeepSeek', defaultBaseUrl: 'https://api.deepseek.com/v1' },
+    { id: 'deepseek', name: 'DeepSeek', defaultBaseUrl: 'https://api.deepseek.com' },
     { id: 'openai', name: 'OpenAI / Generic', defaultBaseUrl: 'https://api.openai.com/v1' },
     { id: 'custom', name: 'Custom / Proxy', defaultBaseUrl: '' },
 ];
