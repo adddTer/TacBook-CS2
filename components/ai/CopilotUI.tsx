@@ -13,6 +13,7 @@ import 'katex/dist/katex.min.css';
 import { AiConfigModal } from '../AiConfigModal';
 import { FunctionDeclaration } from '@google/genai';
 import { Gamepad2, User, Lightbulb, Target, ArrowRight } from 'lucide-react';
+import mermaid from 'mermaid';
 
 // Global lock for DB writes to prevent IDB races
 let dbSavePromise: Promise<void> = Promise.resolve();
@@ -73,6 +74,58 @@ const CopyableWrapper = ({ children, isCode = false }: { children: React.ReactNo
             <div ref={contentRef} className={`w-full max-w-full min-w-0 ${isCode ? '' : 'overflow-x-auto overflow-y-hidden rounded-lg border border-neutral-200 dark:border-neutral-800 slim-scrollbar'}`}>
                 {children}
             </div>
+        </div>
+    );
+};
+
+mermaid.initialize({ startOnLoad: false, theme: 'default' });
+
+const MermaidBlock = ({ chart }: { chart: string }) => {
+    const [svg, setSvg] = useState<string>('');
+    const id = React.useMemo(() => `mermaid-${Math.random().toString(36).substring(2, 9)}`, []);
+
+    useEffect(() => {
+        mermaid.render(id, chart).then((result) => {
+            setSvg(result.svg);
+        }).catch((e) => {
+            console.error('Mermaid render error', e);
+        });
+    }, [chart, id]);
+
+    if (!svg) return <div className="p-4 flex justify-center text-neutral-500 text-xs">渲染图表中...</div>;
+    return <div className="p-4 flex justify-center bg-white dark:bg-neutral-800 rounded-b-2xl overflow-x-auto" dangerouslySetInnerHTML={{ __html: svg }} />;
+};
+
+const SmartCodeBlock = ({ language, code, ...props }: { language: string, code: string, [key: string]: any }) => {
+    const [viewMode, setViewMode] = useState<'render' | 'raw'>('render');
+    const isRenderable = language === 'mermaid' || language === 'hlml';
+
+    if (!isRenderable) {
+        return (
+            <CopyableWrapper isCode={true}>
+                <code className={`language-${language} block overflow-x-auto p-3`} {...props}>{code}</code>
+            </CopyableWrapper>
+        );
+    }
+
+    return (
+        <div className="my-4 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden bg-neutral-50 dark:bg-neutral-900 shadow-sm">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-950/80">
+                <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">{language} 预览</span>
+                <button 
+                    onClick={() => setViewMode(v => v === 'render' ? 'raw' : 'render')}
+                    className="text-[10px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 px-2 py-1 rounded-md text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition"
+                >
+                    {viewMode === 'render' ? '查看原始代码' : '查看渲染效果'}
+                </button>
+            </div>
+            {viewMode === 'render' ? (
+                language === 'mermaid' ? <MermaidBlock chart={code} /> : <div className="p-4 bg-white dark:bg-neutral-800 rounded-b-2xl overflow-x-auto" dangerouslySetInnerHTML={{ __html: code }} />
+            ) : (
+                <CopyableWrapper isCode={true}>
+                    <code className={`language-${language} block overflow-x-auto p-4`} {...props}>{code}</code>
+                </CopyableWrapper>
+            )}
         </div>
     );
 };
@@ -451,7 +504,13 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
         ),
         code: ({node, inline, className, children, ...props}: any) => {
             const match = /language-(\w+)/.exec(className || '');
-            if (!inline && match && match[1] === 'scoreboard') {
+            const language = match ? match[1] : '';
+
+            if (inline) {
+                return <code className={`${className} bg-neutral-100 dark:bg-neutral-800 rounded px-1 py-0.5`} {...props}>{children}</code>;
+            }
+
+            if (language === 'scoreboard') {
                 try {
                     const data = JSON.parse(String(children).replace(/\n$/, ''));
                     return (
@@ -479,16 +538,22 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                     return <code className={className} {...props}>{children}</code>;
                 }
             }
-            return <code className={`${className} bg-neutral-100 dark:bg-neutral-800 rounded px-1 py-0.5`} {...props}>{children}</code>;
+            
+            if (language === 'mermaid' || language === 'hlml') {
+                return <SmartCodeBlock language={language} code={String(children).replace(/\n$/, '')} {...props} />;
+            }
+            
+            return <code className={`${className} block overflow-x-auto`} {...props}>{children}</code>;
         },
         pre: ({node, ...props}: any) => {
             // Check if this pre contains our special code block
-            if (node?.children?.[0]?.properties?.className?.includes('language-scoreboard')) {
+            const childClassName = String(node?.children?.[0]?.properties?.className || '');
+            if (childClassName.includes('language-scoreboard') || childClassName.includes('language-mermaid') || childClassName.includes('language-hlml')) {
                 return <>{props.children}</>;
             }
             return (
                 <CopyableWrapper isCode={true}>
-                    <pre {...props} />
+                    <pre className="!m-0 !bg-transparent p-4 overflow-x-auto text-[13px] leading-relaxed" {...props} />
                 </CopyableWrapper>
             );
         },

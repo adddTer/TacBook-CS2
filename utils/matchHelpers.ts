@@ -2,7 +2,7 @@ import { Match, PlayerMatchStats, MatchBon } from '../types';
 import { getAllPlayers, getTeams } from './teamLoader';
 import { MAPS } from '../constants/maps';
 
-const isPlayerInUserTeam = (p: PlayerMatchStats): boolean => {
+export const isPlayerInUserTeam = (p: PlayerMatchStats): boolean => {
     const userTeams = getTeams().filter(t => t.type === 'user');
     return userTeams.some(team => {
         return team.players.some(r => {

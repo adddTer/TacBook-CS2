@@ -527,6 +527,8 @@ export class AgenticEngine {
                     const toolResponseParts: Part[] = [];
                     const newToolResults: ToolResult[] = [];
 
+                    let shouldInterrupt = false;
+
                     for (const call of newToolCalls) {
                         const handler = this.handlers[call.name];
                         const result = await this.executeTool(call, handler);
@@ -537,6 +539,13 @@ export class AgenticEngine {
                         if (typeof responseObj !== 'object' || responseObj === null || Array.isArray(responseObj)) {
                             responseObj = { result: responseObj };
                         }
+                        
+                        if (responseObj._engine_interrupt) {
+                            shouldInterrupt = true;
+                            // Clean it up so the model only sees the acknowledgment
+                            responseObj = { status: "Awaiting user input..." };
+                        }
+                        
                         // Sanitize responseObj to remove undefined values
                         responseObj = JSON.parse(JSON.stringify(responseObj));
                         
@@ -582,6 +591,13 @@ export class AgenticEngine {
                     currentResponseMsg.apiSequence = [...(currentResponseMsg.apiSequence || []), userContent];
 
                     onThreadUpdate({ memory: this.thread.memory, taskState: this.thread.taskState });
+                    
+                    if (shouldInterrupt) {
+                        currentResponseMsg.status = 'completed'; // Or 'interrupted', but completed means we just wait for the user to answer natively.
+                        currentResponseMsg.endTime = Date.now();
+                        onUpdate({ ...currentResponseMsg });
+                        break; // exit while loop
+                    }
                     
                     continue;
                 }

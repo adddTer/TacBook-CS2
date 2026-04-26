@@ -394,7 +394,7 @@ export const TBTVView: React.FC = () => {
                        </div>
                        <h2 className="text-3xl font-black text-neutral-900 dark:text-white mb-2">{mapName}</h2>
                        <div className="flex justify-center mb-6">
-                           <SourceBadge source={selectedMatch.source} />
+                           {selectedMatch.source !== 'Demo' && <SourceBadge source={selectedMatch.source} />}
                        </div>
                        
                        <div className="flex items-center justify-center gap-10">
@@ -494,7 +494,7 @@ export const TBTVView: React.FC = () => {
                                     <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
                                         {match.date.split('T')[0]}
                                     </span>
-                                    <SourceBadge source={match.source} />
+                                    {match.source !== 'Demo' && <SourceBadge source={match.source} />}
                                 </div>
 
                                 <div className="flex items-center justify-between">

@@ -11,7 +11,7 @@ import { TimelineBetaTab } from './TimelineBetaTab';
 import { EconomyTab } from './EconomyTab';
 import { MatchPerformanceTab } from './match_detail/MatchPerformanceTab';
 import { WPAPlusTab } from './WPAPlusTab';
-import { isMyTeamMatch, getTeamNames, calculateScoreFromRounds } from '../../utils/matchHelpers';
+import { isMyTeamMatch, getTeamNames, calculateScoreFromRounds, isPlayerInUserTeam } from '../../utils/matchHelpers';
 import { useAggregatedStats } from '../../hooks/useAggregatedStats';
 import { resolveName } from '../../utils/demo/helpers';
 
@@ -28,7 +28,38 @@ type SideFilter = 'ALL' | 'CT' | 'T';
 
 // --- MAIN CONTAINER ---
 
-export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlayerClick, onDelete, onShare, headerContent }) => {
+export const MatchDetail: React.FC<MatchDetailProps> = ({ match: originalMatch, onBack, onPlayerClick, onDelete, onShare, headerContent }) => {
+    const match = React.useMemo(() => {
+        const team1HasUserRoster = originalMatch.players.some(isPlayerInUserTeam);
+        const team2HasUserRoster = originalMatch.enemyPlayers.some(isPlayerInUserTeam);
+        const swapSides = !team1HasUserRoster && team2HasUserRoster;
+        
+        if (!swapSides) return originalMatch;
+
+        const baseScore = calculateScoreFromRounds(originalMatch);
+        const swappedScore = {
+             us: baseScore.them,
+             them: baseScore.us,
+             half1_us: baseScore.half1_them,
+             half1_them: baseScore.half1_us,
+             half2_us: baseScore.half2_them,
+             half2_them: baseScore.half2_us,
+             ot_us: baseScore.ot_them,
+             ot_them: baseScore.ot_us,
+        };
+
+        return {
+             ...originalMatch,
+             players: originalMatch.enemyPlayers,
+             enemyPlayers: originalMatch.players,
+             teamNameUs: originalMatch.teamNameThem,
+             teamNameThem: originalMatch.teamNameUs,
+             score: swappedScore,
+             result: swappedScore.us > swappedScore.them ? 'WIN' : (swappedScore.us === swappedScore.them ? 'TIE' : 'LOSS'),
+             startingSide: originalMatch.startingSide === 'CT' ? 'T' : (originalMatch.startingSide === 'T' ? 'CT' : undefined)
+        } as Match;
+    }, [originalMatch]);
+
     const [detailTab, setDetailTab] = useState<'overview' | 'performance' | 'duels' | 'utility' | 'clutches' | 'timeline' | 'timeline_beta' | 'wpa'>('overview');
     const [sideFilter, setSideFilter] = useState<SideFilter>('ALL');
     const [showDefinitions, setShowDefinitions] = useState(false);
@@ -160,19 +191,19 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match, onBack, onPlaye
                          )}
                          <h2 className="text-3xl font-black text-neutral-900 dark:text-white mb-2">{mapName}</h2>
                          <div className="flex justify-center mb-6">
-                             <SourceBadge source={match.source} />
+                             {match.source !== 'Demo' && <SourceBadge source={match.source} />}
                          </div>
                          
                          <div className="flex items-center justify-center gap-8 md:gap-16 font-sans tabular-nums">
                              <div className="text-right">
-                                 <div className={`text-4xl md:text-5xl font-black ${isMine ? (match.result === 'WIN' ? 'text-green-500' : match.result === 'LOSS' ? 'text-red-500' : 'text-yellow-500') : 'text-neutral-900 dark:text-white'}`}>
+                                 <div className={`text-4xl md:text-5xl font-black ${isMine ? (match.result === 'WIN' ? 'text-green-500' : match.result === 'LOSS' ? 'text-red-500' : 'text-yellow-500') : (displayScore.us > displayScore.them ? 'text-green-500' : 'text-neutral-900 dark:text-white')}`}>
                                     {displayScore.us}
                                  </div>
                                  <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">{teamA}</div>
                              </div>
                              <div className="text-2xl text-neutral-300 font-light opacity-50">:</div>
                              <div className="text-left">
-                                  <div className="text-4xl md:text-5xl font-black text-neutral-900 dark:text-white">
+                                  <div className={`text-4xl md:text-5xl font-black ${isMine ? 'text-neutral-900 dark:text-white' : (displayScore.them > displayScore.us ? 'text-green-500' : 'text-neutral-900 dark:text-white')}`}>
                                      {displayScore.them}
                                  </div>
                                  <div className="text-xs font-bold text-neutral-400 uppercase tracking-widest mt-1">{teamB}</div>

@@ -167,7 +167,7 @@ export const toolDeclarations: FunctionDeclaration[] = [
     },
     {
         name: "create_service_card",
-        description: "生成一个精美的服务卡片（Service Card），提供点击跳转功能。支持比赛(match)、战术(tactic)、道具(utility)和玩家(player)。优先使用此工具为用户提供快捷的可视化入口，而不是干巴巴的文字链接。",
+        description: "生成一个服务卡片（Service Card），提供点击跳转功能。⚠️ 绝对警告：只有在需要强引导用户跳转到特定页面查看详情时才使用！不要滥用它来列举数据。如果只是列举比赛、战术或玩家数据，请直接使用 Markdown 文本或表格即可。仅在明确需要“提供一个快捷入口让用户点进去看”时才使用此卡片。",
         parameters: {
             type: Type.OBJECT,
             properties: {
@@ -233,6 +233,28 @@ export const toolDeclarations: FunctionDeclaration[] = [
                 query: { type: Type.STRING, description: "搜索关键词" }
             },
             required: ["query"]
+        }
+    },
+    {
+        name: "read_webpage",
+        description: "读取指定网页的内容正文文本。（在 search_internet 返回有价值的 URL 后，可以使用此工具深入读取）",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                url: { type: Type.STRING, description: "要读取的完整 URL 地址" }
+            },
+            required: ["url"]
+        }
+    },
+    {
+        name: "ask_user",
+        description: "主动中止当前执行循环，向人类用户提问或请求确认。只有在遇到重大歧义、极其危险的操作，或者必须让用户做选择（如给出 A/B 两套方案）才能继续时使用。",
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                question: { type: Type.STRING, description: "直接向用户提问的文本，将直接展示给用户。" }
+            },
+            required: ["question"]
         }
     },
     {
@@ -685,6 +707,31 @@ export const createToolHandlers = (context: {
             } catch (e: any) {
                 return { error: `搜索失败: ${e.message}` };
             }
+        },
+        read_webpage: async ({ url }: { url: string }) => {
+            try {
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                const res = await fetch(proxyUrl);
+                if (!res.ok) throw new Error('Failed to fetch webpage');
+                const html = await res.text();
+                // Extremely simple regex strip for texts
+                const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+                const bodyHtml = bodyMatch ? bodyMatch[1] : html;
+                const text = bodyHtml
+                    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '\n')
+                    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '\n')
+                    .replace(/<[^>]+>/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                return { text: text.substring(0, 8000) + (text.length > 8000 ? "...\n(TRUNCATED)" : "") };
+            } catch (e: any) {
+                return { error: `无法读取网页: ${e.message}` };
+            }
+        },
+        ask_user: async ({ question }: { question: string }) => {
+            // This tool's main purpose is to be detected by the engine and HALT execution.
+            // When executing, we return a signal that execution should yield to user.
+            return { _engine_interrupt: true, _question: question };
         },
         query_tournaments: async () => {
             return context.allTournaments || [];

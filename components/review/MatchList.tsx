@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Match } from '../../types';
 import { SourceBadge, getMapDisplayName, getMapEnName } from './ReviewShared';
-import { isMyTeamMatch, calculateScoreFromRounds, getTeamNames } from '../../utils/matchHelpers';
+import { isMyTeamMatch, calculateScoreFromRounds, getTeamNames, isPlayerInUserTeam } from '../../utils/matchHelpers';
 import { CURRENT_PARSER_VERSION } from '../../utils/demoParser';
 import { MatchFilterBar, FilterState } from './MatchFilterBar';
 
@@ -207,14 +207,26 @@ export const MatchList: React.FC<MatchListProps> = ({
                     const mapName = getMapDisplayName(match.mapId);
                     const mapEn = getMapEnName(match.mapId);
                     
-                    const isMine = isMyTeamMatch(match);
-                    const isWin = match.result === 'WIN';
-                    const isTie = match.result === 'TIE';
+                    let isMine = isMyTeamMatch(match);
+                    let isWin = match.result === 'WIN';
+                    let isTie = match.result === 'TIE';
 
                     // Use calculated score for robustness
-                    const displayScore = calculateScoreFromRounds(match);
+                    const rawDisplayScore = calculateScoreFromRounds(match);
+                    const rawTeams = getTeamNames(match);
 
-                    const { teamA, teamB } = getTeamNames(match);
+                    const team1HasUserRoster = match.players.some(isPlayerInUserTeam);
+                    const team2HasUserRoster = match.enemyPlayers.some(isPlayerInUserTeam);
+                    const swapSides = !team1HasUserRoster && team2HasUserRoster;
+
+                    const displayScore = swapSides ? { us: rawDisplayScore.them, them: rawDisplayScore.us } : rawDisplayScore;
+                    const teamA = swapSides ? rawTeams.teamB : rawTeams.teamA;
+                    const teamB = swapSides ? rawTeams.teamA : rawTeams.teamB;
+
+                    if (swapSides) {
+                        isWin = displayScore.us > displayScore.them;
+                        isTie = displayScore.us === displayScore.them;
+                    }
 
                     let statusText = '赛事数据';
                     let statusColor = 'text-neutral-500 bg-neutral-100 dark:bg-neutral-800';
@@ -241,6 +253,12 @@ export const MatchList: React.FC<MatchListProps> = ({
                             indicatorColor = 'bg-red-500';
                         }
                     }
+
+                    const usWon = displayScore.us > displayScore.them;
+                    const themWon = displayScore.them > displayScore.us;
+
+                    const usScoreColor = isMine ? (isWin ? 'text-green-600 dark:text-green-400' : '') : (usWon ? 'text-green-600 dark:text-green-400' : '');
+                    const themScoreColor = isMine ? (!isWin && !isTie ? 'text-red-600 dark:text-red-400' : '') : (themWon ? 'text-green-600 dark:text-green-400' : '');
 
                     return (
                         <div 
@@ -281,9 +299,9 @@ export const MatchList: React.FC<MatchListProps> = ({
                                         <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 truncate" title={teamA}>{teamA}</span>
                                     </div>
                                     <div className="px-3 py-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg flex items-center justify-center gap-2 font-mono font-bold text-lg min-w-[70px] shrink-0">
-                                        <span className={isMine && isWin ? 'text-green-600 dark:text-green-400' : ''}>{displayScore.us}</span>
+                                        <span className={usScoreColor}>{displayScore.us}</span>
                                         <span className="text-neutral-400 text-sm">:</span>
-                                        <span className={isMine && !isWin && !isTie ? 'text-red-600 dark:text-red-400' : ''}>{displayScore.them}</span>
+                                        <span className={themScoreColor}>{displayScore.them}</span>
                                     </div>
                                     <div className="flex-1 flex justify-start min-w-0">
                                         <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 truncate" title={teamB}>{teamB}</span>
@@ -293,7 +311,7 @@ export const MatchList: React.FC<MatchListProps> = ({
                                 {/* Meta section (Source, Server) */}
                                 <div className="flex flex-col items-start md:items-end w-full md:w-[25%] shrink-0 min-w-0 text-[11px] gap-1">
                                     <div className="flex items-center gap-2">
-                                        <SourceBadge source={match.source} />
+                                        {match.source !== 'Demo' && <SourceBadge source={match.source} />}
                                         {match.source === 'Demo' && match.parserVersion !== CURRENT_PARSER_VERSION && (
                                             <span className="px-1.5 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-bold rounded" title={!match.rawDemoJson ? "需重新导入" : "旧版数据"}>
                                                 {!match.rawDemoJson ? "缺数据" : "版本旧"}
