@@ -51,10 +51,14 @@ export const MatchList: React.FC<MatchListProps> = ({
         );
     }
     
-    // Sort all by date
+    // Sort all by date safely to prevent NaN crashing the sort in Safari
     const items = [
-        ...matches.map(m => ({ type: 'match' as const, data: m, date: m.date, id: m.id }))
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        ...matches.map(m => {
+            const parsedDate = new Date(m.date);
+            const time = isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime();
+            return { type: 'match' as const, data: m, date: parsedDate, time, id: m.id };
+        })
+    ].sort((a, b) => b.time - a.time);
 
     // Selection Handlers
     const toggleSelection = (id: string) => {

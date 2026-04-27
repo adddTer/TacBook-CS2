@@ -42,13 +42,20 @@ export const saveGroupsToDB = async (groups: ContentGroup[]): Promise<void> => {
             request.onsuccess = () => resolve();
             request.onerror = () => {
                 const error = request.error;
-                window.dispatchEvent(new CustomEvent('tacbook_db_error', { detail: { message: error?.message || '未知 IndexedDB 错误' } }));
+                console.error("IndexedDB Request Error:", error);
+                window.dispatchEvent(new CustomEvent('tacbook_db_error', { detail: { message: error?.message || 'IndexedDB 存储失败，可能是由数据超出配额或包含无法克隆的对象导致' } }));
+                reject(error);
+            };
+            transaction.onabort = () => {
+                const error = transaction.error;
+                console.error("IndexedDB Transaction Aborted:", error);
+                window.dispatchEvent(new CustomEvent('tacbook_db_error', { detail: { message: error?.message || 'IndexedDB 存储事务被中止' } }));
                 reject(error);
             };
         });
     } catch (e: any) {
-        console.error("IndexedDB Save Error:", e);
-        window.dispatchEvent(new CustomEvent('tacbook_db_error', { detail: { message: e?.message || '未知的存储引擎错误' } }));
+        console.error("IndexedDB Save Exception:", e);
+        window.dispatchEvent(new CustomEvent('tacbook_db_error', { detail: { message: e?.message || '未知的存储引擎异常' } }));
     }
 };
 

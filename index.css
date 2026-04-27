@@ -83,3 +83,95 @@ html.dark, html.dark body {
     background-clip: text;
     color: transparent;
 }
+
+/* Liquid Glass Theme Overrides */
+html.theme-liquid-glass {
+  background-color: #f0f2f5 !important;
+  background-image: radial-gradient(circle at top left, rgba(255,255,255,0.8), transparent),
+                    radial-gradient(circle at bottom right, rgba(0,0,255,0.05), transparent) !important;
+}
+
+html.theme-liquid-glass.dark {
+  background-color: #050505 !important;
+  background-image: radial-gradient(circle at top left, rgba(255,255,255,0.02), transparent),
+                    radial-gradient(circle at bottom right, rgba(255,0,255,0.02), transparent) !important;
+}
+
+html.theme-liquid-glass body {
+  background: transparent !important;
+}
+
+/* Make backgrounds semi-transparent and apply blur to common utility classes */
+html.theme-liquid-glass .bg-white {
+  background-color: rgba(255, 255, 255, 0.4) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+html.theme-liquid-glass.dark .bg-neutral-900,
+html.theme-liquid-glass.dark .dark\:bg-neutral-900 {
+  background-color: rgba(20, 20, 20, 0.4) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+html.theme-liquid-glass .bg-neutral-50,
+html.theme-liquid-glass .bg-neutral-100 {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+html.theme-liquid-glass.dark .bg-neutral-800,
+html.theme-liquid-glass.dark .dark\:bg-neutral-800,
+html.theme-liquid-glass.dark .dark\:bg-neutral-950 {
+  background-color: rgba(30, 30, 30, 0.3) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Headers and Navbars */
+html.theme-liquid-glass header, 
+html.theme-liquid-glass nav,
+html.theme-liquid-glass .sticky {
+  background-color: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+html.theme-liquid-glass.dark header, 
+html.theme-liquid-glass.dark nav,
+html.theme-liquid-glass.dark .sticky {
+  background-color: rgba(10, 10, 10, 0.6) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Modals / Dialogs / Popovers */
+html.theme-liquid-glass [role="dialog"],
+html.theme-liquid-glass .modal-content,
+html.theme-liquid-glass .popover,
+html.theme-liquid-glass .fixed > div.bg-white {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+html.theme-liquid-glass.dark [role="dialog"],
+html.theme-liquid-glass.dark .fixed > div.dark\:bg-neutral-900 {
+  background: rgba(15, 15, 15, 0.55) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Enhanced Borders */
+html.theme-liquid-glass .border-neutral-200 { border-color: rgba(255, 255, 255, 0.4) !important; }
+html.theme-liquid-glass.dark .dark\:border-neutral-800 { border-color: rgba(255, 255, 255, 0.06) !important; }

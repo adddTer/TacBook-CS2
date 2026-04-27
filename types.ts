@@ -3,6 +3,7 @@ export type Side = 'T' | 'CT';
 export type Site = 'A' | 'Mid' | 'B' | 'All';
 export type MapId = 'mirage' | 'inferno' | 'dust2' | 'ancient' | 'anubis' | 'overpass' | 'nuke';
 export type Theme = 'light' | 'dark' | 'system';
+export type VisualStyle = 'default' | 'liquid-glass';
 
 export type TagCategory = 'economy' | 'playstyle' | 'utility' | 'difficulty' | 'type';
 

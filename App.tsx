@@ -33,6 +33,7 @@ const App: React.FC = () => {
   const [currentMap, setCurrentMap] = useState<MapId>('mirage');
   const [viewMode, setViewMode] = useState<'tactics' | 'utilities' | 'weapons' | 'economy' | 'training'>('tactics');
   const [theme, setTheme] = useState<Theme>('system');
+  const [visualStyle, setVisualStyle] = useState<VisualStyle>('default');
   const [utilityViewMode, setUtilityViewMode] = useState<'detail' | 'accordion'>('detail');
   const [isDebug, setIsDebug] = useState(true);
 
@@ -131,6 +132,8 @@ const App: React.FC = () => {
     if (savedUtilMode) setUtilityViewMode(savedUtilMode);
     const savedTheme = safeStorage.getItem('tacbook_theme') as Theme;
     if (savedTheme) setTheme(savedTheme);
+    const savedVisualStyle = safeStorage.getItem('tacbook_visual_style') as VisualStyle;
+    if (savedVisualStyle) setVisualStyle(savedVisualStyle);
     
     // Auto-enable debug mode if API key is present in environment variables
     let hasEnvApiKey = false;
@@ -146,18 +149,19 @@ const App: React.FC = () => {
     setIsDebug(hasEnvApiKey);
   }, []);
 
-  // Apply Theme
+  // Apply Theme & Visual Style
   useEffect(() => {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       const applyTheme = () => {
           const isDark = theme === 'dark' || (theme === 'system' && mediaQuery.matches);
           document.documentElement.classList.toggle('dark', isDark);
+          document.documentElement.classList.toggle('theme-liquid-glass', visualStyle === 'liquid-glass');
       };
       applyTheme();
       const listener = () => applyTheme();
       if (theme === 'system') mediaQuery.addEventListener('change', listener);
       return () => mediaQuery.removeEventListener('change', listener);
-  }, [theme]);
+  }, [theme, visualStyle]);
 
   useEffect(() => {
     const handleOpenMatch = (e: CustomEvent<string>) => {
@@ -244,6 +248,11 @@ const App: React.FC = () => {
   const handleThemeChange = (newTheme: Theme) => {
       setTheme(newTheme);
       safeStorage.setItem('tacbook_theme', newTheme);
+  };
+
+  const handleVisualStyleChange = (newStyle: VisualStyle) => {
+      setVisualStyle(newStyle);
+      safeStorage.setItem('tacbook_visual_style', newStyle);
   };
 
   const handleCopyId = (e: React.MouseEvent, id: string) => {
@@ -436,7 +445,10 @@ const App: React.FC = () => {
                         allMatches={allMatches}
                         allTournaments={allTournaments}
                         allBons={allBons}
-                        onSaveMatch={handleSaveMatch}
+                        onSaveMatch={(match, targetGroupId) => {
+                          const idToSave = targetGroupId || match.groupId || (writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
+                          if (idToSave) handleSaveMatch(match, idToSave);
+                        }}
                         onSaveTournament={handleSaveTournament}
                         onSaveBon={handleSaveBon}
                         onDeleteMatch={deleteMatch}
@@ -511,6 +523,8 @@ const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         currentTheme={theme}
         onThemeChange={handleThemeChange}
+        visualStyle={visualStyle}
+        onVisualStyleChange={handleVisualStyleChange}
         isInstallable={isInstallable && !isStandalone}
         onInstall={handleInstall}
         utilityViewMode={utilityViewMode}

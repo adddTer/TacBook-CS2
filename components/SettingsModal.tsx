@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Theme } from '../types';
+import { Theme, VisualStyle } from '../types';
 import { safeStorage } from '../utils/storage';
 
 interface SettingsModalProps {
@@ -8,6 +8,8 @@ interface SettingsModalProps {
   onClose: () => void;
   currentTheme: Theme;
   onThemeChange: (t: Theme) => void;
+  visualStyle: VisualStyle;
+  onVisualStyleChange: (v: VisualStyle) => void;
   isInstallable: boolean;
   onInstall: () => void;
   utilityViewMode: 'detail' | 'accordion';
@@ -21,6 +23,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   currentTheme,
   onThemeChange,
+  visualStyle,
+  onVisualStyleChange,
   isInstallable,
   onInstall,
   utilityViewMode,
@@ -79,7 +83,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-wider border-b border-neutral-100 dark:border-neutral-800 pb-2">外观与显示</h4>
             
             <div className="space-y-3">
-                <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300">外观模式</label>
+                <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300">主题风格</label>
+                <div className="grid grid-cols-2 gap-2 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl">
+                    {(['default', 'liquid-glass'] as const).map(style => (
+                        <button
+                            key={style}
+                            onClick={() => onVisualStyleChange(style)}
+                            className={`
+                                py-2 rounded-lg text-xs font-bold transition-all capitalize
+                                ${visualStyle === style 
+                                    ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm' 
+                                    : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'}
+                            `}
+                        >
+                            {style === 'default' ? '默认 (Default)' : '液态玻璃 (Liquid Glass)'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300">深浅色模式</label>
                 <div className="grid grid-cols-3 gap-2 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl">
                     {(['light', 'system', 'dark'] as const).map(theme => (
                         <button
