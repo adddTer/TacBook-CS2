@@ -25,7 +25,7 @@ const HITGROUP_MAP: Record<string, number> = {
     'gear': 10
 };
 
-export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
+export const parseDemoJson = (data: DemoData, fileDate?: number, keepRaw: boolean = false): Match => {
     let events = Array.isArray(data) ? data : (data.events || []);
     const meta = (!Array.isArray(data) && data.meta) ? data.meta : { map_name: 'Unknown', server_name: '' };
     
@@ -1440,7 +1440,7 @@ export const parseDemoJson = (data: DemoData, fileDate?: number): Match => {
 
     const finalScoreUs = s1 + s3 + otUs;
     const finalScoreThem = s2 + s4 + otThem;
-    const keepRawJson = safeStorage.getItem('keepRawDemoJson') === 'true';
+    const keepRawJson = keepRaw || safeStorage.getItem('keepRawDemoJson') === 'true';
     
     return {
         id: generateId('demo'),

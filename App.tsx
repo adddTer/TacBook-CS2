@@ -18,13 +18,13 @@ import { SettingsModal } from './components/SettingsModal';
 import { GroupManagerModal } from './components/GroupManagerModal'; 
 import { ConfirmModal } from './components/ConfirmModal';
 import { AlertModal } from './components/AlertModal';
-import { AiConfigModal } from './components/AiConfigModal';
+import { AiConfigModal } from './copilot/ui/AiConfigModal';
 import { LiquipediaScraper } from './components/LiquipediaScraper';
-import { GlobalCopilot } from './components/ai/GlobalCopilot';
+import { GlobalCopilot } from './copilot/project/GlobalCopilot';
 import { useTactics } from './hooks/useTactics';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useAppStorage } from './hooks/useAppStorage'; 
-import { Side, MapId, Tactic, Tag, Utility, Theme } from './types';
+import { Side, MapId, Tactic, Tag, Utility, Theme, VisualStyle } from './types';
 import { safeStorage } from './utils/storage';
 
 const App: React.FC = () => {
@@ -567,7 +567,6 @@ const App: React.FC = () => {
         allMatches={allMatches}
         allTournaments={allTournaments}
         allBons={allBons}
-        isAdmin={hasWritableGroups}
         onSaveTactic={(tactic, desc, author) => {
           const groupId = tactic.groupId || (writableGroups.length > 0 ? writableGroups[0].metadata.id : '');
           if (groupId) handleSaveTactic(tactic, groupId, { description: desc, author });

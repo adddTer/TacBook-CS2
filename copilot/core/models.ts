@@ -8,8 +8,6 @@ export const PRESET_MODELS: Record<string, { id: string, name: string }[]> = {
     deepseek: [
         { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro" },
         { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
-        { id: "deepseek-chat", name: "DeepSeek Chat (V3)" },
-        { id: "deepseek-reasoner", name: "DeepSeek Reasoner (R1)" }
     ],
     openai: [],
     custom: []

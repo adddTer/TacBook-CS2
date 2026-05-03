@@ -47,9 +47,19 @@ export function convertGeminiHistoryToOpenAI(apiHistory: Content[]) {
                     });
                 }
             } else {
+                const content: any[] = [];
+                for (const p of msg.parts || []) {
+                    if (p.text) content.push({ type: "text", text: p.text });
+                    if (p.inlineData) {
+                        content.push({ 
+                            type: "image_url", 
+                            image_url: { url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}` } 
+                        });
+                    }
+                }
                 messages.push({
                     role: 'user',
-                    content: msg.parts?.map(p => p.text || '').join('\n') || ''
+                    content: content.length === 1 && content[0].type === 'text' ? content[0].text : content
                 });
             }
         } else if (msg.role === 'model') {
@@ -57,13 +67,24 @@ export function convertGeminiHistoryToOpenAI(apiHistory: Content[]) {
             const textParts = msg.parts?.filter(p => p.text);
             
             let contentText = textParts?.map(p => p.text || '').join('\n') || '';
-            // DeepSeek V4 specifically forbids sending reasoning content back in the history
+            
+            // Extract reasoning_content from our <think> wrapper so we can pass it natively
+            let reasoningContent = undefined;
+            const thinkMatch = contentText.match(/<think>([\s\S]*?)<\/think>\s*/i);
+            if (thinkMatch) {
+                reasoningContent = thinkMatch[1];
+            }
+            // Strip it from the main content for OpenAI compatibility (or DeepSeek which requires them separate)
             contentText = contentText.replace(/<think>[\s\S]*?<\/think>\s*/gi, '');
 
             const message: any = {
                 role: 'assistant',
                 content: contentText
             };
+
+            if (reasoningContent) {
+                message.reasoning_content = reasoningContent;
+            }
 
             if (toolCalls && toolCalls.length > 0) {
                 message.tool_calls = toolCalls.map(tc => ({

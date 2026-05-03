@@ -10,9 +10,12 @@ export const isPlayerInUserTeam = (p: PlayerMatchStats): boolean => {
             if (!p.steamid) return false;
             
             const pSteamIdStr = String(p.steamid);
-            if (r.id === pSteamIdStr) return true;
+            if (r.id === pSteamIdStr || r.id.slice(0, -2) === pSteamIdStr.slice(0, -2)) return true;
             
-            let isMatch = r.steamids?.includes(pSteamIdStr) || 
+            let isMatch = false;
+            if (r.steamids) {
+                isMatch = r.steamids.some(sid => sid === pSteamIdStr || sid.slice(0, -2) === pSteamIdStr.slice(0, -2));
+            }
                 (pSteamIdStr.endsWith('00') && r.steamids?.some(id => id.startsWith(pSteamIdStr.slice(0, -2))));
                 
             if (!isMatch && /^\d+$/.test(pSteamIdStr) && pSteamIdStr.length < 16) {

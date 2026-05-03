@@ -570,22 +570,31 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
             await new Promise(resolve => setTimeout(resolve, 50));
 
             try {
-                // Read File
-                const content = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = (ev) => resolve(ev.target?.result as string);
-                    reader.onerror = reject;
-                    reader.readAsText(file);
+                const match = await new Promise<Match>((resolve, reject) => {
+                    const worker = new Worker(new URL('../utils/demoWorker.ts', import.meta.url), { type: 'module' });
+                    
+                    worker.onmessage = (e) => {
+                        worker.terminate();
+                        if (e.data.success) resolve(e.data.match);
+                        else reject(new Error(e.data.error));
+                    };
+                    
+                    worker.onerror = (e) => {
+                        worker.terminate();
+                        reject(new Error(e.message || 'Worker syntax error (memory limit?)'));
+                    };
+                    
+                    const keepRaw = localStorage.getItem('keepRawDemoJson') === 'true';
+                    worker.postMessage({ file, keepRaw });
                 });
 
-                // Parse
-                // Fix precision loss for large numbers like steamid
-                const fixedContent = content.replace(/"(steamid|attacker_steamid|user_steamid|assister_steamid|userid)"\s*:\s*(\d{16,20})/g, '"$1":"$2"');
-                const json = JSON.parse(fixedContent);
-                let match = parseDemoJson(json, file.lastModified);
-                
+                // Clear reference to allow GC
+                files[i] = null as any;
+
                 // Save
                 setLoadingState(prev => ({ ...prev, message: '正在保存数据...', subMessage: `${match.mapId} - ${match.date}` }));
+                await new Promise(r => setTimeout(r, 10)); // Allow UI to update before IndexedDB blocks
+
                 onSaveMatch(match, targetGroup);
                 
                 successCount++;

@@ -1,7 +1,7 @@
 import { GoogleGenAI, GenerateContentResponse, Type, Content, Part, ThinkingLevel, FunctionDeclaration } from "@google/genai";
 import { CopilotMessage, CopilotThread, ToolCall, ToolResult } from "./types";
 import { convertGeminiToolsToOpenAI, convertGeminiHistoryToOpenAI } from "./openai_adapter";
-import { getAIConfig } from "../config";
+import { getAIConfig, isMultimodalSupported } from "./config";
 
 export class AgenticEngine {
     private ai: GoogleGenAI;
@@ -211,14 +211,20 @@ export class AgenticEngine {
         }
 
         // If resuming and the last message in apiHistory is from the model (e.g. interrupted due to token limit or manual abort),
-        // we need to prompt it to continue, because Gemini requires the last message to be from the user.
         if (resumeMessageId && apiHistory.length > 0 && apiHistory[apiHistory.length - 1].role === 'model') {
-            const continueContent: Content = {
-                role: 'user',
-                parts: [{ text: " " }] // Use a single space instead of explicit text to avoid breaking the flow
-            };
-            apiHistory.push(continueContent);
-            currentResponseMsg.apiSequence = [...(currentResponseMsg.apiSequence || []), continueContent];
+            const aiConfig = getAIConfig();
+            const isDeepSeek = aiConfig.model.toLowerCase().includes('deepseek');
+            
+            if (!isDeepSeek) {
+                // 如果是其他模型，返回模型发生了意外错误，继续完成刚刚未完成的事宜。
+                const continueContent: Content = {
+                    role: 'user',
+                    parts: [{ text: "发生了意外错误，继续完成刚刚未完成的事宜。" }] 
+                };
+                apiHistory.push(continueContent);
+                currentResponseMsg.apiSequence = [...(currentResponseMsg.apiSequence || []), continueContent];
+            }
+            // 思考传入本地的 DeepSeek 模型，直接将过去内容传给服务器，不需要添加用户信息。
         }
 
         while (loopCount < MAX_LOOPS) {
@@ -248,10 +254,7 @@ export class AgenticEngine {
                 let activeTools = this.toolDeclarations;
 
                 if (this.thread.pathway === 'complex') {
-                    systemInstruction += "2. **复杂长任务处理 (Plan-and-Solve)**：这是一个复杂长任务，你必须使用 `update_task_state` 工具来维护一个全局状态机。在开始前，先制定一个计划（plan）。每完成一步，更新 currentStepIndex 和 completedSteps。将中间结果保存在 intermediateResults 中。这能保证即使对话意外中断，你也能知道当前进展到哪一步。花时间钻研，给出有深度的结论，而不是敷衍了事。";
-                    if (this.thread.taskState) {
-                        systemInstruction += `\n\n**当前长任务状态 (Global State)：**\n\`\`\`json\n${JSON.stringify(this.thread.taskState, null, 2)}\n\`\`\`\n请根据此状态继续执行你的任务。`;
-                    }
+                    systemInstruction += "2. **复杂长任务处理 (Plan-and-Solve)**：这是一个复杂长任务，请务必充分利用多轮工具调用。不要急于给出最终结论。你可以先浏览数据，再深挖细节。你可以并且**应该**调用 `update_task_state` 来将你的计划和当前执行进度展示给用户（例如 plan: ['搜索基础数据', '分析队伍A的短板', '总结胜率模型', '得出最终推荐']）。把阶段性核心结果保存在 intermediateResults 或 memory_save 中，一步步稳扎稳打。";
                 } else {
                     systemInstruction += "2. **简单查询任务 (Fast Pathway)**：这是一个简单查询任务，请直接调用相关工具获取数据并快速回答，无需制定复杂计划或更新任务状态。";
                     activeTools = this.toolDeclarations.filter(t => t.name !== 'update_task_state');
@@ -288,11 +291,32 @@ export class AgenticEngine {
                 while (retryCount < MAX_RETRIES) {
                     try {
                         const aiConfig = getAIConfig();
+                        
+                        // Construct context block for Prompt Caching optimization
+                        // By injecting dynamic state here instead of systemInstruction, the system prompt remains static
+                        let contextBlock = "";
+                        if (this.thread.memory && Object.keys(this.thread.memory).length > 0) {
+                            contextBlock += `\n\n[SYSTEM INJECTION: Current Memory]\n\`\`\`json\n${JSON.stringify(this.thread.memory, null, 2)}\n\`\`\`\n`;
+                        }
+                        if (this.thread.pathway === 'complex' && this.thread.taskState) {
+                            contextBlock += `\n\n[SYSTEM INJECTION: Current Task State]\n\`\`\`json\n${JSON.stringify(this.thread.taskState, null, 2)}\n\`\`\`\n请根据此状态继续执行你的任务。\n`;
+                        }
+
+                        const requestHistory = JSON.parse(JSON.stringify(apiHistory));
+                        if (contextBlock && requestHistory.length > 0) {
+                            const lastMsg = requestHistory[requestHistory.length - 1];
+                            if (lastMsg.role === 'user') {
+                                lastMsg.parts.push({ text: contextBlock });
+                            } else {
+                                requestHistory.push({ role: 'user', parts: [{ text: contextBlock }] });
+                            }
+                        }
+
                         if (aiConfig.provider !== 'google') {
                             // OpenAI / DeepSeek / Custom API integration
                             if (!aiConfig.apiKey) throw new Error(`${aiConfig.provider} API key is not configured.`);
                             
-                            const messages = convertGeminiHistoryToOpenAI(apiHistory);
+                            const messages = convertGeminiHistoryToOpenAI(requestHistory);
                             
                             // Add system instruction
                             if (modelConfig.systemInstruction) {
@@ -310,6 +334,8 @@ export class AgenticEngine {
                                 messages: messages,
                                 temperature: modelConfig.temperature,
                                 max_tokens: modelConfig.maxOutputTokens,
+                                stream: true, // ENABLING STREAMING
+                                stream_options: { include_usage: true }
                             };
                             if (tools && tools.length > 0) {
                                 reqBody.tools = tools;
@@ -330,27 +356,112 @@ export class AgenticEngine {
                                 throw new Error(errorData.error?.message || `${aiConfig.provider} API Error: ${res.status}`);
                             }
 
-                            const data = await res.json();
-                            const message = data.choices[0].message;
+                            const reader = res.body?.getReader();
+                            if (!reader) throw new Error("No response body");
+                            const decoder = new TextDecoder("utf-8");
+                            
+                            let textContent = "";
+                            let reasoningContent = "";
+                            const toolCallsMap: Record<number, any> = {};
+                            const mUsage = currentResponseMsg.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedPromptTokens: 0 };
+                            let pendingChunk = "";
+
+                            while (true) {
+                                if (abortSignal?.aborted) throw new DOMException('Aborted', 'AbortError');
+                                
+                                const { done: streamDone, value: chunk } = await reader.read();
+                                if (streamDone) break;
+                                
+                                pendingChunk += decoder.decode(chunk, { stream: true });
+                                const lines = pendingChunk.split('\n');
+                                pendingChunk = lines.pop() || ""; // keep the last potentially incomplete line
+
+                                for (const line of lines) {
+                                    const trimmedLine = line.trim();
+                                    if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+                                    
+                                    const dataStr = trimmedLine.slice(6);
+                                    if (dataStr === '[DONE]') continue;
+                                    
+                                    try {
+                                        const parsed = JSON.parse(dataStr);
+                                        
+                                        // Usage might be in a separate chunk with stream_options: include_usage
+                                        if (parsed.usage) {
+                                            mUsage.promptTokens += (parsed.usage.prompt_tokens || 0);
+                                            mUsage.completionTokens += (parsed.usage.completion_tokens || 0);
+                                            mUsage.totalTokens += (parsed.usage.total_tokens || 0);
+                                            mUsage.cachedPromptTokens = (mUsage.cachedPromptTokens || 0) + (parsed.usage.prompt_tokens_details?.cached_tokens || 0);
+                                            currentResponseMsg.usage = mUsage;
+                                        }
+
+                                        const delta = parsed.choices?.[0]?.delta;
+                                        if (!delta) continue;
+                                        
+                                        let updated = false;
+
+                                        if (delta.content) {
+                                            textContent += delta.content;
+                                            updated = true;
+                                        }
+                                        if (delta.reasoning_content) {
+                                            reasoningContent += delta.reasoning_content;
+                                            updated = true;
+                                        }
+                                        
+                                        if (delta.tool_calls) {
+                                            for (const tc of delta.tool_calls) {
+                                                const index = tc.index;
+                                                if (!toolCallsMap[index]) {
+                                                    toolCallsMap[index] = { id: tc.id, name: '', arguments: '' };
+                                                }
+                                                if (tc.function?.name) toolCallsMap[index].name += tc.function.name;
+                                                if (tc.function?.arguments) toolCallsMap[index].arguments += tc.function.arguments;
+                                            }
+                                        }
+
+                                        if (updated) {
+                                            let displayPreviewText = textContent;
+                                            const blockCount = (displayPreviewText.match(/```/g) || []).length;
+                                            if (blockCount % 2 !== 0) {
+                                                displayPreviewText += '\n```';
+                                            }
+                                            
+                                            const combinedText = (currentResponseMsg.text ? currentResponseMsg.text + (currentResponseMsg.text.endsWith('\n\n') ? '' : '\n\n') : '') + displayPreviewText;
+                                            const combinedReasoning = (currentResponseMsg.reasoningContent ? currentResponseMsg.reasoningContent + '\n\n' : '') + reasoningContent;
+                                            
+                                            onUpdate({ 
+                                                ...currentResponseMsg, 
+                                                text: combinedText,
+                                                reasoningContent: combinedReasoning || undefined
+                                            });
+                                        }
+                                    } catch (e) {
+                                        // Ignore parse errors for incomplete chunks
+                                    }
+                                }
+                            }
                             
                             const parts: Part[] = [];
-                            let textContent = message.content || "";
-                            if (message.reasoning_content) {
-                                textContent = `<think>\n${message.reasoning_content}\n</think>\n\n` + textContent;
+                            if (reasoningContent) {
+                                // For OpenAI/DeepSeek models with explicit reasoning, we insert it manually in the context block 
+                                // to remember it in future turns, or Gemini-style formatting. But wait, OpenAI remembers via API automatically?
+                                // Actually, DeepSeek provides reasoning_content natively, OpenAI doesn't support repeating reasoning_content yet, so we format it as <think> for Gemini cross-compatibility.
+                                textContent = `<think>\n${reasoningContent}\n</think>\n\n` + textContent;
                             }
                             if (textContent) {
                                 parts.push({ text: textContent });
                             }
-                            if (message.tool_calls) {
-                                for (const tc of message.tool_calls) {
-                                    parts.push({
-                                        functionCall: {
-                                            id: tc.id,
-                                            name: tc.function.name,
-                                            args: JSON.parse(tc.function.arguments)
-                                        }
-                                    });
-                                }
+                            
+                            const parsedToolCalls = Object.values(toolCallsMap);
+                            for (const tc of parsedToolCalls) {
+                                parts.push({
+                                    functionCall: {
+                                        id: tc.id,
+                                        name: tc.name,
+                                        args: JSON.parse(tc.arguments || '{}')
+                                    }
+                                });
                             }
                             
                             response = {
@@ -365,41 +476,57 @@ export class AgenticEngine {
                             const dynamicAi = new GoogleGenAI({ apiKey: aiConfig.apiKey });
                             const stream = await dynamicAi.models.generateContentStream({
                                 model: aiConfig.model,
-                                contents: apiHistory,
+                                contents: requestHistory,
                                 config: modelConfig
                             });
                             
                             const parts: Part[] = [];
                             let textContent = "";
+                            let reasoningContent = "";
+                            let lastChunkUsage: any = null;
                             
                             for await (const chunk of stream) {
                                 if (abortSignal?.aborted) {
                                     throw new DOMException('Aborted', 'AbortError');
                                 }
                                 
+                                if (chunk.usageMetadata) {
+                                    lastChunkUsage = chunk.usageMetadata;
+                                }
+                                
                                 const candidate = chunk.candidates?.[0];
                                 if (!candidate || !candidate.content || !candidate.content.parts) continue;
                                 
-                                for (const part of candidate.content.parts) {
+                                for (const part of candidate.content.parts as any[]) {
                                     if (part.text) {
-                                        textContent += part.text;
+                                        if (part.thought) {
+                                            reasoningContent += part.text;
+                                        } else {
+                                            textContent += part.text;
+                                        }
                                         
                                         // We can do a naive update for the UI to see the stream without mutating the base text yet
                                         let previewText = textContent;
-                                        let previewReasoning = "";
+                                        let previewReasoning = reasoningContent;
                                         
                                         const thinkMatch = previewText.match(/<think>([\s\S]*?)<\/think>/);
                                         const thinkOpenMatch = previewText.match(/<think>([\s\S]*)$/);
                                         
                                         if (thinkMatch) {
-                                            previewReasoning = thinkMatch[1].trim();
+                                            previewReasoning += (previewReasoning ? '\n\n' : '') + thinkMatch[1].trim();
                                             previewText = previewText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
                                         } else if (thinkOpenMatch) {
-                                            previewReasoning = thinkOpenMatch[1].trim();
+                                            previewReasoning += (previewReasoning ? '\n\n' : '') + thinkOpenMatch[1].trim();
                                             previewText = previewText.replace(/<think>[\s\S]*$/g, '').trim();
                                         }
                                         
-                                        const combinedText = (currentResponseMsg.text ? currentResponseMsg.text + (currentResponseMsg.text.endsWith('\n\n') ? '' : '\n\n') : '') + previewText;
+                                        let displayPreviewText = previewText;
+                                        const blockCount = (displayPreviewText.match(/```/g) || []).length;
+                                        if (blockCount % 2 !== 0) {
+                                            displayPreviewText += '\n```';
+                                        }
+                                        
+                                        const combinedText = (currentResponseMsg.text ? currentResponseMsg.text + (currentResponseMsg.text.endsWith('\n\n') ? '' : '\n\n') : '') + displayPreviewText;
                                         const combinedReasoning = (currentResponseMsg.reasoningContent ? currentResponseMsg.reasoningContent + '\n\n' : '') + previewReasoning;
                                         
                                         onUpdate({ 
@@ -414,8 +541,22 @@ export class AgenticEngine {
                                 }
                             }
                             
-                            if (textContent) {
-                                parts.unshift({ text: textContent });
+                            let finalTextContent = textContent;
+                            // Add reasoning to finalTextContent as <think> for memory in future turns
+                            if (reasoningContent) {
+                                finalTextContent = `<think>\n${reasoningContent}\n</think>\n\n` + finalTextContent;
+                            }
+                            if (finalTextContent) {
+                                parts.unshift({ text: finalTextContent });
+                            }
+                            
+                            if (lastChunkUsage) {
+                                const mUsage = currentResponseMsg.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedPromptTokens: 0 };
+                                mUsage.promptTokens += (lastChunkUsage.promptTokenCount || 0);
+                                mUsage.completionTokens += (lastChunkUsage.candidatesTokenCount || 0);
+                                mUsage.totalTokens += (lastChunkUsage.totalTokenCount || 0);
+                                mUsage.cachedPromptTokens = (mUsage.cachedPromptTokens || 0) + (lastChunkUsage.cachedContentTokenCount || 0);
+                                currentResponseMsg.usage = mUsage;
                             }
                             
                             response = {
@@ -664,6 +805,11 @@ export class AgenticEngine {
     }
 
     private pruneApiHistory(apiHistory: Content[]) {
+        const historyStr = JSON.stringify(apiHistory);
+        // Only trigger compress when tokens are incredibly huge and it destroys context windows / explodes costs
+        // e.g. 500,000 chars roughly 120k tokens.
+        if (historyStr.length < 500000) return;
+        
         if (apiHistory.length <= 12) return;
         
         for (let i = 1; i < apiHistory.length - 10; i++) {
@@ -672,10 +818,10 @@ export class AgenticEngine {
                 for (const part of content.parts) {
                     if (part.functionResponse && part.functionResponse.response) {
                         const jsonStr = JSON.stringify(part.functionResponse.response);
-                        if (jsonStr.length > 500) {
+                        if (jsonStr.length > 2000) {
                             part.functionResponse.response = {
                                 _truncated: `Data omitted to save tokens.`,
-                                _preview: jsonStr.substring(0, 500) + '...'
+                                _preview: jsonStr.substring(0, 2000) + '...'
                             };
                         }
                     }
@@ -736,35 +882,38 @@ export class AgenticEngine {
      * Converts CopilotMessage history into Gemini Content format for the initial call.
      */
     private prepareApiHistory(): Content[] {
-        const recentMessages = this.thread.messages.slice(-15);
+        // Use all messages to maintain matching prefix for caching (sliding windows break the cache)
+        const recentMessages = this.thread.messages;
         const history: Content[] = [];
 
         for (let i = 0; i < recentMessages.length; i++) {
             const msg = recentMessages[i];
-            const isLastMessage = i === recentMessages.length - 1;
             
             if (msg.role === 'user') {
-                history.push({ role: 'user', parts: [{ text: msg.text || '' }] });
-            } else if (msg.role === 'model') {
-                if (msg.apiSequence && msg.apiSequence.length > 0) {
-                    // Truncate old tool results in the sequence to save tokens
-                    const sequence = JSON.parse(JSON.stringify(msg.apiSequence));
-                    for (const content of sequence) {
-                        if (content.role === 'user') {
-                            for (const part of content.parts) {
-                                if (part.functionResponse && part.functionResponse.response) {
-                                    const jsonStr = JSON.stringify(part.functionResponse.response);
-                                    const limit = isLastMessage ? 15000 : 500; // Reduced from 50000 to 15000 for better cross-model stability
-                                    if (jsonStr.length > limit) {
-                                        part.functionResponse.response = { 
-                                            _truncated: `Data omitted to save tokens (exceeded ${limit} chars). Please query again with more specific filters if needed.`,
-                                            _preview: jsonStr.substring(0, limit) + '...'
-                                        };
-                                    }
-                                }
-                            }
+                const parts: any[] = [];
+                if (msg.text) parts.push({ text: msg.text });
+                
+                if (msg.attachments && msg.attachments.length > 0) {
+                    const aiConfig = getAIConfig();
+                    for (const att of msg.attachments) {
+                        const actuallyUnsupported = !isMultimodalSupported(aiConfig.model, att.type || 'application/octet-stream');
+                        
+                        if (att.textContent) {
+                            parts.push({ text: `[Attached file: ${att.name}]\n\`\`\`\n${att.textContent}\n\`\`\`` });
+                        } else if (actuallyUnsupported || att.unsupported) {
+                            parts.push({ text: `[Attached file: ${att.name}] (Note: As an AI model not supporting multimodal inputs or this file type, you cannot see the contents of this file. Do not pretend to know its contents unless you use a tool to read the file.)` });
+                        } else if (att.base64 && att.type) {
+                            parts.push({ inlineData: { mimeType: att.type, data: att.base64 } });
                         }
                     }
+                }
+                if (parts.length === 0) parts.push({ text: "" });
+                history.push({ role: 'user', parts });
+            } else if (msg.role === 'model') {
+                if (msg.apiSequence && msg.apiSequence.length > 0) {
+                    // Do NOT post-compress old tool results in the sequence.
+                    // Modifying old content breaks exact prefix matching for Prompt Caching.
+                    const sequence = JSON.parse(JSON.stringify(msg.apiSequence));
                     history.push(...sequence);
                 } else {
                     // Fallback for older messages
@@ -794,22 +943,12 @@ export class AgenticEngine {
                             parts: msg.toolResults.map(tr => {
                                 let responseObj = tr.result || { error: tr.error };
                                 
-                                if (!isLastMessage) {
-                                    const jsonStr = JSON.stringify(responseObj);
-                                    if (jsonStr.length > 500) {
-                                        responseObj = { 
-                                            _truncated: "Data omitted to save tokens. Please query again if needed.",
-                                            _preview: jsonStr.substring(0, 500) + '...'
-                                        };
-                                    }
-                                } else {
-                                    const jsonStr = JSON.stringify(responseObj);
-                                    if (jsonStr.length > 15000) {
-                                        responseObj = { 
-                                            _truncated: "Data omitted to save tokens. Please query again if needed.",
-                                            _preview: jsonStr.substring(0, 15000) + '...'
-                                        };
-                                    }
+                                const jsonStr = JSON.stringify(responseObj);
+                                if (jsonStr.length > 15000) {
+                                    responseObj = { 
+                                        _truncated: "Data omitted to save tokens. Please query again if needed.",
+                                        _preview: jsonStr.substring(0, 15000) + '...'
+                                    };
                                 }
 
                                 if (typeof responseObj !== 'object' || responseObj === null || Array.isArray(responseObj)) {
@@ -829,6 +968,12 @@ export class AgenticEngine {
                 }
             }
         }
+
+        // Avoid infinite growth, drop massive chunks at once rather than sliding.
+        if (history.length > 100) {
+            history.splice(0, history.length - 80);
+        }
+
         return history;
     }
 }

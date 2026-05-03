@@ -1,7 +1,7 @@
 import { FunctionDeclaration, Type } from "@google/genai";
-import { getTeams } from "../../../utils/teamLoader";
-import { calculateTeamRating, calculateTeamWinRateMatrix } from '../../../utils/analytics/teamStatsCalculator';
-import { saveVersion } from "../../../utils/versionDb";
+import { getTeams } from "../../utils/teamLoader";
+import { calculateTeamRating, calculateTeamWinRateMatrix } from '../../utils/analytics/teamStatsCalculator';
+import { saveVersion } from "../../utils/versionDb";
 
 export const toolDeclarations: FunctionDeclaration[] = [
     {
@@ -294,7 +294,6 @@ export const createToolHandlers = (context: {
     threadMemory: Record<string, any>,
     updateMemory: (key: string, value: any) => void,
     updateTaskState?: (state: any) => void,
-    isAdmin?: boolean,
     onSaveTactic?: (tactic: any, description?: string, author?: string) => Promise<void> | void,
     onSaveUtility?: (utility: any, description?: string, author?: string) => Promise<void> | void,
     onSaveMatch?: (match: any) => Promise<void> | void,
@@ -302,11 +301,6 @@ export const createToolHandlers = (context: {
     onDeleteUtility?: (utility: any) => Promise<void> | void,
     onDeleteMatch?: (match: any) => Promise<void> | void
 }) => {
-    const checkPermission = (action: string) => {
-        if (!context.isAdmin) {
-            throw new Error(`权限不足：无法执行 ${action} 操作。请联系管理员。`);
-        }
-    };
 
     return {
         update_task_state: async (args: any) => {
@@ -317,7 +311,6 @@ export const createToolHandlers = (context: {
             return { error: "无法更新状态" };
         },
         memory_save: async ({ key, value }: { key: string, value: any }) => {
-            checkPermission("保存记忆");
             context.updateMemory(key, value);
             return { status: "success", message: `已记录记忆: ${key}` };
         },
@@ -638,7 +631,7 @@ export const createToolHandlers = (context: {
             if (startDate) filtered = filtered.filter(m => m.date >= startDate);
             if (endDate) filtered = filtered.filter(m => m.date <= endDate);
             
-            const { MatchAggregator } = await import('../../../utils/analytics/matchAggregator');
+            const { MatchAggregator } = await import('../../utils/analytics/matchAggregator');
             const aggregated = MatchAggregator.aggregate(filtered);
             
             // Clean up internal accumulators to avoid confusing the AI
@@ -769,7 +762,6 @@ export const createToolHandlers = (context: {
         },
         update_database_item: async (args: { collection: string, item: any, edit_summary?: string }) => {
             const { collection, item, edit_summary } = args;
-            checkPermission("修改数据库");
             if (!item || !item.id) return { error: "项目必须包含 id" };
             
             try {
@@ -828,7 +820,6 @@ export const createToolHandlers = (context: {
             }
         },
         delete_database_item: async ({ collection, id }: { collection: string, id: string }) => {
-            checkPermission("删除数据库项目");
             
             try {
                 if (collection === 'tactics' && context.onDeleteTactic) {

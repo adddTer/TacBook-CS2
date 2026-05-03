@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { CopilotThread, CopilotMessage } from '../../services/ai/agentic/types';
-import { getThreads, createThread, getThread, addMessageToThread, updateThread, deleteThread, saveThreads } from '../../services/ai/agentic/storage';
-import { AgenticEngine } from '../../services/ai/agentic/engine';
-import { getApiKey, getSelectedModel, getThinkingLevel } from '../../services/ai/config';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { CopilotThread, CopilotMessage } from '../core/types';
+import { getThreads, createThread, getThread, addMessageToThread, updateThread, deleteThread, saveThreads, upsertMessageInThread } from '../core/storage';
+import { AgenticEngine } from '../core/engine';
+import { getApiKey, getSelectedModel, getThinkingLevel, isMultimodalSupported } from '../core/config';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -10,22 +10,13 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import 'katex/dist/katex.min.css';
-import { AiConfigModal } from '../AiConfigModal';
+import { AiConfigModal } from './AiConfigModal';
 import { FunctionDeclaration } from '@google/genai';
-import { Gamepad2, User, Lightbulb, Target, ArrowRight } from 'lucide-react';
+import { Gamepad2, User, Lightbulb, Target, ArrowRight, Paperclip, X, Image, FileText } from 'lucide-react';
 import mermaid from 'mermaid';
+import JSZip from 'jszip';
 
-// Global lock for DB writes to prevent IDB races
-let dbSavePromise: Promise<void> = Promise.resolve();
-const queueSaveThreads = (threadsToSave: CopilotThread[]) => {
-    dbSavePromise = dbSavePromise.then(async () => {
-        try {
-            await saveThreads(threadsToSave);
-        } catch (e) {
-            console.error("Failed to save threads in queue:", e);
-        }
-    });
-};
+// We use atomic updates from storage.ts instead of full sweeps to prevent DB races
 
 const CopyableWrapper = ({ children, isCode = false }: { children: React.ReactNode, isCode?: boolean }) => {
     const contentRef = useRef<HTMLDivElement>(null);
@@ -82,23 +73,141 @@ mermaid.initialize({ startOnLoad: false, theme: 'default' });
 
 const MermaidBlock = ({ chart }: { chart: string }) => {
     const [svg, setSvg] = useState<string>('');
-    const id = React.useMemo(() => `mermaid-${Math.random().toString(36).substring(2, 9)}`, []);
+    const [errorMsg, setErrorMsg] = useState<string>('');
+
+    // Force re-render when theme changes
+    const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
 
     useEffect(() => {
-        mermaid.render(id, chart).then((result) => {
-            setSvg(result.svg);
+        const observer = new MutationObserver(() => {
+            const currentDark = document.documentElement.classList.contains('dark');
+            if (currentDark !== isDark) {
+                setIsDark(currentDark);
+            }
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, [isDark]);
+
+    useEffect(() => {
+        let isMounted = true;
+        const currentId = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
+        mermaid.initialize({
+            startOnLoad: false,
+            suppressErrorRendering: true,
+            theme: isDark ? 'dark' : 'base',
+            themeVariables: isDark ? {
+                fontFamily: 'inherit',
+                primaryColor: '#262626',
+                primaryBorderColor: '#404040',
+                lineColor: '#a3a3a3',
+                textColor: '#f5f5f5',
+            } : {
+                fontFamily: 'inherit',
+                primaryColor: '#f3f4f6',
+                primaryBorderColor: '#d1d5db',
+                lineColor: '#6b7280',
+                textColor: '#1f2937',
+            }
+        });
+
+        // Unescape HTML entities from Markdown code block string
+        const unescapedChart = chart
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'");
+
+        const processedChart = unescapedChart.replace(/;\s*/g, ';\n');
+        mermaid.render(currentId, processedChart).then((result) => {
+            if (isMounted) {
+                setSvg(result.svg);
+                setErrorMsg('');
+            }
         }).catch((e) => {
             console.error('Mermaid render error', e);
+            if (isMounted) {
+                setErrorMsg(e.message || String(e));
+            }
         });
-    }, [chart, id]);
+        return () => { isMounted = false; };
+    }, [chart, isDark]);
 
-    if (!svg) return <div className="p-4 flex justify-center text-neutral-500 text-xs">渲染图表中...</div>;
+    if (errorMsg) return <div className="p-4 flex flex-col items-center justify-center text-red-500 font-bold text-xs bg-red-50 dark:bg-red-900/10 rounded-b-2xl"><span className="mb-2">渲染失败</span><pre className="text-[10px] text-red-400 overflow-x-auto max-w-full p-2">{errorMsg}</pre><pre className="mt-2 text-[8px] text-neutral-400 max-w-full overflow-x-auto">{chart}</pre></div>;
+    
+    if (!svg) return <div className="p-4 flex justify-center text-neutral-500 text-xs shrink-0 min-h-[40px]">渲染图表中...</div>;
     return <div className="p-4 flex justify-center bg-white dark:bg-neutral-800 rounded-b-2xl overflow-x-auto" dangerouslySetInnerHTML={{ __html: svg }} />;
+};
+
+const HTMLPreviewIframe = ({ html }: { html: string }) => {
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+    const [height, setHeight] = useState('200px');
+    const getSrcDoc = () => {
+        const isDark = document.documentElement.classList.contains('dark');
+        return `
+            <!DOCTYPE html>
+            <html class="${isDark ? 'dark' : ''}">
+            <head>
+                <script src="https://cdn.tailwindcss.com"></script>
+                <script>
+                    tailwind.config = { darkMode: 'class' }
+                </script>
+                <style>
+                    body { margin: 0; padding: 1rem; overflow: hidden; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: transparent; }
+                </style>
+                <script>
+                    function sendHeight() {
+                        const contentHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+                        window.parent.postMessage({ type: 'resize', height: contentHeight + 'px', iframeUrl: window.location.href }, '*');
+                    }
+                    window.addEventListener('load', sendHeight);
+                    const observer = new MutationObserver(sendHeight);
+                    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+                </script>
+            </head>
+            <body class="text-neutral-900 dark:text-neutral-100 antialiased">
+                ${html}
+            </body>
+            </html>
+        `;
+    };
+
+    useEffect(() => {
+        const handleMessage = (e: MessageEvent) => {
+            if (e.source === iframeRef.current?.contentWindow && e.data?.type === 'resize') {
+                setHeight(e.data.height);
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
+
+    const [srcDoc, setSrcDoc] = useState(getSrcDoc());
+
+    useEffect(() => { setSrcDoc(getSrcDoc()); }, [html]);
+
+    useEffect(() => {
+        const observer = new MutationObserver(() => setSrcDoc(getSrcDoc()));
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
+
+    return (
+        <iframe ref={iframeRef} srcDoc={srcDoc} style={{ height, transition: 'height 0.2s', minHeight: '100px' }} sandbox="allow-scripts allow-same-origin" className="w-full border-none rounded-b-2xl bg-white dark:bg-neutral-900 block" />
+    );
 };
 
 const SmartCodeBlock = ({ language, code, ...props }: { language: string, code: string, [key: string]: any }) => {
     const [viewMode, setViewMode] = useState<'render' | 'raw'>('render');
-    const isRenderable = language === 'mermaid' || language === 'hlml';
+    const [debouncedCode, setDebouncedCode] = useState(code);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedCode(code), 1000);
+        return () => clearTimeout(timer);
+    }, [code]);
+
+    const isRenderable = language === 'mermaid' || language === 'hlml' || language === 'html';
 
     if (!isRenderable) {
         return (
@@ -119,13 +228,15 @@ const SmartCodeBlock = ({ language, code, ...props }: { language: string, code: 
                     {viewMode === 'render' ? '查看原始代码' : '查看渲染效果'}
                 </button>
             </div>
-            {viewMode === 'render' ? (
-                language === 'mermaid' ? <MermaidBlock chart={code} /> : <div className="p-4 bg-white dark:bg-neutral-800 rounded-b-2xl overflow-x-auto" dangerouslySetInnerHTML={{ __html: code }} />
-            ) : (
+            {/* By hiding the render instead of unmounting it, we persist the MermaidBlock's internal cache state */}
+            <div className={viewMode === 'render' ? "block" : "hidden"}>
+                {language === 'mermaid' ? <MermaidBlock chart={debouncedCode} /> : <HTMLPreviewIframe html={debouncedCode} />}
+            </div>
+            <div className={viewMode === 'raw' ? "block" : "hidden"}>
                 <CopyableWrapper isCode={true}>
                     <code className={`language-${language} block overflow-x-auto p-4`} {...props}>{code}</code>
                 </CopyableWrapper>
-            )}
+            </div>
         </div>
     );
 };
@@ -219,6 +330,203 @@ export interface CopilotUIProps {
     emptyStateDescription?: string;
 }
 
+const ActionHistoryViewer = ({ msg, markdownComponents, toolNameMap, handleRollback }: any) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
+
+    const toggleExpanded = () => setIsExpanded(!isExpanded);
+    const toggleStep = (stepId: string) => setExpandedSteps(prev => ({ ...prev, [stepId]: !prev[stepId] }));
+
+    if (!((msg.steps && msg.steps.length > 0) || (msg.toolCalls && msg.toolCalls.length > 0) || msg.reasoningContent)) {
+        return null;
+    }
+
+    return (
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-100 dark:border-neutral-800 overflow-hidden shadow-sm">
+            <button 
+                onClick={toggleExpanded}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-all"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
+                        <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                    </div>
+                    <div className="text-left">
+                        <p className="text-xs font-black text-neutral-900 dark:text-white tracking-widest">行动历史</p>
+                        <p className="text-[10px] text-neutral-400 font-bold tracking-widest">
+                            {msg.steps ? `Copilot 执行了 ${msg.steps.length} 个步骤` : (msg.toolCalls && msg.toolCalls.length > 0 ? `Copilot 采取了 ${msg.toolCalls.length} 项关键措施` : 'Copilot 进行了深度思考')}
+                        </p>
+                    </div>
+                </div>
+                <svg className={`w-4 h-4 text-neutral-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </button>
+
+            <AnimatePresence>
+                {isExpanded && (
+                    <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950/50 px-4 py-3 space-y-3"
+                    >
+                        {msg.steps ? (
+                            msg.steps.map((step: any, stepIdx: number) => {
+                                if (step.type === 'think') {
+                                    return (
+                                        <div key={step.id || stepIdx} className="flex flex-col gap-1.5">
+                                            <button 
+                                                onClick={() => toggleStep(step.id)}
+                                                className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left"
+                                            >
+                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest flex items-center gap-1">
+                                                    思考 {step.duration ? Math.round(step.duration / 1000) : 0}s
+                                                    <svg className={`w-3 h-3 transition-transform duration-300 ${expandedSteps[step.id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                </span>
+                                            </button>
+                                            <AnimatePresence>
+                                                {expandedSteps[step.id] && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        className="pl-3.5 border-l-2 border-blue-100 dark:border-blue-900/30 overflow-hidden"
+                                                    >
+                                                        <div className="text-xs text-neutral-500 dark:text-neutral-400 italic py-1 prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-1 prose-pre:p-2 prose-pre:bg-neutral-100 dark:prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-200 dark:prose-pre:border-neutral-800 prose-table:my-0">
+                                                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex, rehypeRaw]} components={markdownComponents}>{step.content || ''}</ReactMarkdown>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+                                    );
+                                } else if (step.type === 'action' && step.toolCalls) {
+                                    return step.toolCalls.map((tc: any, tcIdx: number) => {
+                                        const result = step.toolResults?.find((tr: any) => tr.id === tc.id);
+                                        let actionText = (toolNameMap && toolNameMap[tc.name]) ? toolNameMap[tc.name](tc.args) : tc.name;
+
+                                        return (
+                                            <div key={`${step.id}_${tc.id || tcIdx}`} className="flex flex-col gap-1.5">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${result ? (result.error ? 'bg-red-500' : 'bg-green-500') : 'bg-blue-500 animate-pulse'}`} />
+                                                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest">{actionText}</span>
+                                                    {result?.error && (
+                                                        <span className="text-[9px] font-black text-red-500 tracking-widest ml-auto">失败</span>
+                                                    )}
+                                                </div>
+                                                {result?.error && (
+                                                    <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5">
+                                                        <p className="text-[9px] text-red-500 mt-1 font-medium">{result.error}</p>
+                                                    </div>
+                                                )}
+                                                {result?.logs && (
+                                                    <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5 mt-1">
+                                                        <pre className="text-[9px] text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 p-1.5 rounded overflow-x-auto">
+                                                            {result.logs}
+                                                        </pre>
+                                                    </div>
+                                                )}
+                                                {tc.name === 'update_database_item' && result?.result?.snapshot && result?.result?.updated && (
+                                                    <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5 mt-1">
+                                                        <ItemDiffViewer 
+                                                            snapshot={result.result.snapshot} 
+                                                            updated={result.result.updated} 
+                                                            onRollback={() => handleRollback(tc.args.collection, result.result.snapshot)} 
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    });
+                                } else if (step.type === 'reply') {
+                                    return (
+                                        <div key={step.id || stepIdx} className="flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest">回复</span>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })
+                        ) : (
+                            /* Fallback for old messages without steps */
+                            <>
+                                {msg.reasoningContent && (
+                                    <div className="flex flex-col gap-1.5">
+                                        <button 
+                                            onClick={() => toggleStep(msg.id)}
+                                            className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left"
+                                        >
+                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest flex items-center gap-1">
+                                                思考 {Math.round((msg.runningTime || (msg.endTime && msg.startTime ? msg.endTime - msg.startTime : 0)) / 1000)}s
+                                                <svg className={`w-3 h-3 transition-transform duration-300 ${expandedSteps[msg.id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                            </span>
+                                        </button>
+                                        <AnimatePresence>
+                                            {expandedSteps[msg.id] && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    className="pl-3.5 border-l-2 border-blue-100 dark:border-blue-900/30 overflow-hidden"
+                                                >
+                                                    <div className="text-xs text-neutral-500 dark:text-neutral-400 italic py-1 prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-1 prose-pre:p-2 prose-pre:bg-neutral-100 dark:prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-200 dark:prose-pre:border-neutral-800 prose-table:my-0">
+                                                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex, rehypeRaw]} components={markdownComponents}>{msg.reasoningContent}</ReactMarkdown>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                )}
+                                {msg.toolCalls?.map((tc: any) => {
+                                    const result = msg.toolResults?.find((tr: any) => tr.id === tc.id);
+                                    
+                                    // Convert tool call to natural language
+                                    let actionText = (toolNameMap && toolNameMap[tc.name]) ? toolNameMap[tc.name](tc.args) : tc.name;
+
+                                    return (
+                                        <div key={tc.id} className="flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-2">
+                                                <div className={`w-1.5 h-1.5 rounded-full ${result ? (result.error ? 'bg-red-500' : 'bg-green-500') : 'bg-blue-500 animate-pulse'}`} />
+                                                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest">{actionText}</span>
+                                                {result?.error && (
+                                                    <span className="text-[9px] font-black text-red-500 tracking-widest ml-auto">失败</span>
+                                                )}
+                                            </div>
+                                            {result?.error && (
+                                                <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5">
+                                                    <p className="text-[9px] text-red-500 mt-1 font-medium">{result.error}</p>
+                                                </div>
+                                            )}
+                                            {result?.logs && (
+                                                <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5 mt-1">
+                                                    <pre className="text-[9px] text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 p-1.5 rounded overflow-x-auto">
+                                                        {result.logs}
+                                                    </pre>
+                                                </div>
+                                            )}
+                                            {tc.name === 'update_database_item' && result?.result?.snapshot && result?.result?.updated && (
+                                                <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5 mt-1">
+                                                    <ItemDiffViewer 
+                                                        snapshot={result.result.snapshot} 
+                                                        updated={result.result.updated} 
+                                                        onRollback={() => handleRollback(tc.args.collection, result.result.snapshot)} 
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
 export const CopilotUI: React.FC<CopilotUIProps> = ({ 
     toolDeclarations,
     createHandlers,
@@ -236,17 +544,18 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
     const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
     const [inputText, setInputText] = useState('');
     const [isThinking, setIsThinking] = useState(false);
-    const [isAdmin, setIsAdmin] = useState(true); // Permission toggle for demo
     const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
     const [editTitle, setEditTitle] = useState('');
     const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
-    const [showActionHistory, setShowActionHistory] = useState<Record<string, boolean>>({});
-    const [showReasoningContent, setShowReasoningContent] = useState<Record<string, boolean>>({});
     const [currentModelName, setCurrentModelName] = useState<string>('');
     const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
     const [showMobileSidebar, setShowMobileSidebar] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    // Attachments state
+    const [attachments, setAttachments] = useState<any[]>([]);
 
     const [isInputExpanded, setIsInputExpanded] = useState(false);
     const [showExpandButton, setShowExpandButton] = useState(false);
@@ -259,6 +568,141 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
             setShowExpandButton(textareaRef.current.scrollHeight > 160);
         }
+    };
+
+    const processFiles = async (files: File[]) => {
+        if (!files.length) return;
+
+        const newAttachments = await Promise.all(
+            files.map(async (file) => {
+                const fileType = file.type || 'application/octet-stream';
+                const isTextPattern = /\.(txt|json|md|xml|csv|js|ts|jsx|tsx|html|css|py|java|c|cpp|h|hpp|rs|go|mod|sum|sh|bat|yaml|yml)$/i.test(file.name);
+                const isTextType = fileType.startsWith('text/') || fileType === 'application/json' || isTextPattern;
+                const isZipType = file.name.endsWith('.zip') || fileType.includes('zip');
+                
+                let extractedText: string | undefined = undefined;
+
+                if (isZipType) {
+                    try {
+                        const zip = await JSZip.loadAsync(file);
+                        let combinedText = '';
+                        const textExtensions = ['txt', 'md', 'json', 'js', 'ts', 'jsx', 'tsx', 'py', 'html', 'css', 'csv', 'yaml', 'yml', 'xml', 'java', 'c', 'cpp', 'h', 'hpp', 'rs', 'go', 'mod', 'sum', 'sh', 'bat'];
+                        
+                        let fileCount = 0;
+                        for (const relativePath of Object.keys(zip.files)) {
+                            // avoid huge unzips
+                            if (fileCount > 50) {
+                                combinedText += `\n--- [Truncated: Too many files in zip] ---\n`;
+                                break;
+                            }
+                            const zipEntry = zip.files[relativePath];
+                            if (zipEntry.dir) continue;
+                            const ext = relativePath.split('.').pop()?.toLowerCase() || '';
+                            if (textExtensions.includes(ext) || !relativePath.includes('.')) {
+                                const content = await zipEntry.async('string');
+                                // skip huge files
+                                if (content.length > 200000) {
+                                    combinedText += `\n--- File: ${relativePath} (Skipped: Too large) ---\n`;
+                                } else {
+                                    combinedText += `\n--- File: ${relativePath} ---\n${content}\n`;
+                                }
+                                fileCount++;
+                            }
+                        }
+                        if (combinedText) {
+                            extractedText = combinedText;
+                        } else {
+                            extractedText = 'No extractable text files found in zip.';
+                        }
+                    } catch (err) {
+                        console.error('Failed to unzip', err);
+                        extractedText = 'Failed to extract zip contents.';
+                    }
+                } else if (isTextType) {
+                    try {
+                        extractedText = await new Promise<string>((res, rej) => {
+                            const reader = new FileReader();
+                            reader.onload = () => res(reader.result as string);
+                            reader.onerror = rej;
+                            reader.readAsText(file);
+                        });
+                        // Skip huge files
+                        if (extractedText && extractedText.length > 500000) {
+                            extractedText = extractedText.substring(0, 500000) + '\n...[Truncated: File too large]';
+                        }
+                    } catch (err) {
+                        console.error('Failed to read text file', err);
+                    }
+                }
+
+                return new Promise<any>((resolve) => {
+                    if (extractedText !== undefined) {
+                        resolve({
+                            id: Math.random().toString(36).substring(7),
+                            file: file,
+                            name: file.name,
+                            type: fileType,
+                            size: file.size,
+                            url: undefined, // no object url needed for pure text unless we render it, but we use icon
+                            base64: undefined,
+                            textContent: extractedText,
+                            unsupported: false // Text is injected raw to prompt, universally supported
+                        });
+                    } else {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const base64Data = reader.result?.toString().split(',')[1];
+                            resolve({
+                                id: Math.random().toString(36).substring(7),
+                                file: file,
+                                name: file.name,
+                                type: fileType,
+                                size: file.size,
+                                url: URL.createObjectURL(file), // mostly for images
+                                base64: base64Data,
+                                unsupported: false
+                            });
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            })
+        );
+
+        setAttachments(prev => [...prev, ...newAttachments]);
+        
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        await processFiles(files);
+    };
+
+    const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        const items = Array.from(e.clipboardData.items || []);
+        const files = items
+            .filter(item => item.kind === 'file')
+            .map(item => item.getAsFile())
+            .filter((f): f is File => f !== null);
+
+        if (files.length > 0) {
+            e.preventDefault(); // Optionally prevent pasting file text directly if browser does it
+            await processFiles(files);
+        }
+    };
+
+    const removeAttachment = (id: string) => {
+        setAttachments(prev => {
+            const filtered = prev.filter(a => a.id !== id);
+            const removing = prev.find(a => a.id === id);
+            if (removing && removing.url) {
+                URL.revokeObjectURL(removing.url);
+            }
+            return filtered;
+        });
     };
 
     // Reset textarea height when input is cleared
@@ -318,7 +762,7 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
         let targetThreadId = currentThreadId;
 
         if (!resumeId) {
-            if (!inputText.trim()) return;
+            if (!inputText.trim() && attachments.length === 0) return;
 
             if (!targetThreadId) {
                 const newThread = await createThread();
@@ -331,6 +775,7 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                 id: `msg_${Date.now()}`,
                 role: 'user',
                 text: inputText.trim(),
+                attachments: attachments.map(a => ({...a, file: undefined})), // Don't save File object in DB
                 timestamp: Date.now(),
                 status: 'completed'
             };
@@ -338,6 +783,7 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
             await addMessageToThread(targetThreadId, userMsg);
             setThreads(await getThreads());
             setInputText('');
+            setAttachments([]);
         }
 
         if (!targetThreadId) return;
@@ -354,7 +800,6 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
         // Initialize Engine
         const handlers = createHandlers({
             ...context,
-            isAdmin,
             threadMemory: freshThread.memory || {},
             updateMemory: (key: string, value: any) => {
                 if (!freshThread.memory) freshThread.memory = {};
@@ -409,7 +854,7 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                         });
 
                         if (isUpdated && msgUpdate.status !== 'aborted') {
-                            queueSaveThreads(newThreads);
+                            upsertMessageInThread(targetThreadId, Object.assign({}, msgUpdate as CopilotMessage, { id: msgUpdate.id || `msg_${Date.now()}` })).catch(console.error);
                         }
                         
                         return newThreads;
@@ -423,9 +868,9 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                             }
                             return t;
                         });
-                        queueSaveThreads(newThreads);
                         return newThreads;
                     });
+                    updateThread(targetThreadId, threadUpdate).catch(console.error);
                 },
                 resumeId,
                 abortControllerRef.current.signal
@@ -496,18 +941,19 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
         }
     };
 
-    const markdownComponents = {
+    const markdownComponents = useMemo(() => ({
         table: ({node, ...props}: any) => (
             <CopyableWrapper>
                 <table className="w-full text-left text-xs md:text-sm !m-0 min-w-max" {...props} />
             </CopyableWrapper>
         ),
-        code: ({node, inline, className, children, ...props}: any) => {
+        code: ({node, className, children, ...props}: any) => {
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
 
-            if (inline) {
-                return <code className={`${className} bg-neutral-100 dark:bg-neutral-800 rounded px-1 py-0.5`} {...props}>{children}</code>;
+            // Handle inline code blocks (ReactMarkdown v9 doesn't pass 'inline' prop directly in the same way, usually no className or node.position checks)
+            if (!match) {
+                return <code className={`${className || ''} text-sm font-mono bg-neutral-100 dark:bg-neutral-800 rounded px-1.5 py-0.5 text-neutral-800 dark:text-neutral-200`} {...props}>{children}</code>;
             }
 
             if (language === 'scoreboard') {
@@ -738,7 +1184,7 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
             return <a href={href} {...props} className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>;
         },
         p: ({node, ...props}: any) => <div className="mb-4 last:mb-0" {...props} />
-    };
+    }), [context]);
 
     if (!isOpen) {
         return (
@@ -809,17 +1255,6 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                         </div>
                     </div>
                     <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
-                        <button 
-                            onClick={() => setIsAdmin(!isAdmin)} 
-                            className={`hidden sm:block px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded-md transition-all mr-1 md:mr-2 ${
-                                isAdmin 
-                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30' 
-                                    : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800'
-                            }`}
-                            title={isAdmin ? "管理员模式 (可编辑)" : "普通用户模式 (只读)"}
-                        >
-                            {isAdmin ? 'Admin' : 'User'}
-                        </button>
                         <button onClick={() => setShowConfig(true)} className="p-1.5 md:p-2 text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" title="API 设置">
                             <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                         </button>
@@ -892,8 +1327,8 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                                                 }`}
                                             >
                                                 <div className="truncate pr-8">{thread.title}</div>
-                                                <div className={`text-[10px] mt-1 opacity-60 ${currentThreadId === thread.id ? 'text-white' : 'text-neutral-400'}`}>
-                                                    {new Date(thread.updatedAt).toLocaleDateString()}
+                                                <div className={`flex items-center justify-between text-[10px] mt-1 opacity-60 ${currentThreadId === thread.id ? 'text-white' : 'text-neutral-400'}`}>
+                                                    <span>{new Date(thread.updatedAt).toLocaleDateString()}</span>
                                                 </div>
                                             </button>
                                             <div className="absolute right-2 top-3 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover/item:opacity-100 transition-all">
@@ -951,193 +1386,60 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                                                         </span>
                                                     )}
                                                 </div>
+                                                {msg.usage && (
+                                                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] tracking-wide bg-neutral-50 dark:bg-neutral-800/50 px-2 py-0.5 rounded-md border border-neutral-100 dark:border-neutral-700">
+                                                        <div className="flex items-center gap-1">
+                                                            <svg className="w-3 h-3 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                                            {(msg.usage.cachedPromptTokens || 0) > 0 ? (
+                                                                <>
+                                                                    <span className="text-green-600 dark:text-green-400 font-medium" title="输入(缓存命中)">{msg.usage.cachedPromptTokens!.toLocaleString()}</span>
+                                                                    <span className="text-neutral-400">+</span>
+                                                                    <span className="text-amber-600 dark:text-amber-400 font-medium" title="输入(未命中)">{Math.max(0, msg.usage.promptTokens - (msg.usage.cachedPromptTokens || 0)).toLocaleString()}</span>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-amber-600 dark:text-amber-400 font-medium" title="输入Tokens">{msg.usage.promptTokens.toLocaleString()}</span>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-neutral-400">→</span>
+                                                        <span className="text-blue-600 dark:text-blue-400 font-medium" title="输出Tokens">{msg.usage.completionTokens.toLocaleString()}</span>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Action History Summary */}
-                                            {((msg.steps && msg.steps.length > 0) || (msg.toolCalls && msg.toolCalls.length > 0) || msg.reasoningContent) && (
-                                                <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-100 dark:border-neutral-800 overflow-hidden shadow-sm">
-                                                    <button 
-                                                        onClick={() => setShowActionHistory(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
-                                                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-all"
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
-                                                                <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-                                                            </div>
-                                                            <div className="text-left">
-                                                                <p className="text-xs font-black text-neutral-900 dark:text-white tracking-widest">行动历史</p>
-                                                                <p className="text-[10px] text-neutral-400 font-bold tracking-widest">
-                                                                    {msg.steps ? `Copilot 执行了 ${msg.steps.length} 个步骤` : (msg.toolCalls && msg.toolCalls.length > 0 ? `Copilot 采取了 ${msg.toolCalls.length} 项关键措施` : 'Copilot 进行了深度思考')}
-                                                                </p>
-                                                            </div>
+                                            <ActionHistoryViewer 
+                                                msg={msg} 
+                                                markdownComponents={markdownComponents} 
+                                                toolNameMap={toolNameMap} 
+                                                handleRollback={handleRollback} 
+                                            />
+                                        </div>
+                                    )}
+
+                                    {msg.attachments && msg.attachments.length > 0 && (
+                                        <div className={`flex flex-wrap gap-2 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                                            {msg.attachments.map((att) => (
+                                                <div key={att.id} className="relative group flex items-center gap-2 bg-neutral-100 dark:bg-neutral-800 rounded-lg p-2 border border-neutral-200 dark:border-neutral-700">
+                                                    {att.type.startsWith('image/') ? (
+                                                        <div className="w-10 h-10 rounded shrink-0 overflow-hidden bg-neutral-200">
+                                                            <img src={att.base64 ? `data:${att.type};base64,${att.base64}` : (att.url || '')} alt={att.name} className="w-full h-full object-cover" />
                                                         </div>
-                                                        <svg className={`w-4 h-4 text-neutral-400 transition-transform duration-300 ${showActionHistory[msg.id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                                    </button>
-
-                                                    <AnimatePresence>
-                                                        {showActionHistory[msg.id] && (
-                                                            <motion.div 
-                                                                initial={{ height: 0, opacity: 0 }}
-                                                                animate={{ height: 'auto', opacity: 1 }}
-                                                                exit={{ height: 0, opacity: 0 }}
-                                                                className="border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950/50 px-4 py-3 space-y-3"
-                                                            >
-                                                                {msg.steps ? (
-                                                                    msg.steps.map((step, stepIdx) => {
-                                                                        if (step.type === 'think') {
-                                                                            return (
-                                                                                <div key={step.id} className="flex flex-col gap-1.5">
-                                                                                    <button 
-                                                                                        onClick={() => setShowReasoningContent(prev => ({ ...prev, [step.id]: !prev[step.id] }))}
-                                                                                        className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left"
-                                                                                    >
-                                                                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                                                                        <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest flex items-center gap-1">
-                                                                                            思考 {step.duration ? Math.round(step.duration / 1000) : 0}s
-                                                                                            <svg className={`w-3 h-3 transition-transform duration-300 ${showReasoningContent[step.id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                                                                        </span>
-                                                                                    </button>
-                                                                                    <AnimatePresence>
-                                                                                        {showReasoningContent[step.id] && (
-                                                                                            <motion.div
-                                                                                                initial={{ height: 0, opacity: 0 }}
-                                                                                                animate={{ height: 'auto', opacity: 1 }}
-                                                                                                exit={{ height: 0, opacity: 0 }}
-                                                                                                className="pl-3.5 border-l-2 border-blue-100 dark:border-blue-900/30 overflow-hidden"
-                                                                                            >
-                                                                                                <div className="text-xs text-neutral-500 dark:text-neutral-400 italic py-1 prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-1 prose-pre:p-2 prose-pre:bg-neutral-100 dark:prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-200 dark:prose-pre:border-neutral-800 prose-table:my-0">
-                                                                                                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex, rehypeRaw]} components={markdownComponents}>{step.content || ''}</ReactMarkdown>
-                                                                                                </div>
-                                                                                            </motion.div>
-                                                                                        )}
-                                                                                    </AnimatePresence>
-                                                                                </div>
-                                                                            );
-                                                                        } else if (step.type === 'action' && step.toolCalls) {
-                                                                            return step.toolCalls.map((tc, tcIdx) => {
-                                                                                const result = step.toolResults?.find(tr => tr.id === tc.id);
-                                                                                let actionText = (toolNameMap && toolNameMap[tc.name]) ? toolNameMap[tc.name](tc.args) : tc.name;
-
-                                                                                return (
-                                                                                    <div key={`${step.id}_${tc.id || tcIdx}`} className="flex flex-col gap-1.5">
-                                                                                        <div className="flex items-center gap-2">
-                                                                                            <div className={`w-1.5 h-1.5 rounded-full ${result ? (result.error ? 'bg-red-500' : 'bg-green-500') : 'bg-blue-500 animate-pulse'}`} />
-                                                                                            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest">{actionText}</span>
-                                                                                            {result?.error && (
-                                                                                                <span className="text-[9px] font-black text-red-500 tracking-widest ml-auto">失败</span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                        {result?.error && (
-                                                                                            <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5">
-                                                                                                <p className="text-[9px] text-red-500 mt-1 font-medium">{result.error}</p>
-                                                                                            </div>
-                                                                                        )}
-                                                                                        {result?.logs && (
-                                                                                            <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5 mt-1">
-                                                                                                <pre className="text-[9px] text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 p-1.5 rounded overflow-x-auto">
-                                                                                                    {result.logs}
-                                                                                                </pre>
-                                                                                            </div>
-                                                                                        )}
-                                                                                        {tc.name === 'update_database_item' && result?.result?.snapshot && result?.result?.updated && (
-                                                                                            <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5 mt-1">
-                                                                                                <ItemDiffViewer 
-                                                                                                    snapshot={result.result.snapshot} 
-                                                                                                    updated={result.result.updated} 
-                                                                                                    onRollback={() => handleRollback(tc.args.collection, result.result.snapshot)} 
-                                                                                                />
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                );
-                                                                            });
-                                                                        } else if (step.type === 'reply') {
-                                                                            return (
-                                                                                <div key={step.id} className="flex items-center gap-2">
-                                                                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                                                                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest">回复</span>
-                                                                                </div>
-                                                                            );
-                                                                        }
-                                                                        return null;
-                                                                    })
-                                                                ) : (
-                                                                    /* Fallback for old messages without steps */
-                                                                    <>
-                                                                        {msg.reasoningContent && (
-                                                                            <div className="flex flex-col gap-1.5">
-                                                                                <button 
-                                                                                    onClick={() => setShowReasoningContent(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
-                                                                                    className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left"
-                                                                                >
-                                                                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                                                                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest flex items-center gap-1">
-                                                                                        思考 {Math.round((msg.runningTime || (msg.endTime && msg.startTime ? msg.endTime - msg.startTime : 0)) / 1000)}s
-                                                                                        <svg className={`w-3 h-3 transition-transform duration-300 ${showReasoningContent[msg.id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                                                                    </span>
-                                                                                </button>
-                                                                                <AnimatePresence>
-                                                                                    {showReasoningContent[msg.id] && (
-                                                                                        <motion.div
-                                                                                            initial={{ height: 0, opacity: 0 }}
-                                                                                            animate={{ height: 'auto', opacity: 1 }}
-                                                                                            exit={{ height: 0, opacity: 0 }}
-                                                                                            className="pl-3.5 border-l-2 border-blue-100 dark:border-blue-900/30 overflow-hidden"
-                                                                                        >
-                                                                                            <div className="text-xs text-neutral-500 dark:text-neutral-400 italic py-1 prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-1 prose-pre:p-2 prose-pre:bg-neutral-100 dark:prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-200 dark:prose-pre:border-neutral-800 prose-table:my-0">
-                                                                                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex, rehypeRaw]} components={markdownComponents}>{msg.reasoningContent}</ReactMarkdown>
-                                                                                            </div>
-                                                                                        </motion.div>
-                                                                                    )}
-                                                                                </AnimatePresence>
-                                                                            </div>
-                                                                        )}
-                                                                        {msg.toolCalls?.map(tc => {
-                                                                            const result = msg.toolResults?.find(tr => tr.id === tc.id);
-                                                                            
-                                                                            // Convert tool call to natural language
-                                                                            let actionText = (toolNameMap && toolNameMap[tc.name]) ? toolNameMap[tc.name](tc.args) : tc.name;
-
-                                                                            return (
-                                                                                <div key={tc.id} className="flex flex-col gap-1.5">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <div className={`w-1.5 h-1.5 rounded-full ${result ? (result.error ? 'bg-red-500' : 'bg-green-500') : 'bg-blue-500 animate-pulse'}`} />
-                                                                                        <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 tracking-widest">{actionText}</span>
-                                                                                        {result?.error && (
-                                                                                            <span className="text-[9px] font-black text-red-500 tracking-widest ml-auto">失败</span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    {result?.error && (
-                                                                                        <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5">
-                                                                                            <p className="text-[9px] text-red-500 mt-1 font-medium">{result.error}</p>
-                                                                                        </div>
-                                                                                    )}
-                                                                                    {result?.logs && (
-                                                                                        <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5 mt-1">
-                                                                                            <pre className="text-[9px] text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 p-1.5 rounded overflow-x-auto">
-                                                                                                {result.logs}
-                                                                                            </pre>
-                                                                                        </div>
-                                                                                    )}
-                                                                                    {tc.name === 'update_database_item' && result?.result?.snapshot && result?.result?.updated && (
-                                                                                        <div className="pl-3.5 border-l border-neutral-200 dark:border-neutral-800 ml-0.5 mt-1">
-                                                                                            <ItemDiffViewer 
-                                                                                                snapshot={result.result.snapshot} 
-                                                                                                updated={result.result.updated} 
-                                                                                                onRollback={() => handleRollback(tc.args.collection, result.result.snapshot)} 
-                                                                                            />
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </>
-                                                                )}
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded shrink-0 flex items-center justify-center bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
+                                                            <FileText className="w-5 h-5" />
+                                                        </div>
+                                                    )}
+                                                    <div className="flex flex-col min-w-0 max-w-[120px] md:max-w-[200px]">
+                                                        <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300 truncate" title={att.name}>{att.name}</span>
+                                                        <span className="text-[10px] text-neutral-500">{(att.size / 1024).toFixed(1)} KB</span>
+                                                    </div>
+                                                    {(!isMultimodalSupported(currentModelName, att.type || 'application/octet-stream') || att.unsupported) && (
+                                                        <div className="absolute -top-2 max-w-24 -left-2 bg-yellow-100 text-yellow-800 text-[9px] px-1.5 py-0.5 rounded shadow-sm border border-yellow-200 cursor-help" title="The selected model does not support file reading. File name will be sent as a hint.">
+                                                            ⚠ 不支持
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
+                                            ))}
                                         </div>
                                     )}
 
@@ -1147,7 +1449,7 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                                                 ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded-2xl rounded-tr-sm px-4 py-3 max-w-[90%] md:max-w-[85%]' 
                                                 : 'text-neutral-900 dark:text-neutral-100 w-full overflow-hidden'
                                         }`}>
-                                            <div className={`prose dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-1 prose-pre:p-2 prose-pre:bg-neutral-100 dark:prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-200 dark:prose-pre:border-neutral-800 prose-table:my-0 text-[13px] md:text-sm leading-relaxed ${msg.role === 'user' ? 'prose-p:last:mb-0 prose-p:first:mt-0' : ''}`}>
+                                            <div className={`prose dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-1 prose-pre:p-2 prose-pre:bg-neutral-100 dark:prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-200 dark:prose-pre:border-neutral-800 prose-table:my-0 prose-code:before:content-none prose-code:after:content-none text-[13px] md:text-sm leading-relaxed ${msg.role === 'user' ? 'prose-p:last:mb-0 prose-p:first:mt-0' : ''}`}>
                                                 <ReactMarkdown 
                                                     remarkPlugins={[remarkGfm, remarkMath]} 
                                                     rehypePlugins={[rehypeKatex, rehypeRaw]}
@@ -1244,35 +1546,188 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
 
                         {/* Task State Display */}
                         {currentThread?.taskState && (
-                            <div className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10 border-t border-blue-100 dark:border-blue-900/30">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-xs font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1">
-                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                                        长任务进度
-                                    </span>
-                                    <span className="text-[10px] text-blue-500/70">
-                                        {currentThread.taskState.currentStepIndex + 1} / {currentThread.taskState.plan.length}
+                            <div className="mx-4 my-3 p-3 lg:p-4 bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900/50 dark:to-neutral-800/20 border border-neutral-200/60 dark:border-neutral-700/60 rounded-2xl relative overflow-hidden shadow-sm">
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/[0.03] dark:via-blue-500/[0.05] to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+                                
+                                <div className="flex items-center justify-between mb-3 pb-3 border-b border-neutral-200/60 dark:border-neutral-700/60 relative z-10">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-neutral-800 dark:text-neutral-200">
+                                        <div className="relative flex h-2.5 w-2.5">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+                                        </div>
+                                        正在执行复杂决策任务
+                                    </div>
+                                    <span className="text-[10px] font-mono font-bold text-neutral-500 bg-white/50 dark:bg-neutral-900/50 px-2 py-0.5 rounded-md shadow-sm border border-neutral-200/50 dark:border-neutral-700/50">
+                                        STEP {currentThread.taskState.currentStepIndex + 1} / {Math.max(1, currentThread.taskState.plan.length)}
                                     </span>
                                 </div>
-                                <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-full h-1.5 mb-2 overflow-hidden">
-                                    <div 
-                                        className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" 
-                                        style={{ width: `${Math.min(100, Math.max(0, ((currentThread.taskState.currentStepIndex) / Math.max(1, currentThread.taskState.plan.length)) * 100))}%` }}
-                                    />
-                                </div>
-                                <div className="text-[10px] text-blue-600/80 dark:text-blue-400/80 truncate">
-                                    当前: {currentThread.taskState.plan[currentThread.taskState.currentStepIndex] || '完成'}
+                                
+                                <div className="space-y-2 relative z-10">
+                                    {currentThread.taskState.plan.map((step, idx) => {
+                                        const isActive = idx === currentThread.taskState!.currentStepIndex;
+                                        const isCompleted = idx < currentThread.taskState!.currentStepIndex;
+                                        
+                                        // Highlight logic: Only show immediate neighbors and active
+                                        if (Math.abs(idx - currentThread.taskState!.currentStepIndex) > 1 && !isCompleted) return null; // fold future ones optionally, but let's show all for full transparency, or just show active + 1 future
+                                        if (idx > currentThread.taskState!.currentStepIndex + 1) return null;
+                                        if (idx < currentThread.taskState!.currentStepIndex - 2) return null;
+                                        
+                                        return (
+                                            <div key={idx} className={`flex items-start gap-2.5 text-xs transition-opacity duration-300 ${isActive ? 'text-blue-700 dark:text-blue-300 font-bold' : isCompleted ? 'text-green-600 dark:text-green-500/80' : 'text-neutral-400 dark:text-neutral-500'}`}>
+                                                {isActive ? (
+                                                    <div className="w-4 h-4 shrink-0 mt-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded flex items-center justify-center">
+                                                        <ArrowRight className="w-3 h-3 animate-pulse" />
+                                                    </div>
+                                                ) : isCompleted ? (
+                                                    <div className="w-4 h-4 shrink-0 mt-0.5 bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-500 rounded flex items-center justify-center">
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-4 h-4 shrink-0 mt-0.5 border border-current rounded border-dashed opacity-50 flex items-center justify-center">
+                                                        <span className="text-[8px] font-mono">{idx + 1}</span>
+                                                    </div>
+                                                )}
+                                                <span className={`leading-relaxed line-clamp-2 mt-0.5 ${isCompleted ? 'line-through opacity-70' : ''}`}>{step}</span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
 
                         {/* Input Area */}
-                        <div className="p-3 md:p-4 bg-white dark:bg-neutral-900 border-t border-neutral-100 dark:border-neutral-800">
-                            <div className="relative flex items-end gap-2 md:gap-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-2xl p-1.5 md:p-2 border border-neutral-200 dark:border-neutral-700 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all">
+                        <div className="bg-white dark:bg-neutral-900 border-t border-neutral-100 dark:border-neutral-800">
+                            {/* Token Stats Bar */}
+                            <div className="px-4 py-1.5 bg-neutral-50/50 dark:bg-neutral-800/20 border-b border-neutral-100 dark:border-neutral-800/50 flex items-center justify-between text-[10px] md:text-xs">
+                                {currentThread ? (() => {
+                                    const totalCached = currentThread.messages.reduce((acc, m) => acc + (m.usage?.cachedPromptTokens || 0), 0);
+                                    const totalPrompt = currentThread.messages.reduce((acc, m) => acc + (m.usage?.promptTokens || 0), 0);
+                                    const totalUncached = Math.max(0, totalPrompt - totalCached);
+                                    const totalCompletion = currentThread.messages.reduce((acc, m) => acc + (m.usage?.completionTokens || 0), 0);
+                                    const totalOverall = currentThread.messages.reduce((acc, m) => acc + (m.usage?.totalTokens || 0), 0);
+                                    
+                                    // Calculate estimated text length from user texts plus reasoning plus AI responses
+                                    const estimatedTextLength = currentThread.messages.reduce((acc, m) => {
+                                        let len = (m.text || '').length + (m.reasoningContent || '').length;
+                                        if (m.toolCalls) len += JSON.stringify(m.toolCalls).length;
+                                        if (m.toolResults) len += JSON.stringify(m.toolResults).length;
+                                        return acc + len;
+                                    }, 0);
+
+                                    const estimatedHistoryAttachmentsTokens = currentThread.messages.reduce((acc, m) => {
+                                        if (!m.attachments) return acc;
+                                        // roughly estimate multimodal token costs (e.g., image ~ 500 tokens, basic text/pdf based on size)
+                                        return acc + m.attachments.reduce((a, att) => {
+                                            const actuallyUnsupported = !isMultimodalSupported(currentModelName, att.type);
+                                            if (actuallyUnsupported || att.unsupported) return a + 10;
+                                            return a + 500;
+                                        }, 0);
+                                    }, 0);
+
+                                    const estimatedNewAttachmentsTokens = attachments.reduce((a, att) => {
+                                        const actuallyUnsupported = !isMultimodalSupported(currentModelName, att.type);
+                                        if (actuallyUnsupported || att.unsupported) return a + 10;
+                                        return a + 500;
+                                    }, 0);
+                                    
+                                    // For new threads or first messages, nothing is cached.
+                                    const hasHistory = currentThread.messages && currentThread.messages.length > 0;
+                                    
+                                    const estimatedHit = hasHistory ? Math.ceil(estimatedTextLength / 3.5) + estimatedHistoryAttachmentsTokens : 0;
+                                    // For subsequent turns, new input + some system overhead might be un-cached.
+                                    const estimatedMiss = hasHistory ? Math.ceil(inputText.length / 3.5) + estimatedNewAttachmentsTokens + 50 : Math.ceil((estimatedTextLength + inputText.length) / 3.5) + estimatedHistoryAttachmentsTokens + estimatedNewAttachmentsTokens + 50;
+                                    
+                                    return (
+                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                                            <div className="flex items-center gap-1.5 text-neutral-500">
+                                                <span>预计输入:</span>
+                                                <span className="font-mono text-neutral-700 dark:text-neutral-300">~{(estimatedHit + estimatedMiss).toLocaleString()}</span>
+                                                <span className="text-neutral-400 text-[9px]">
+                                                    {estimatedHit > 0 ? `(可能命中 ~${estimatedHit.toLocaleString()} + 新Token ~${estimatedMiss.toLocaleString()})` : `(~${estimatedMiss.toLocaleString()} Tokens)`}
+                                                </span>
+                                            </div>
+                                            {totalOverall > 0 && (
+                                                <div className="group relative cursor-help">
+                                                    <span className="text-neutral-500 shadow-sm">
+                                                        累计消耗: <span className="font-mono text-blue-600 dark:text-blue-400 font-medium">{totalOverall.toLocaleString()} Tokens</span>
+                                                    </span>
+                                                    <div className="absolute bottom-full left-0 mb-2 w-48 p-2.5 bg-neutral-800 dark:bg-neutral-900 text-white rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all shadow-xl z-50 border border-neutral-700">
+                                                        <div className="font-medium mb-1.5 border-b border-neutral-700 pb-1.5">累计消耗详情</div>
+                                                        <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                                                            <span className="text-neutral-400">输入 (命中):</span>
+                                                            <span className="text-right text-green-400 font-mono">{totalCached.toLocaleString()}</span>
+                                                            
+                                                            <span className="text-neutral-400">输入 (未命中):</span>
+                                                            <span className="text-right text-amber-400 font-mono">{totalUncached.toLocaleString()}</span>
+                                                            
+                                                            <span className="text-neutral-400">输出消耗:</span>
+                                                            <span className="text-right text-blue-400 font-mono">{totalCompletion.toLocaleString()}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })() : (
+                                    <span className="text-neutral-400">AI 助理准备就绪</span>
+                                )}
+                            </div>
+                            
+                            <div className="p-3 md:p-4">
+                                {attachments.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mb-3">
+                                        {attachments.map((att) => (
+                                            <div key={att.id} className="relative group flex items-center gap-2 bg-neutral-100 dark:bg-neutral-800 rounded-lg p-2 pr-8 border border-neutral-200 dark:border-neutral-700">
+                                                {att.type.startsWith('image/') ? (
+                                                    <div className="w-8 h-8 rounded shrink-0 overflow-hidden bg-neutral-200">
+                                                        <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-8 h-8 rounded shrink-0 flex items-center justify-center bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
+                                                        <FileText className="w-4 h-4" />
+                                                    </div>
+                                                )}
+                                                <div className="flex flex-col min-w-0 max-w-[120px] md:max-w-[200px]">
+                                                    <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300 truncate" title={att.name}>{att.name}</span>
+                                                    <span className="text-[10px] text-neutral-500">{(att.size / 1024).toFixed(1)} KB</span>
+                                                </div>
+                                                {(!isMultimodalSupported(currentModelName, att.type || 'application/octet-stream') || att.unsupported) && (
+                                                    <div className="absolute -top-2 max-w-24 -left-2 bg-yellow-100 text-yellow-800 text-[9px] px-1.5 py-0.5 rounded shadow-sm border border-yellow-200" title="The selected model does not support file reading. File name will be sent as a hint.">
+                                                        ⚠ 不支持
+                                                    </div>
+                                                )}
+                                                <button
+                                                    onClick={() => removeAttachment(att.id)}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-500 transition-all rounded-full hover:bg-red-50 dark:hover:bg-red-900/30"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="relative flex items-end gap-2 md:gap-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-2xl p-1.5 md:p-2 border border-neutral-200 dark:border-neutral-700 focus-within:border-blue-500/50 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all">
+                                
+                                <input 
+                                    type="file" 
+                                    multiple 
+                                    ref={fileInputRef} 
+                                    className="hidden" 
+                                    onChange={handleFileSelect} 
+                                />
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="w-10 h-10 md:w-11 md:h-11 shrink-0 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl flex items-center justify-center transition-all"
+                                    title="上传图片/文件"
+                                >
+                                    <Paperclip className="w-5 h-5" />
+                                </button>
+
                                 <textarea
                                     ref={textareaRef}
                                     value={inputText}
                                     onChange={handleInput}
+                                    onPaste={handlePaste}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && !e.shiftKey) {
                                             e.preventDefault();
@@ -1305,7 +1760,7 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                                 ) : (
                                     <button 
                                         onClick={() => handleSend()}
-                                        disabled={!inputText.trim()}
+                                        disabled={!inputText.trim() && attachments.length === 0}
                                         className="w-10 h-10 md:w-11 md:h-11 shrink-0 bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-200 dark:disabled:bg-neutral-800 text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-blue-600/20 active:scale-95"
                                     >
                                         <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
@@ -1315,6 +1770,7 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
                         </div>
                     </div>
                 </div>
+            </div>
             </motion.div>
 
             {showConfig && (
