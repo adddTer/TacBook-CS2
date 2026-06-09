@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Match } from '../../types';
 import { SourceBadge, getMapDisplayName, getMapEnName } from './ReviewShared';
 import { isMyTeamMatch, calculateScoreFromRounds, getTeamNames, isPlayerInUserTeam } from '../../utils/matchHelpers';
@@ -19,6 +19,138 @@ interface MatchListProps {
     availableServers?: string[];
 }
 
+// --- MatchListItem Component ---
+const MatchListItem = React.memo<{
+    match: Match;
+    isSelected: boolean;
+    isSelectMode: boolean;
+    onSelectMatch: (match: Match) => void;
+    toggleSelection: (id: string) => void;
+}>(({ match, isSelected, isSelectMode, onSelectMatch, toggleSelection }) => {
+    const mapName = getMapDisplayName(match.mapId);
+    const mapEn = getMapEnName(match.mapId);
+    
+    let isMine = isMyTeamMatch(match);
+    let isWin = match.result === 'WIN';
+    let isTie = match.result === 'TIE';
+
+    // Use calculated score for robustness
+    const rawDisplayScore = calculateScoreFromRounds(match);
+    const rawTeams = getTeamNames(match);
+
+    const team1HasUserRoster = match.players.some(isPlayerInUserTeam);
+    const team2HasUserRoster = match.enemyPlayers.some(isPlayerInUserTeam);
+    const swapSides = !team1HasUserRoster && team2HasUserRoster;
+
+    const displayScore = swapSides ? { us: rawDisplayScore.them, them: rawDisplayScore.us } : rawDisplayScore;
+    const teamA = swapSides ? rawTeams.teamB : rawTeams.teamA;
+    const teamB = swapSides ? rawTeams.teamA : rawTeams.teamB;
+
+    if (swapSides) {
+        isWin = displayScore.us > displayScore.them;
+        isTie = displayScore.us === displayScore.them;
+    }
+
+    let statusText = '赛事数据';
+    let statusColor = 'text-neutral-500 bg-neutral-100 dark:bg-neutral-800';
+    let rowBorder = 'border-neutral-200 dark:border-neutral-800';
+    let indicatorColor = 'bg-neutral-400';
+
+    if (isMine) {
+        if (isWin) {
+            statusText = '胜利';
+            statusColor = 'text-green-700 bg-green-100 dark:text-green-400 dark:bg-green-500/20';
+            rowBorder = 'border-green-200 dark:border-green-800/50';
+            indicatorColor = 'bg-green-500';
+        }
+        else if (isTie) {
+            statusText = '平局';
+            statusColor = 'text-yellow-700 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-500/20';
+            rowBorder = 'border-yellow-200 dark:border-yellow-800/50';
+            indicatorColor = 'bg-yellow-500';
+        }
+        else {
+            statusText = '战败';
+            statusColor = 'text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-500/20';
+            rowBorder = 'border-red-200 dark:border-red-800/50';
+            indicatorColor = 'bg-red-500';
+        }
+    }
+
+    const usWon = displayScore.us > displayScore.them;
+    const themWon = displayScore.them > displayScore.us;
+
+    const usScoreColor = isMine ? (isWin ? 'text-green-600 dark:text-green-400' : '') : (usWon ? 'text-green-600 dark:text-green-400' : '');
+    const themScoreColor = isMine ? (!isWin && !isTie ? 'text-red-600 dark:text-red-400' : '') : (themWon ? 'text-green-600 dark:text-green-400' : '');
+
+    return (
+        <div 
+            onClick={() => isSelectMode ? toggleSelection(match.id) : onSelectMatch(match)}
+            className={`relative flex items-center p-3 sm:px-5 sm:py-4 cursor-pointer transition-all duration-200 bg-white dark:bg-[#111] border rounded-xl
+                ${isSelected ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/10' : `${rowBorder} hover:shadow-md hover:border-neutral-300 dark:hover:border-neutral-600`}
+            `}
+        >
+            {/* Left indicator strip */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${indicatorColor}`} />
+
+            {/* Selection Overlay Checkbox */}
+            {isSelectMode && (
+                <div className="mr-4">
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-neutral-300 dark:border-neutral-600'}`}>
+                        {isSelected && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                    </div>
+                </div>
+            )}
+
+            {/* Main Content */}
+            <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center justify-between gap-4 pl-2">
+                
+                {/* Info section (Map, Status) */}
+                <div className="flex flex-col gap-1.5 w-full md:w-[15%] shrink-0">
+                    <div className="flex items-center gap-2">
+                        <span className="text-base font-bold text-neutral-900 dark:text-white leading-none whitespace-nowrap">{mapName}</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm whitespace-nowrap ${statusColor}`}>
+                            {statusText}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Score section */}
+                <div className="flex items-center justify-center gap-2 sm:gap-4 flex-1 min-w-0 lg:px-4">
+                    <div className="flex-1 flex justify-end min-w-0">
+                        <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 truncate" title={teamA}>{teamA}</span>
+                    </div>
+                    <div className="px-3 py-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg flex items-center justify-center gap-2 font-mono font-bold text-lg min-w-[70px] shrink-0">
+                        <span className={usScoreColor}>{displayScore.us}</span>
+                        <span className="text-neutral-400 text-sm">:</span>
+                        <span className={themScoreColor}>{displayScore.them}</span>
+                    </div>
+                    <div className="flex-1 flex justify-start min-w-0">
+                        <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 truncate" title={teamB}>{teamB}</span>
+                    </div>
+                </div>
+
+                {/* Meta section (Source, Server) */}
+                <div className="flex flex-col items-start md:items-end w-full md:w-[25%] shrink-0 min-w-0 text-[11px] gap-1">
+                    <div className="flex items-center gap-2">
+                        {match.source !== 'Demo' && <SourceBadge source={match.source} />}
+                        {match.source === 'Demo' && match.parserVersion !== CURRENT_PARSER_VERSION && (
+                            <span className="px-1.5 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-bold rounded" title={!match.rawDemoJson ? "需重新导入" : "旧版数据"}>
+                                {!match.rawDemoJson ? "缺数据" : "版本旧"}
+                            </span>
+                        )}
+                    </div>
+                    {match.serverName && (
+                        <div className="text-neutral-400 truncate max-w-full text-left md:text-right" title={match.serverName}>
+                            {match.serverName}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+});
+
 export const MatchList: React.FC<MatchListProps> = ({ 
     matches, 
     onSelectMatch, 
@@ -35,9 +167,73 @@ export const MatchList: React.FC<MatchListProps> = ({
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isFilterExpanded, setIsFilterExpanded] = useState(false);
 
+    const [pageNumber, setPageNumber] = useState(1);
+    const itemsPerPage = 20;
+
     const hasNoData = matches.length === 0;
     const isFilteredEmpty = hasNoData && (availableMaps.length > 0 || availableServers.length > 0);
     const isTrulyEmpty = hasNoData && !isFilteredEmpty;
+
+    // Reset to page 1 when search or filter changes
+    React.useEffect(() => {
+        setPageNumber(1);
+    }, [searchQuery, matches.length, availableMaps, availableServers]);
+
+    // Sort all by date safely to prevent NaN crashing the sort in Safari
+    const items = useMemo(() => {
+        return [
+            ...matches.map(m => {
+                const parsedDate = new Date(m.date);
+                const time = isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime();
+                return { type: 'match' as const, data: m, date: parsedDate, time, id: m.id };
+            })
+        ].sort((a, b) => b.time - a.time);
+    }, [matches]);
+
+    const totalPages = Math.ceil(items.length / itemsPerPage);
+    const currentItems = useMemo(() => {
+        return items.slice(0, pageNumber * itemsPerPage);
+    }, [items, pageNumber, itemsPerPage]);
+
+    const loadMoreRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && pageNumber < totalPages) {
+                setPageNumber(prev => prev + 1);
+            }
+        }, { threshold: 0.1 });
+
+        const currentRef = loadMoreRef.current;
+        if (currentRef) {
+            observer.observe(currentRef);
+        }
+
+        return () => {
+            if (currentRef) {
+                observer.unobserve(currentRef);
+            }
+        };
+    }, [pageNumber, totalPages]);
+
+    const onSelectMatchRef = React.useRef(onSelectMatch);
+    React.useEffect(() => {
+        onSelectMatchRef.current = onSelectMatch;
+    }, [onSelectMatch]);
+
+    const handleSelectMatch = useCallback((match: Match) => {
+        onSelectMatchRef.current(match);
+    }, []);
+
+    // Selection Handlers
+    const toggleSelection = useCallback((id: string) => {
+        setSelectedIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) newSet.delete(id);
+            else newSet.add(id);
+            return newSet;
+        });
+    }, []);
 
     if (isTrulyEmpty) {
         return (
@@ -50,23 +246,6 @@ export const MatchList: React.FC<MatchListProps> = ({
             </div>
         );
     }
-    
-    // Sort all by date safely to prevent NaN crashing the sort in Safari
-    const items = [
-        ...matches.map(m => {
-            const parsedDate = new Date(m.date);
-            const time = isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime();
-            return { type: 'match' as const, data: m, date: parsedDate, time, id: m.id };
-        })
-    ].sort((a, b) => b.time - a.time);
-
-    // Selection Handlers
-    const toggleSelection = (id: string) => {
-        const newSet = new Set(selectedIds);
-        if (newSet.has(id)) newSet.delete(id);
-        else newSet.add(id);
-        setSelectedIds(newSet);
-    };
 
     const handleBatchDeleteClick = () => {
         if (!onBatchDelete) return;
@@ -203,136 +382,28 @@ export const MatchList: React.FC<MatchListProps> = ({
                 </div>
             ) : (
                     <div className="flex flex-col gap-3">
-                    {items.map(item => {
+                    {currentItems.map(item => {
                     const isSelected = selectedIds.has(item.id);
-
-                    // Render Regular Match
                     const match = item.data as Match;
-                    const mapName = getMapDisplayName(match.mapId);
-                    const mapEn = getMapEnName(match.mapId);
-                    
-                    let isMine = isMyTeamMatch(match);
-                    let isWin = match.result === 'WIN';
-                    let isTie = match.result === 'TIE';
-
-                    // Use calculated score for robustness
-                    const rawDisplayScore = calculateScoreFromRounds(match);
-                    const rawTeams = getTeamNames(match);
-
-                    const team1HasUserRoster = match.players.some(isPlayerInUserTeam);
-                    const team2HasUserRoster = match.enemyPlayers.some(isPlayerInUserTeam);
-                    const swapSides = !team1HasUserRoster && team2HasUserRoster;
-
-                    const displayScore = swapSides ? { us: rawDisplayScore.them, them: rawDisplayScore.us } : rawDisplayScore;
-                    const teamA = swapSides ? rawTeams.teamB : rawTeams.teamA;
-                    const teamB = swapSides ? rawTeams.teamA : rawTeams.teamB;
-
-                    if (swapSides) {
-                        isWin = displayScore.us > displayScore.them;
-                        isTie = displayScore.us === displayScore.them;
-                    }
-
-                    let statusText = '赛事数据';
-                    let statusColor = 'text-neutral-500 bg-neutral-100 dark:bg-neutral-800';
-                    let rowBorder = 'border-neutral-200 dark:border-neutral-800';
-                    let indicatorColor = 'bg-neutral-400';
-
-                    if (isMine) {
-                        if (isWin) {
-                            statusText = '胜利';
-                            statusColor = 'text-green-700 bg-green-100 dark:text-green-400 dark:bg-green-500/20';
-                            rowBorder = 'border-green-200 dark:border-green-800/50';
-                            indicatorColor = 'bg-green-500';
-                        }
-                        else if (isTie) {
-                            statusText = '平局';
-                            statusColor = 'text-yellow-700 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-500/20';
-                            rowBorder = 'border-yellow-200 dark:border-yellow-800/50';
-                            indicatorColor = 'bg-yellow-500';
-                        }
-                        else {
-                            statusText = '战败';
-                            statusColor = 'text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-500/20';
-                            rowBorder = 'border-red-200 dark:border-red-800/50';
-                            indicatorColor = 'bg-red-500';
-                        }
-                    }
-
-                    const usWon = displayScore.us > displayScore.them;
-                    const themWon = displayScore.them > displayScore.us;
-
-                    const usScoreColor = isMine ? (isWin ? 'text-green-600 dark:text-green-400' : '') : (usWon ? 'text-green-600 dark:text-green-400' : '');
-                    const themScoreColor = isMine ? (!isWin && !isTie ? 'text-red-600 dark:text-red-400' : '') : (themWon ? 'text-green-600 dark:text-green-400' : '');
-
                     return (
-                        <div 
-                            key={match.id} 
-                            onClick={() => isSelectMode ? toggleSelection(match.id) : onSelectMatch(match)}
-                            className={`relative flex items-center p-3 sm:px-5 sm:py-4 cursor-pointer transition-all duration-200 bg-white dark:bg-[#111] border rounded-xl
-                                ${isSelected ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/10' : `${rowBorder} hover:shadow-md hover:border-neutral-300 dark:hover:border-neutral-600`}
-                            `}
-                        >
-                            {/* Left indicator strip */}
-                            <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${indicatorColor}`} />
-
-                            {/* Selection Overlay Checkbox */}
-                            {isSelectMode && (
-                                <div className="mr-4">
-                                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-neutral-300 dark:border-neutral-600'}`}>
-                                        {isSelected && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Main Content */}
-                            <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center justify-between gap-4 pl-2">
-                                
-                                {/* Info section (Map, Status) */}
-                                <div className="flex flex-col gap-1.5 w-full md:w-[15%] shrink-0">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-base font-bold text-neutral-900 dark:text-white leading-none whitespace-nowrap">{mapName}</span>
-                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm whitespace-nowrap ${statusColor}`}>
-                                            {statusText}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Score section */}
-                                <div className="flex items-center justify-center gap-2 sm:gap-4 flex-1 min-w-0 lg:px-4">
-                                    <div className="flex-1 flex justify-end min-w-0">
-                                        <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 truncate" title={teamA}>{teamA}</span>
-                                    </div>
-                                    <div className="px-3 py-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg flex items-center justify-center gap-2 font-mono font-bold text-lg min-w-[70px] shrink-0">
-                                        <span className={usScoreColor}>{displayScore.us}</span>
-                                        <span className="text-neutral-400 text-sm">:</span>
-                                        <span className={themScoreColor}>{displayScore.them}</span>
-                                    </div>
-                                    <div className="flex-1 flex justify-start min-w-0">
-                                        <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 truncate" title={teamB}>{teamB}</span>
-                                    </div>
-                                </div>
-
-                                {/* Meta section (Source, Server) */}
-                                <div className="flex flex-col items-start md:items-end w-full md:w-[25%] shrink-0 min-w-0 text-[11px] gap-1">
-                                    <div className="flex items-center gap-2">
-                                        {match.source !== 'Demo' && <SourceBadge source={match.source} />}
-                                        {match.source === 'Demo' && match.parserVersion !== CURRENT_PARSER_VERSION && (
-                                            <span className="px-1.5 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-bold rounded" title={!match.rawDemoJson ? "需重新导入" : "旧版数据"}>
-                                                {!match.rawDemoJson ? "缺数据" : "版本旧"}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {match.serverName && (
-                                        <div className="text-neutral-400 truncate max-w-full text-left md:text-right" title={match.serverName}>
-                                            {match.serverName}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
+                        <MatchListItem
+                            key={item.id}
+                            match={match}
+                            isSelected={isSelected}
+                            isSelectMode={isSelectMode}
+                            onSelectMatch={handleSelectMatch}
+                            toggleSelection={toggleSelection}
+                        />
                     );
                 })}
             </div>
+            )}
+
+            {/* Load More Indicator */}
+            {pageNumber < totalPages && (
+                <div ref={loadMoreRef} className="py-8 flex justify-center items-center">
+                    <div className="w-6 h-6 border-2 border-neutral-200 dark:border-neutral-700 border-t-blue-500 rounded-full animate-spin"></div>
+                </div>
             )}
             
             {/* Batch Action Floating Bar */}

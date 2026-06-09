@@ -12,10 +12,100 @@ interface StatsTabProps {
 
 export const StatsTab: React.FC<StatsTabProps> = ({ allMatches }) => {
     const [selectedAbility, setSelectedAbility] = useState<AbilityType>('firepower');
-    const stats = useMemo(() => {
-        if (allMatches.length === 0) return null;
-        return calculateGlobalStats(allMatches);
+    const [isCalculating, setIsCalculating] = useState(true);
+    const [progress, setProgress] = useState(0);
+    const [stats, setStats] = useState<GlobalStats | null>(null);
+    const [distData, setDistData] = useState<{rating: number[], wpa: number[], damage: number[]}>({ rating: [], wpa: [], damage: [] });
+
+    useEffect(() => {
+        setIsCalculating(true);
+        setProgress(0);
+
+        // Fake an asymptotic progress to show activity with high granularity
+        let currentProgress = 0;
+        const interval = setInterval(() => {
+            currentProgress += (90 - currentProgress) * 0.08;
+            setProgress(currentProgress);
+        }, 16); // 60fps
+
+        let isCancelled = false;
+        
+        const doWork = async () => {
+            const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
+            await new Promise(r => setTimeout(r, 50)); // let initial UI render
+
+            if (isCancelled) return;
+
+            if (allMatches.length === 0) {
+                clearInterval(interval);
+                setStats(null);
+                setIsCalculating(false);
+                return;
+            }
+            
+            const result = calculateGlobalStats(allMatches);
+            await yieldToMain();
+            if (isCancelled) return;
+            
+            // Precompute distribution arrays in chunks to avoid blocking render
+            const rating: number[] = [];
+            const wpa: number[] = [];
+            const damage: number[] = [];
+            
+            const chunkSize = 20;
+            for (let i = 0; i < allMatches.length; i += chunkSize) {
+                const chunk = allMatches.slice(i, i + chunkSize);
+                chunk.forEach(m => {
+                    m.rounds?.forEach(r => {
+                        Object.values(r.playerStats).forEach(p => {
+                            rating.push(p.rating);
+                            wpa.push(p.wpa);
+                            damage.push(p.damage);
+                        });
+                    });
+                });
+                await yieldToMain();
+                if (isCancelled) return;
+            }
+
+            setDistData({ rating, wpa, damage });
+            setStats(result);
+            
+            clearInterval(interval);
+            setProgress(100);
+            
+            // Allow progress bar to reach 100% before dissolving
+            setTimeout(() => {
+                if (!isCancelled) setIsCalculating(false);
+            }, 250);
+        };
+
+        doWork();
+
+        return () => {
+            isCancelled = true;
+            clearInterval(interval);
+        };
     }, [allMatches]);
+
+    if (isCalculating) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in duration-300">
+                <div className="w-64 mb-8">
+                    <div className="h-1.5 w-full bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+                        <div 
+                            className="h-full bg-blue-500 transition-all ease-out" 
+                            style={{ width: `${progress}%`, transitionDuration: progress === 100 ? '200ms' : '16ms' }}
+                        ></div>
+                    </div>
+                </div>
+                <div className="text-neutral-900 dark:text-white font-bold tracking-widest text-sm uppercase mb-2">生成统计报告</div>
+                <div className="text-xs text-neutral-400 font-medium font-mono border border-neutral-200 dark:border-neutral-800 px-2 py-0.5 rounded shadow-sm bg-white dark:bg-neutral-900 w-16 text-center">
+                    {progress.toFixed(1)}%
+                </div>
+            </div>
+        );
+    }
 
     if (!stats) return <div className="p-4 text-neutral-500">暂无比赛数据</div>;
 
@@ -83,9 +173,9 @@ export const StatsTab: React.FC<StatsTabProps> = ({ allMatches }) => {
 
             {/* New Dimensions: Distributions */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <ContinuousDistributionChart title="Rating 分布" data={allMatches.flatMap(m => m.rounds.flatMap(r => Object.values(r.playerStats).map(p => p.rating)))} colors={['bg-blue-500']} isBetterHigher={true} />
-                <ContinuousDistributionChart title="WPA 分布" data={allMatches.flatMap(m => m.rounds.flatMap(r => Object.values(r.playerStats).map(p => p.wpa)))} colors={['bg-purple-500']} isBetterHigher={true} />
-                <ContinuousDistributionChart title="伤害分布" data={allMatches.flatMap(m => m.rounds.flatMap(r => Object.values(r.playerStats).map(p => p.damage)))} colors={['bg-yellow-500']} isBetterHigher={true} />
+                <ContinuousDistributionChart title="Rating 分布" data={distData.rating} colors={['bg-blue-500']} isBetterHigher={true} />
+                <ContinuousDistributionChart title="WPA 分布" data={distData.wpa} colors={['bg-purple-500']} isBetterHigher={true} />
+                <ContinuousDistributionChart title="伤害分布" data={distData.damage} colors={['bg-yellow-500']} isBetterHigher={true} />
             </div>
 
             <PlayerStatsGrid 

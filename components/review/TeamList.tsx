@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Match, TeamProfile } from '../../types';
 import { getTeams } from '../../utils/teamLoader';
 import { calculateTeamRating } from '../../utils/analytics/teamStatsCalculator';
@@ -22,9 +22,23 @@ export const TeamList: React.FC<TeamListProps> = ({ onSelectTeam, matches }) => 
         });
     }, [teams]);
 
-    const getTeamRating = (teamPlayers: any[]) => {
-        const rating = calculateTeamRating(teamPlayers, matches);
-        return rating > 0 ? rating.toFixed(2) : '-';
+    const [teamRatings, setTeamRatings] = useState<Record<string, string>>({});
+
+    // Defer heavy ratings calculation to unblock initial render
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            const ratings: Record<string, string> = {};
+            sortedTeams.forEach(team => {
+                const rating = calculateTeamRating(team.players, matches);
+                ratings[team.id] = rating > 0 ? rating.toFixed(2) : '-';
+            });
+            setTeamRatings(ratings);
+        }, 10);
+        return () => clearTimeout(timer);
+    }, [sortedTeams, matches]);
+
+    const getTeamRating = (teamId: string) => {
+        return teamRatings[teamId] || '...';
     };
 
     return (
@@ -44,10 +58,12 @@ export const TeamList: React.FC<TeamListProps> = ({ onSelectTeam, matches }) => 
                                 <h4 className="font-bold text-base text-neutral-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">{team.name}</h4>
                                 <div className="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mt-0.5 flex items-center gap-2">
                                     <span>{team.players.length} 名队员</span>
-                                    {getTeamRating(team.players) !== '-' && (
+                                    {getTeamRating(team.id) !== '-' && (
                                         <>
                                             <span className="w-1 h-1 rounded-full bg-neutral-300 dark:bg-neutral-600"></span>
-                                            <span className={getRatingStyle(Number(getTeamRating(team.players)), 'text')}>Rating {getTeamRating(team.players)}</span>
+                                            <span className={getTeamRating(team.id) !== '...' ? getRatingStyle(Number(getTeamRating(team.id)), 'text') : 'text-neutral-400'}>
+                                                Rating {getTeamRating(team.id)}
+                                            </span>
                                         </>
                                     )}
                                 </div>

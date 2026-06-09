@@ -21,12 +21,12 @@ const safeStorage = {
     }
 };
 
-const LS_KEY_PROVIDER = "tacbook_ai_provider";
-const LS_KEY_BASE_URL = "tacbook_ai_base_url";
-const LS_KEY_API_KEY = "tacbook_gemini_api_key";
-const LS_KEY_MODEL = "tacbook_gemini_model";
-const LS_KEY_THINKING_LEVEL = "tacbook_gemini_thinking_level";
-const LS_KEY_USE_ENV_KEY = "tacbook_use_env_api_key";
+const LS_KEY_PROVIDER = "copilot_ai_provider";
+const LS_KEY_BASE_URL = "copilot_ai_base_url";
+const LS_KEY_API_KEY = "copilot_gemini_api_key";
+const LS_KEY_MODEL = "copilot_gemini_model";
+const LS_KEY_THINKING_LEVEL = "copilot_gemini_thinking_level";
+const LS_KEY_USE_ENV_KEY = "copilot_use_env_api_key";
 
 export const getEnvApiKey = (): string => {
     // Try Vite env variables first

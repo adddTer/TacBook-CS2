@@ -1,8 +1,8 @@
 import { get, set } from 'idb-keyval';
 import { CopilotThread, CopilotMessage, DataSnapshot } from './types';
 
-const THREADS_KEY = 'tacbook_copilot_threads';
-const SNAPSHOTS_KEY = 'tacbook_copilot_snapshots';
+const THREADS_KEY = 'sys_copilot_threads';
+const SNAPSHOTS_KEY = 'sys_copilot_snapshots';
 
 // --- Mutex / Lock for DB ---
 let dbLock = Promise.resolve();

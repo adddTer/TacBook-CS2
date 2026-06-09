@@ -1,5 +1,5 @@
 import React from 'react';
-import { CopilotUI } from '../ui/CopilotUI';
+import { CopilotUI } from '../../copilot/ui/CopilotUI';
 import { toolDeclarations, createToolHandlers } from './tools';
 import { systemInstructionBase, toolNameMap } from './prompts';
 

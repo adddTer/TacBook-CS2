@@ -1,11 +1,215 @@
 import { Match, PlayerProfile, Side } from '../../types';
 import { resolveName } from '../demo/helpers';
+import { MatchAggregator } from './matchAggregator';
+import { calculatePlayerStats } from './playerStatsCalculator';
+
+export const calculateTeamDeepStats = (
+    teamId: string,
+    players: PlayerProfile[],
+    matches: Match[],
+    teamPlayerStats: any[],
+    internalSideFilter: 'ALL' | 'CT' | 'T',
+    minTeamMembers: number,
+    maxTeamMembers: number
+) => {
+    if (!players || players.length === 0 || !matches || matches.length === 0) return null;
+    
+    // We use the first player's id combined with players length as a surrogate for teamId
+    const teamIdSurrogate = `TDS-${players[0].id}-${players.length}`;
+    const cacheKey = generateFingerprint(teamIdSurrogate, matches, internalSideFilter, minTeamMembers, maxTeamMembers);
+    
+    if (cache.has(cacheKey)) {
+        return cache.get(cacheKey);
+    }
+
+    // 1. Array sorted stats calculation inline
+    const playerIdMap = new Map<string, string>();
+    players.forEach(p => {
+        playerIdMap.set(p.id, p.id);
+        if (p.steamids) {
+            p.steamids.forEach(steamId => playerIdMap.set(steamId, p.id));
+        }
+    });
+
+    const resolveKeyToPlayerId = (key: string): string | null => {
+        if (playerIdMap.has(key)) return playerIdMap.get(key)!;
+        return null;
+    };
+
+    const filteredPlayerRatings = new Map<string, { sum: number, count: number }>();
+    
+    matches.forEach(match => {
+        if (!match.rounds) return;
+        match.rounds.forEach(round => {
+            let mySide: any = null;
+            let matchingMembersCount = 0;
+            const roundPlayerIds = new Set<string>();
+            
+            Object.entries(round.playerStats).forEach(([key, pStat]) => {
+                let k = key;
+                if (k.startsWith('[U:')) {
+                    const parts = k.split(':');
+                    if (parts.length >= 3) {
+                        const accountId = parseInt(parts[2].replace(']', ''), 10);
+                        const base = BigInt('76561197960265728');
+                        k = (base + BigInt(accountId)).toString();
+                    }
+                } else if (/^\d+$/.test(k) && k.length < 16) {
+                    const accountId = parseInt(k, 10);
+                    const base = BigInt('76561197960265728');
+                    k = (base + BigInt(accountId)).toString();
+                }
+
+                const pid = resolveKeyToPlayerId(k) || resolveKeyToPlayerId(key);
+                if (pid) {
+                    if (!mySide) mySide = pStat.side;
+                    matchingMembersCount++;
+                    roundPlayerIds.add(pid);
+                }
+            });
+
+            if (!mySide || matchingMembersCount < minTeamMembers || matchingMembersCount > maxTeamMembers) {
+                return;
+            }
+            if (internalSideFilter !== 'ALL' && mySide !== internalSideFilter) {
+                return;
+            }
+
+            Object.entries(round.playerStats).forEach(([key, pStat]) => {
+                let k = key;
+                if (k.startsWith('[U:')) {
+                    const parts = k.split(':');
+                    if (parts.length >= 3) {
+                        const accountId = parseInt(parts[2].replace(']', ''), 10);
+                        const base = BigInt('76561197960265728');
+                        k = (base + BigInt(accountId)).toString();
+                    }
+                } else if (/^\d+$/.test(k) && k.length < 16) {
+                    const accountId = parseInt(k, 10);
+                    const base = BigInt('76561197960265728');
+                    k = (base + BigInt(accountId)).toString();
+                }
+
+                const pid = resolveKeyToPlayerId(k) || resolveKeyToPlayerId(key);
+                if (pid && roundPlayerIds.has(pid) && pStat.rating !== undefined) {
+                    const current = filteredPlayerRatings.get(pid) || { sum: 0, count: 0 };
+                    filteredPlayerRatings.set(pid, { sum: current.sum + pStat.rating, count: current.count + 1 });
+                }
+            });
+        });
+    });
+
+    const updatedStats = teamPlayerStats.map(p => {
+        const filtered = filteredPlayerRatings.get(p.id);
+        const newRating = filtered && filtered.count > 0 ? (filtered.sum / filtered.count).toFixed(2) : '-';
+        return {
+            ...p,
+            avgRating: newRating !== '-' ? Number(newRating).toFixed(2) : '-',
+            matches: filtered ? filtered.count : 0,
+            dataTypeLabel: '回合'
+        };
+    });
+
+    const sortedTeamPlayerStats = updatedStats.sort((a, b) => {
+        if (a.avgRating === '-' && b.avgRating === '-') return 0;
+        if (a.avgRating === '-') return 1;
+        if (b.avgRating === '-') return -1;
+        return Number(b.avgRating) - Number(a.avgRating);
+    });
+
+    // 2. Abilities
+    let totalRounds = 0;
+    let sums: Record<string, number> = {};
+
+    players.forEach(player => {
+        const history = matches
+            .filter(m => [...m.players, ...m.enemyPlayers].some(px => resolveName(px.playerId) === resolveName(player.id) || resolveName(px.steamid) === resolveName(player.id)))
+            .map(m => {
+                const rawStats = [...m.players, ...m.enemyPlayers].find(px => resolveName(px.playerId) === resolveName(player.id) || resolveName(px.steamid) === resolveName(player.id))!;
+                const aggregatedStats = MatchAggregator.aggregateMatchBySide(m, [rawStats], 'ALL')[0];
+                return { match: m, stats: aggregatedStats };
+            });
+
+        if (history.length === 0) return;
+
+        const fullStats = calculatePlayerStats(player.id, history, internalSideFilter as any);
+        const rounds = history.reduce((sum, h) => sum + (h.stats.r3_rounds_played || h.match.rounds?.length || Math.max(h.match.score.us + h.match.score.them, 1)), 0);
+
+        if (rounds > 0) {
+            totalRounds += rounds;
+            Object.entries(fullStats.filtered.details).forEach(([k, v]) => {
+                if (typeof v === 'number') {
+                    sums[k] = (sums[k] || 0) + v * rounds;
+                }
+            });
+            sums['scoreFirepower'] = (sums['scoreFirepower'] || 0) + fullStats.filtered.scoreFirepower * rounds;
+            sums['scoreEntry'] = (sums['scoreEntry'] || 0) + fullStats.filtered.scoreEntry * rounds;
+            sums['scoreSniper'] = (sums['scoreSniper'] || 0) + fullStats.filtered.scoreSniper * rounds;
+            sums['scoreClutch'] = (sums['scoreClutch'] || 0) + fullStats.filtered.scoreClutch * rounds;
+            sums['scoreOpening'] = (sums['scoreOpening'] || 0) + fullStats.filtered.scoreOpening * rounds;
+            sums['scoreTrade'] = (sums['scoreTrade'] || 0) + fullStats.filtered.scoreTrade * rounds;
+            sums['scoreUtility'] = (sums['scoreUtility'] || 0) + fullStats.filtered.scoreUtility * rounds;
+        }
+    });
+
+    let teamAbilitiesFilteredData = null;
+    let teamAbilities = null;
+    if (totalRounds > 0) {
+        const averagedFiltered: Record<string, number> = {};
+        Object.entries(sums).forEach(([k, v]) => {
+            averagedFiltered[k] = v / totalRounds;
+        });
+        teamAbilitiesFilteredData = averagedFiltered;
+        
+        teamAbilities = [
+            { id: 'firepower', label: '火力', value: averagedFiltered.scoreFirepower }, 
+            { id: 'entry', label: '破点', value: averagedFiltered.scoreEntry }, 
+            { id: 'sniper', label: '狙击', value: averagedFiltered.scoreSniper }, 
+            { id: 'clutch', label: '残局', value: averagedFiltered.scoreClutch }, 
+            { id: 'opening', label: '开局', value: averagedFiltered.scoreOpening, isPct: false }, 
+            { id: 'trade', label: '补枪', value: averagedFiltered.scoreTrade }, 
+            { id: 'utility', label: '道具', value: averagedFiltered.scoreUtility }, 
+        ];
+    }
+
+    const result = {
+        sortedTeamPlayerStats,
+        teamAbilitiesFilteredData,
+        teamAbilities
+    };
+    
+    cache.set(cacheKey, result);
+    return result;
+};
+
+
+// Simple Cache implementation for team stats calculating
+const cache = new Map<string, any>();
+
+function generateFingerprint(teamId: string, matches: Match[], sideFilter: string, minTeamMembers?: number, maxTeamMembers?: number): string {
+    const matchHash = matches.length + '-' + (matches[0]?.id || '') + '-' + (matches[matches.length - 1]?.id || '');
+    return `${teamId}-${matchHash}-${sideFilter}-${minTeamMembers}-${maxTeamMembers}`;
+}
+
+export const clearTeamStatsCache = () => {
+    cache.clear();
+};
 
 /**
  * Calculates the overall rating of a team by computing a weighted average
  * of each member's rating based on the number of rounds they played.
  */
 export const calculateTeamRating = (players: PlayerProfile[], matches: Match[]): number => {
+    if (!players || players.length === 0 || !matches || matches.length === 0) return 0;
+    
+    // We use the first player's id combined with players length as a surrogate for teamId
+    const teamIdSurrogate = `TR-${players[0].id}-${players.length}`;
+    const cacheKey = generateFingerprint(teamIdSurrogate, matches, 'ALL');
+    
+    if (cache.has(cacheKey)) {
+        return cache.get(cacheKey);
+    }
+
     let totalScore = 0;
     let totalRoundsPlayed = 0;
 
@@ -55,7 +259,9 @@ export const calculateTeamRating = (players: PlayerProfile[], matches: Match[]):
         return 0; // Return 0 if the team hasn't played any rounds
     }
 
-    return totalScore / totalRoundsPlayed;
+    const result = totalScore / totalRoundsPlayed;
+    cache.set(cacheKey, result);
+    return result;
 };
 
 export interface TeamComprehensiveStats {
@@ -83,6 +289,14 @@ export const calculateComprehensiveTeamStats = (
     minTeamMembers: number = 3, 
     maxTeamMembers: number = 5
 ): TeamComprehensiveStats => {
+    if (!players || players.length === 0) return { roundsPlayed: 0, roundsWon: 0, kills: 0, deaths: 0, assists: 0, pistolRoundsPlayed: 0, pistolRoundsWon: 0, totalMapsPlayed: 0, mapWinRates: {}, firstTo5Wins: 0, firstTo5Matches: 0, totalMatchesWith5: 0, firstTo10Wins: 0, firstTo10Matches: 0, totalMatchesWith10: 0 };
+    const teamIdSurrogate = `TC-${players[0].id}-${players.length}`;
+    const cacheKey = generateFingerprint(teamIdSurrogate, matches, sideFilter, minTeamMembers, maxTeamMembers);
+    
+    if (cache.has(cacheKey)) {
+        return cache.get(cacheKey);
+    }
+
     const stats: TeamComprehensiveStats = {
         roundsPlayed: 0,
         roundsWon: 0,
@@ -234,6 +448,7 @@ export const calculateComprehensiveTeamStats = (
         }
     }
 
+    cache.set(cacheKey, stats);
     return stats;
 };
 export interface TeamWinRateMatrix {
@@ -243,6 +458,14 @@ export interface TeamWinRateMatrix {
 }
 
 export const calculateTeamWinRateMatrix = (players: PlayerProfile[], matches: Match[], sideFilter: 'ALL' | 'CT' | 'T', minTeamMembers: number = 3, maxTeamMembers: number = 5): TeamWinRateMatrix => {
+    if (!players || players.length === 0) return { matrix: Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => ({ wins: 0, total: 0 }))) };
+    const teamIdSurrogate = `TWM-${players[0].id}-${players.length}`;
+    const cacheKey = generateFingerprint(teamIdSurrogate, matches, sideFilter, minTeamMembers, maxTeamMembers);
+    
+    if (cache.has(cacheKey)) {
+        return cache.get(cacheKey);
+    }
+
     // Initialize 5x5 matrix
     const matrix: { wins: number; total: number }[][] = Array.from({ length: 5 }, () => 
         Array.from({ length: 5 }, () => ({ wins: 0, total: 0 }))
@@ -339,6 +562,8 @@ export const calculateTeamWinRateMatrix = (players: PlayerProfile[], matches: Ma
         }
     }
 
-    return { matrix };
+    const result = { matrix };
+    cache.set(cacheKey, result);
+    return result;
 };
 

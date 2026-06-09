@@ -17,6 +17,17 @@ export interface AggregatedPlayer {
   role: RoleDefinition;
 }
 
+const matchCache = new Map<string, any>();
+
+function getFingerprint(matches: Match[], fn: string, ...args: any[]) {
+    const hash = matches.length + '-' + (matches[0]?.id || '') + '-' + (matches[matches.length - 1]?.id || '');
+    return `${fn}-${hash}-${JSON.stringify(args)}`;
+}
+
+export const clearMatchAggregatorCache = () => {
+    matchCache.clear();
+};
+
 /**
  * Generic aggregator for match statistics.
  * Can be used to combine stats from multiple matches into a single set of player profiles.
@@ -27,6 +38,9 @@ export class MatchAggregator {
    * Useful for tournament-wide or series-wide statistics.
    */
   static aggregate(matches: Match[]): PlayerMatchStats[] {
+    const cacheKey = getFingerprint(matches, 'aggregate');
+    if (matchCache.has(cacheKey)) return matchCache.get(cacheKey);
+
     const statsMap = new Map<string, PlayerMatchStats>();
 
     matches.forEach((match) => {
@@ -239,6 +253,7 @@ export class MatchAggregator {
       }
     }
 
+    matchCache.set(cacheKey, aggregated);
     return aggregated;
   }
 
@@ -246,6 +261,9 @@ export class MatchAggregator {
    * Performs a deep aggregation including ability scores for all players.
    */
   static aggregateFull(matches: Match[]): AggregatedPlayer[] {
+    const cacheKey = getFingerprint(matches, 'aggregateFull');
+    if (matchCache.has(cacheKey)) return matchCache.get(cacheKey);
+
     // 1. Group matches by player
     const playerHistoryMap = new Map<
       string,
@@ -279,7 +297,7 @@ export class MatchAggregator {
       }),
     );
 
-    return Array.from(playerHistoryMap.entries()).map(([id, history]) => {
+    const finalResult = Array.from(playerHistoryMap.entries()).map(([id, history]) => {
       const full = calculatePlayerStats(id, history, "ALL");
       const basic = basicStatsMap.get(id)!;
       const role = identifyRole(full.filtered);
@@ -294,6 +312,9 @@ export class MatchAggregator {
         role,
       };
     });
+
+    matchCache.set(cacheKey, finalResult);
+    return finalResult;
   }
 
   /**
@@ -305,6 +326,9 @@ export class MatchAggregator {
     targetPlayers: PlayerMatchStats[],
     filter: SideFilter,
   ): PlayerMatchStats[] {
+    const cacheKey = getFingerprint([match], 'aggregateMatchBySide', targetPlayers.map(t => t.playerId).join(','), filter);
+    if (matchCache.has(cacheKey)) return matchCache.get(cacheKey);
+
     if (!match.rounds || match.rounds.length === 0) return targetPlayers;
 
     const safeDiv = (a: number, b: number) => (b === 0 ? 0 : a / b);
@@ -469,6 +493,7 @@ export class MatchAggregator {
       }
     }
 
+    matchCache.set(cacheKey, result);
     return result;
   }
 }

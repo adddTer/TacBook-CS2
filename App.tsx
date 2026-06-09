@@ -20,7 +20,7 @@ import { ConfirmModal } from './components/ConfirmModal';
 import { AlertModal } from './components/AlertModal';
 import { AiConfigModal } from './copilot/ui/AiConfigModal';
 import { LiquipediaScraper } from './components/LiquipediaScraper';
-import { GlobalCopilot } from './copilot/project/GlobalCopilot';
+import { GlobalCopilot } from './components/CopilotIntegration/GlobalCopilot';
 import { useTactics } from './hooks/useTactics';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useAppStorage } from './hooks/useAppStorage'; 

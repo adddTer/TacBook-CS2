@@ -61,7 +61,7 @@ export const AiConfigModal: React.FC<AiConfigModalProps> = ({ onClose, onSave })
         setProvider(config.provider);
         setBaseUrl(config.baseUrl);
         // If using env key, don't show it in the input field, keep the local one
-        setApiKey(typeof window !== 'undefined' ? window.localStorage.getItem('tacbook_gemini_api_key') || '' : '');
+        setApiKey(typeof window !== 'undefined' ? window.localStorage.getItem('copilot_gemini_api_key') || '' : '');
         setModel(config.model);
         setThinkingLevel(config.thinkingLevel || 'HIGH');
         setUseEnvKey(isUsingEnvApiKey());

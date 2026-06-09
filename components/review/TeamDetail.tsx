@@ -1,13 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Match, TeamProfile } from '../../types';
 import { PlayerList } from './PlayerList';
-import { calculateTeamRating, calculateTeamWinRateMatrix, calculateComprehensiveTeamStats } from '../../utils/analytics/teamStatsCalculator';
+import { calculateTeamRating, calculateTeamWinRateMatrix, calculateComprehensiveTeamStats, calculateTeamDeepStats } from '../../utils/analytics/teamStatsCalculator';
 import { getRatingStyle } from '../../utils/styleConstants';
 import { MATRIX_PRE } from '../../utils/rating3/wpa/constants';
 import { MAPS } from '../../constants';
-import { MatchAggregator } from '../../utils/analytics/matchAggregator';
-import { calculatePlayerStats } from '../../utils/analytics/playerStatsCalculator';
-import { resolveName } from '../../utils/demo/helpers';
 import { PlayerAbilitySection } from './player_detail/PlayerAbilitySection';
 import { AbilityType } from './player_detail/config';
 
@@ -30,185 +27,110 @@ export const TeamDetail: React.FC<TeamDetailProps> = ({ team, playerStats, match
         return playerStats.filter(p => team.players.some(tp => tp.id === p.id));
     }, [playerStats, team.players]);
 
-    const teamRatingStr = useMemo(() => {
-        const rating = calculateTeamRating(team.players, matches);
-        return rating > 0 ? rating.toFixed(2) : '-';
-    }, [team.players, matches]);
-    
-    // Use internal enum matching old toggle
     const internalSideFilter = sideFilter === 'All' ? 'ALL' : sideFilter;
 
-    // Sort players by Rating within the team detail
-    const sortedTeamPlayerStats = useMemo(() => {
-        // Build a quick lookup for playerId -> player
-        const playerIdMap = new Map<string, string>();
-        team.players.forEach(p => {
-            playerIdMap.set(p.id, p.id);
-            if (p.steamids) {
-                p.steamids.forEach(steamId => {
-                    playerIdMap.set(steamId, p.id);
-                });
-            }
-        });
+    const [isCalculating, setIsCalculating] = useState(true);
+    const [progress, setProgress] = useState(0);
+    const [statsResult, setStatsResult] = useState<{
+        teamRatingStr: string;
+        sortedTeamPlayerStats: any[];
+        winRateMatrix: { wins: number, total: number }[][];
+        compStats: any;
+        teamAbilitiesFilteredData: any;
+        teamAbilities: any;
+    } | null>(null);
 
-        // Resolve generic keys mapping dynamically
-        const resolveKeyToPlayerId = (key: string): string | null => {
-            if (playerIdMap.has(key)) return playerIdMap.get(key)!;
-            // Maybe handle missing normalizations if needed
-            return null;
+    React.useEffect(() => {
+        setIsCalculating(true);
+        setProgress(0);
+
+        // Fake an asymptotic progress
+        let currentProgress = 0;
+        const interval = setInterval(() => {
+            currentProgress += (90 - currentProgress) * 0.08;
+            setProgress(currentProgress);
+        }, 16); // 60fps
+
+        let isCancelled = false;
+        
+        const doWork = async () => {
+            const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
+            await new Promise(r => setTimeout(r, 50)); // let UI render initially
+            
+            if (isCancelled) return;
+
+            // 1. Team Rating
+            const rawRating = calculateTeamRating(team.players, matches);
+            const teamRatingStr = rawRating > 0 ? rawRating.toFixed(2) : '-';
+            await yieldToMain();
+            if (isCancelled) return;
+
+            // 2. Matrix & Comp Stats
+            const winRateMatrix = calculateTeamWinRateMatrix(team.players, matches, internalSideFilter, minTeamMembers, maxTeamMembers).matrix;
+            await yieldToMain();
+            if (isCancelled) return;
+
+            const compStats = calculateComprehensiveTeamStats(team.players, matches, internalSideFilter, minTeamMembers, maxTeamMembers);
+            await yieldToMain();
+            if (isCancelled) return;
+
+            // 3. Deep Stats (Cached)
+            const deepStats = calculateTeamDeepStats(
+                team.id,
+                team.players,
+                matches,
+                teamPlayerStats,
+                internalSideFilter,
+                minTeamMembers,
+                maxTeamMembers
+            );
+            await yieldToMain();
+            if (isCancelled) return;
+
+            setStatsResult({
+                teamRatingStr,
+                sortedTeamPlayerStats: deepStats?.sortedTeamPlayerStats || teamPlayerStats,
+                winRateMatrix,
+                compStats,
+                teamAbilitiesFilteredData: deepStats?.teamAbilitiesFilteredData,
+                teamAbilities: deepStats?.teamAbilities
+            });
+            
+            clearInterval(interval);
+            setProgress(100);
+            setTimeout(() => {
+                if (!isCancelled) setIsCalculating(false);
+            }, 250);
         };
 
-        const filteredPlayerRatings = new Map<string, { sum: number, count: number }>();
-        
-        matches.forEach(match => {
-            if (!match.rounds) return;
-            match.rounds.forEach(round => {
-                let mySide: any = null;
-                let matchingMembersCount = 0;
-                const roundPlayerIds = new Set<string>();
-                
-                Object.entries(round.playerStats).forEach(([key, pStat]) => {
-                    let k = key;
-                    if (k.startsWith('[U:')) {
-                        const parts = k.split(':');
-                        if (parts.length >= 3) {
-                            const accountId = parseInt(parts[2].replace(']', ''), 10);
-                            const base = BigInt('76561197960265728');
-                            k = (base + BigInt(accountId)).toString();
-                        }
-                    } else if (/^\d+$/.test(k) && k.length < 16) {
-                        const accountId = parseInt(k, 10);
-                        const base = BigInt('76561197960265728');
-                        k = (base + BigInt(accountId)).toString();
-                    }
+        doWork();
 
-                    const pid = resolveKeyToPlayerId(k) || resolveKeyToPlayerId(key);
-                    if (pid) {
-                        if (!mySide) mySide = pStat.side;
-                        matchingMembersCount++;
-                        roundPlayerIds.add(pid);
-                    }
-                });
+        return () => {
+            isCancelled = true;
+            clearInterval(interval);
+        };
+    }, [team.id, team.players, matches, teamPlayerStats, minTeamMembers, maxTeamMembers, internalSideFilter]);
 
-                if (!mySide || matchingMembersCount < minTeamMembers || matchingMembersCount > maxTeamMembers) {
-                    return;
-                }
-                if (internalSideFilter !== 'ALL' && mySide !== internalSideFilter) {
-                    return;
-                }
+    if (isCalculating || !statsResult) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in duration-300">
+                <div className="w-64 mb-8">
+                    <div className="h-1.5 w-full bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+                        <div 
+                            className="h-full bg-blue-500 transition-all ease-out" 
+                            style={{ width: `${progress}%`, transitionDuration: progress === 100 ? '200ms' : '16ms' }}
+                        ></div>
+                    </div>
+                </div>
+                <div className="text-neutral-900 dark:text-white font-bold tracking-widest text-sm uppercase mb-2">生成队伍报告</div>
+                <div className="text-xs text-neutral-400 font-medium font-mono border border-neutral-200 dark:border-neutral-800 px-2 py-0.5 rounded shadow-sm bg-white dark:bg-neutral-900 w-16 text-center">
+                    {progress.toFixed(1)}%
+                </div>
+            </div>
+        );
+    }
 
-                // If valid round, aggregate the rating scores
-                Object.entries(round.playerStats).forEach(([key, pStat]) => {
-                    let k = key;
-                    if (k.startsWith('[U:')) {
-                        const parts = k.split(':');
-                        if (parts.length >= 3) {
-                            const accountId = parseInt(parts[2].replace(']', ''), 10);
-                            const base = BigInt('76561197960265728');
-                            k = (base + BigInt(accountId)).toString();
-                        }
-                    } else if (/^\d+$/.test(k) && k.length < 16) {
-                        const accountId = parseInt(k, 10);
-                        const base = BigInt('76561197960265728');
-                        k = (base + BigInt(accountId)).toString();
-                    }
-
-                    const pid = resolveKeyToPlayerId(k) || resolveKeyToPlayerId(key);
-                    if (pid && roundPlayerIds.has(pid) && pStat.rating !== undefined) {
-                        const current = filteredPlayerRatings.get(pid) || { sum: 0, count: 0 };
-                        filteredPlayerRatings.set(pid, { sum: current.sum + pStat.rating, count: current.count + 1 });
-                    }
-                });
-            });
-        });
-
-        const updatedStats = teamPlayerStats.map(p => {
-            const filtered = filteredPlayerRatings.get(p.id);
-            const newRating = filtered && filtered.count > 0 ? (filtered.sum / filtered.count).toFixed(2) : '-';
-            return {
-                ...p,
-                avgRating: newRating !== '-' ? Number(newRating).toFixed(2) : '-', // override avgRating specifically
-                matches: filtered ? filtered.count : 0, // override matches to represent rounds played in this filter context
-                dataTypeLabel: '回合'
-            };
-        });
-
-        return updatedStats.sort((a, b) => {
-            if (a.avgRating === '-' && b.avgRating === '-') return 0;
-            if (a.avgRating === '-') return 1;
-            if (b.avgRating === '-') return -1;
-            return Number(b.avgRating) - Number(a.avgRating);
-        });
-    }, [teamPlayerStats, team.players, matches, minTeamMembers, maxTeamMembers, internalSideFilter]);
-
-    const winRateMatrix = useMemo(() => {
-        return calculateTeamWinRateMatrix(team.players, matches, internalSideFilter, minTeamMembers, maxTeamMembers).matrix;
-    }, [team.players, matches, internalSideFilter, minTeamMembers, maxTeamMembers]);
-
-    const compStats = useMemo(() => {
-        return calculateComprehensiveTeamStats(team.players, matches, internalSideFilter, minTeamMembers, maxTeamMembers);
-    }, [team.players, matches, internalSideFilter, minTeamMembers, maxTeamMembers]);
-
-    // Build the team average 7-dim stats using logic consistent with Team Rating
-    const teamAbilitiesFilteredData = useMemo(() => {
-        let totalRounds = 0;
-        let sums: Record<string, number> = {};
-
-        team.players.forEach(player => {
-            const history = matches
-                .filter(m => [...m.players, ...m.enemyPlayers].some(px => resolveName(px.playerId) === resolveName(player.id) || resolveName(px.steamid) === resolveName(player.id)))
-                .map(m => {
-                    const rawStats = [...m.players, ...m.enemyPlayers].find(px => resolveName(px.playerId) === resolveName(player.id) || resolveName(px.steamid) === resolveName(player.id))!;
-                    const aggregatedStats = MatchAggregator.aggregateMatchBySide(m, [rawStats], 'ALL')[0];
-                    return { match: m, stats: aggregatedStats };
-                });
-
-            if (history.length === 0) return;
-
-            const fullStats = calculatePlayerStats(player.id, history, internalSideFilter as any);
-            const rounds = history.reduce((sum, h) => sum + (h.stats.r3_rounds_played || h.match.rounds?.length || Math.max(h.match.score.us + h.match.score.them, 1)), 0);
-
-            if (rounds > 0) {
-                totalRounds += rounds;
-                Object.entries(fullStats.filtered.details).forEach(([k, v]) => {
-                    if (typeof v === 'number') {
-                        sums[k] = (sums[k] || 0) + v * rounds;
-                    }
-                });
-                // Also add the primary scores if they are missing
-                sums['scoreFirepower'] = (sums['scoreFirepower'] || 0) + fullStats.filtered.scoreFirepower * rounds;
-                sums['scoreEntry'] = (sums['scoreEntry'] || 0) + fullStats.filtered.scoreEntry * rounds;
-                sums['scoreSniper'] = (sums['scoreSniper'] || 0) + fullStats.filtered.scoreSniper * rounds;
-                sums['scoreClutch'] = (sums['scoreClutch'] || 0) + fullStats.filtered.scoreClutch * rounds;
-                sums['scoreOpening'] = (sums['scoreOpening'] || 0) + fullStats.filtered.scoreOpening * rounds;
-                sums['scoreTrade'] = (sums['scoreTrade'] || 0) + fullStats.filtered.scoreTrade * rounds;
-                sums['scoreUtility'] = (sums['scoreUtility'] || 0) + fullStats.filtered.scoreUtility * rounds;
-            }
-        });
-
-        if (totalRounds === 0) return null;
-
-        const averagedFiltered: Record<string, number> = {};
-        Object.entries(sums).forEach(([k, v]) => {
-            averagedFiltered[k] = v / totalRounds;
-        });
-        
-        return averagedFiltered;
-    }, [team.players, matches, internalSideFilter]);
-
-    const teamAbilities = useMemo(() => {
-        if (!teamAbilitiesFilteredData) return null;
-        const sums = teamAbilitiesFilteredData;
-        return [
-            { id: 'firepower' as AbilityType, label: '火力', value: sums.scoreFirepower }, 
-            { id: 'entry' as AbilityType, label: '破点', value: sums.scoreEntry }, 
-            { id: 'sniper' as AbilityType, label: '狙击', value: sums.scoreSniper }, 
-            { id: 'clutch' as AbilityType, label: '残局', value: sums.scoreClutch }, 
-            { id: 'opening' as AbilityType, label: '开局', value: sums.scoreOpening, isPct: false }, 
-            { id: 'trade' as AbilityType, label: '补枪', value: sums.scoreTrade }, 
-            { id: 'utility' as AbilityType, label: '道具', value: sums.scoreUtility }, 
-        ];
-    }, [teamAbilitiesFilteredData]);
+    const { teamRatingStr, sortedTeamPlayerStats, winRateMatrix, compStats, teamAbilitiesFilteredData, teamAbilities } = statsResult;
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
@@ -426,7 +348,8 @@ export const TeamDetail: React.FC<TeamDetailProps> = ({ team, playerStats, match
                 <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 sm:p-6 shadow-sm overflow-hidden flex flex-col">
                     <h3 className="text-lg font-bold text-neutral-900 dark:text-white mb-4">各地图胜率</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                        {Object.entries(compStats.mapWinRates).map(([mapId, rate]) => {
+                        {Object.entries(compStats.mapWinRates).map(([mapId, rateRaw]) => {
+                            const rate = rateRaw as {wins: number, total: number};
                             const winRateRaw = (rate.wins / rate.total) * 100;
                             const winRate = winRateRaw.toFixed(1);
                             const mapObj = MAPS.find(m => m.id === mapId);

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Match, PlayerMatchStats } from '../../../types';
 import { getMapDisplayName, getRatingColorClass } from '../ReviewShared';
 import { isMyTeamMatch } from '../../../utils/matchHelpers';
@@ -10,11 +10,21 @@ interface PlayerMatchHistoryProps {
 }
 
 export const PlayerMatchHistory: React.FC<PlayerMatchHistoryProps> = ({ history, onMatchClick }) => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 20;
+
+    const totalPages = Math.ceil(history.length / itemsPerPage);
+    const currentItems = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return history.slice(startIndex, startIndex + itemsPerPage);
+    }, [history, currentPage]);
+
     return (
         <div>
-            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3 px-1">全部比赛</h3>
-            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden divide-y divide-neutral-100 dark:divide-neutral-800 shadow-sm">
-                {history.map(({ match, stats }) => {
+            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3 px-1">全部比赛 ({history.length})</h3>
+            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden shadow-sm flex flex-col">
+                <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                {currentItems.map(({ match, stats }) => {
                     const mapName = getMapDisplayName(match.mapId);
                     const kdDiff = stats.kills - stats.deaths;
 
@@ -75,6 +85,29 @@ export const PlayerMatchHistory: React.FC<PlayerMatchHistoryProps> = ({ history,
                         </div>
                     );
                 })}
+                </div>
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                    <div className="p-3 border-t border-neutral-100 dark:border-neutral-800 flex justify-center items-center gap-4 bg-neutral-50 dark:bg-neutral-900/50">
+                        <button 
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className={`p-1.5 rounded-lg ${currentPage === 1 ? 'opacity-50 cursor-not-allowed text-neutral-400' : 'text-neutral-600 hover:bg-neutral-200 dark:text-neutral-300 dark:hover:bg-neutral-800 transition-colors'}`}
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <span className="text-[10px] font-medium text-neutral-500">
+                            {currentPage} / {totalPages}
+                        </span>
+                        <button 
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className={`p-1.5 rounded-lg ${currentPage === totalPages ? 'opacity-50 cursor-not-allowed text-neutral-400' : 'text-neutral-600 hover:bg-neutral-200 dark:text-neutral-300 dark:hover:bg-neutral-800 transition-colors'}`}
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

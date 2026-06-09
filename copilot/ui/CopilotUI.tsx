@@ -532,7 +532,7 @@ export const CopilotUI: React.FC<CopilotUIProps> = ({
     createHandlers,
     systemInstructionBase,
     context,
-    title = "TacBook Copilot",
+    title = "AI Copilot",
     toolNameMap = {},
     emptyStateTitle = "我是你的智能助手",
     emptyStateDescription = "你可以问我任何问题。我会通过 Agentic Workflow 为你提供最专业的建议。"

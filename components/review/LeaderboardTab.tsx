@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Match } from '../../types';
 import { getAllPlayers } from '../../utils/teamLoader';
 import { resolveName } from '../../utils/demo/helpers';
@@ -22,57 +22,111 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
     const [sortField, setSortField] = useState<SortField>('rating');
     const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
     const [includeStrangers, setIncludeStrangers] = useState(false);
+    
+    const [isCalculating, setIsCalculating] = useState(true);
+    const [progress, setProgress] = useState(0);
+    const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
 
     // --- Core Calculation Logic ---
-    const leaderboardData = useMemo(() => {
-        const aggregated = MatchAggregator.aggregateFull(allMatches);
-        const rosterIds = new Set(getAllPlayers().map(r => r.id));
+    useEffect(() => {
+        setIsCalculating(true);
+        setProgress(0);
 
-        return aggregated.map(player => {
-            const isRoster = rosterIds.has(player.playerId);
-            if (!includeStrangers && !isRoster) return null;
+        // Fake an asymptotic progress
+        let currentProgress = 0;
+        const interval = setInterval(() => {
+            currentProgress += (90 - currentProgress) * 0.08;
+            setProgress(currentProgress);
+        }, 16); // 60fps
 
-            const rosterInfo = getAllPlayers().find(r => r.id === player.playerId);
-            const name = rosterInfo ? rosterInfo.name : player.name;
-            const role = player.role.name;
+        let isCancelled = false;
 
-            return {
-                id: player.playerId,
-                name: name,
-                role: role,
-                matches: player.matchesPlayed,
-                
-                // Metrics (from full.filtered)
-                rating: player.full.filtered.details.rating,
-                adr: player.full.filtered.adr,
-                wpa: player.full.filtered.wpaAvg,
-                kast: player.full.filtered.kast,
-                impact: player.full.filtered.impact,
-                
-                // Scores
-                firepower: player.full.filtered.scoreFirepower,
-                entry: player.full.filtered.scoreEntry,
-                opening: player.full.filtered.scoreOpening,
-                trade: player.full.filtered.scoreTrade,
-                sniper: player.full.filtered.scoreSniper,
-                clutch: player.full.filtered.scoreClutch,
-                utility: player.full.filtered.scoreUtility,
-                
-                // Check for broken utility data (moved logic to aggregator or keep here)
-                isUtilityBroken: (player.full.filtered.details.totalFlashes > 5 && player.full.filtered.details.totalBlinded === 0) || 
-                                (player.full.filtered.details.totalFlashAssists > 0 && player.full.filtered.details.totalBlinded === 0)
-            };
-        }).filter(Boolean) as any[];
-    }, [allMatches, includeStrangers]);
+        const doWork = async () => {
+            const yieldToMain = () => new Promise(resolve => setTimeout(resolve, 0));
+            await new Promise(r => setTimeout(r, 50)); // initial UI render
+
+            if (isCancelled) return;
+
+            const aggregated = MatchAggregator.aggregateFull(allMatches);
+            await yieldToMain();
+            if (isCancelled) return;
+
+            const rosterIds = new Set(getAllPlayers().map(r => r.id));
+
+            const rawData: any[] = [];
+            const chunkSize = 20;
+
+            for (let i = 0; i < aggregated.length; i += chunkSize) {
+                const chunk = aggregated.slice(i, i + chunkSize);
+                chunk.forEach(player => {
+                    const isRoster = rosterIds.has(player.playerId);
+                    
+                    // We calculate everyone, and filter during rendering or here
+                    const rosterInfo = getAllPlayers().find(r => r.id === player.playerId);
+                    const name = rosterInfo ? rosterInfo.name : player.name;
+                    const role = player.role.name;
+
+                    rawData.push({
+                        id: player.playerId,
+                        name: name,
+                        role: role,
+                        matches: player.matchesPlayed,
+                        isRoster,
+                        
+                        // Metrics (from full.filtered)
+                        rating: player.full.filtered.details.rating,
+                        adr: player.full.filtered.adr,
+                        wpa: player.full.filtered.wpaAvg,
+                        kast: player.full.filtered.kast,
+                        impact: player.full.filtered.impact,
+                        
+                        // Scores
+                        firepower: player.full.filtered.scoreFirepower,
+                        entry: player.full.filtered.scoreEntry,
+                        opening: player.full.filtered.scoreOpening,
+                        trade: player.full.filtered.scoreTrade,
+                        sniper: player.full.filtered.scoreSniper,
+                        clutch: player.full.filtered.scoreClutch,
+                        utility: player.full.filtered.scoreUtility,
+                        
+                        // Check for broken utility data
+                        isUtilityBroken: (player.full.filtered.details.totalFlashes > 5 && player.full.filtered.details.totalBlinded === 0) || 
+                                        (player.full.filtered.details.totalFlashAssists > 0 && player.full.filtered.details.totalBlinded === 0)
+                    });
+                });
+                await yieldToMain();
+                if (isCancelled) return;
+            }
+
+            setLeaderboardData(rawData);
+            
+            clearInterval(interval);
+            setProgress(100);
+            setTimeout(() => {
+                if (!isCancelled) setIsCalculating(false);
+            }, 250);
+        };
+
+        doWork();
+
+        return () => {
+            isCancelled = true;
+            clearInterval(interval);
+        };
+    }, [allMatches]);
+
+    const activeData = useMemo(() => {
+        return leaderboardData.filter(p => includeStrangers || p.isRoster);
+    }, [leaderboardData, includeStrangers]);
 
     // --- Sorting ---
     const sortedData = useMemo(() => {
-        return [...leaderboardData].sort((a, b) => {
+        return [...activeData].sort((a, b) => {
             const valA = a[sortField];
             const valB = b[sortField];
             return sortOrder === 'asc' ? valA - valB : valB - valA;
         });
-    }, [leaderboardData, sortField, sortOrder]);
+    }, [activeData, sortField, sortOrder]);
 
     const handleSort = (field: SortField) => {
         if (sortField === field) {
@@ -102,10 +156,10 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
 
     // Leader Card Logic (Independent of sort order)
     const leader = useMemo(() => {
-        if (leaderboardData.length === 0) return null;
+        if (activeData.length === 0) return null;
         // Always sort descending to find the best player for the card
-        return [...leaderboardData].sort((a, b) => b[sortField] - a[sortField])[0];
-    }, [leaderboardData, sortField]);
+        return [...activeData].sort((a, b) => b[sortField] - a[sortField])[0];
+    }, [activeData, sortField]);
     
     const getSortLabel = (field: SortField) => {
         const labels: Record<string, string> = {
@@ -131,6 +185,25 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({ allMatches }) =>
         if (['matches', 'firepower', 'entry', 'opening', 'trade', 'sniper', 'clutch', 'utility'].includes(field)) return val.toFixed(0);
         return val;
     };
+
+    if (isCalculating) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in duration-300">
+                <div className="w-64 mb-8">
+                    <div className="h-1.5 w-full bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+                        <div 
+                            className="h-full bg-blue-500 transition-all ease-out" 
+                            style={{ width: `${progress}%`, transitionDuration: progress === 100 ? '200ms' : '16ms' }}
+                        ></div>
+                    </div>
+                </div>
+                <div className="text-neutral-900 dark:text-white font-bold tracking-widest text-sm uppercase mb-2">生成排行榜</div>
+                <div className="text-xs text-neutral-400 font-medium font-mono border border-neutral-200 dark:border-neutral-800 px-2 py-0.5 rounded shadow-sm bg-white dark:bg-neutral-900 w-16 text-center">
+                    {progress.toFixed(1)}%
+                </div>
+            </div>
+        );
+    }
 
     // --- Empty State ---
     if (sortedData.length === 0 && !includeStrangers) {

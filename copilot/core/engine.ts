@@ -159,6 +159,29 @@ export class AgenticEngine {
         // We maintain a separate API history for the SDK to ensure correct role sequencing
         const apiHistory = this.prepareApiHistory();
         
+        // Freeze context block in the latest User message if not already frozen
+        const lastUserMsg = this.thread.messages.filter(m => m.role === 'user').pop();
+        if (lastUserMsg && !lastUserMsg.apiSequence) {
+            let contextBlock = "";
+            if (this.thread.memory && Object.keys(this.thread.memory).length > 0) {
+                contextBlock += `\n\n[SYSTEM INJECTION: Current Memory]\n\`\`\`json\n${JSON.stringify(this.thread.memory, null, 2)}\n\`\`\`\n`;
+            }
+            if (this.thread.pathway === 'complex' && this.thread.taskState) {
+                contextBlock += `\n\n[SYSTEM INJECTION: Current Task State]\n\`\`\`json\n${JSON.stringify(this.thread.taskState, null, 2)}\n\`\`\`\n请根据此状态继续执行你的任务。\n`;
+            }
+
+            const lastApiUserContentIndex = [...apiHistory].reverse().findIndex(c => c.role === 'user');
+            if (lastApiUserContentIndex !== -1) {
+                const targetIndex = apiHistory.length - 1 - lastApiUserContentIndex;
+                const targetContent = apiHistory[targetIndex];
+                if (contextBlock) {
+                    targetContent.parts.push({ text: contextBlock });
+                }
+                lastUserMsg.apiSequence = [JSON.parse(JSON.stringify(targetContent))];
+                onThreadUpdate({ messages: this.thread.messages });
+            }
+        }
+        
         // If resuming and the last message had tool calls without results, we need to handle that
         if (resumeMessageId && currentResponseMsg.toolCalls && (!currentResponseMsg.toolResults || currentResponseMsg.toolResults.length < currentResponseMsg.toolCalls.length)) {
             const pendingCalls = currentResponseMsg.toolCalls.filter(tc => !currentResponseMsg.toolResults?.find(tr => tr.id === tc.id));
@@ -199,6 +222,17 @@ export class AgenticEngine {
                 currentResponseMsg.toolResults = [...(currentResponseMsg.toolResults || []), ...newToolResults];
                 onUpdate({ ...currentResponseMsg });
 
+                let contextBlock = "";
+                if (this.thread.memory && Object.keys(this.thread.memory).length > 0) {
+                    contextBlock += `\n\n[SYSTEM INJECTION: Current Memory]\n\`\`\`json\n${JSON.stringify(this.thread.memory, null, 2)}\n\`\`\`\n`;
+                }
+                if (this.thread.pathway === 'complex' && this.thread.taskState) {
+                    contextBlock += `\n\n[SYSTEM INJECTION: Current Task State]\n\`\`\`json\n${JSON.stringify(this.thread.taskState, null, 2)}\n\`\`\`\n请根据此状态继续执行你的任务。\n`;
+                }
+                if (contextBlock) {
+                    toolResponseParts.push({ text: contextBlock });
+                }
+
                 const userContent: Content = {
                     role: 'user',
                     parts: toolResponseParts
@@ -217,9 +251,20 @@ export class AgenticEngine {
             
             if (!isDeepSeek) {
                 // 如果是其他模型，返回模型发生了意外错误，继续完成刚刚未完成的事宜。
+                let contextBlock = "";
+                if (this.thread.memory && Object.keys(this.thread.memory).length > 0) {
+                    contextBlock += `\n\n[SYSTEM INJECTION: Current Memory]\n\`\`\`json\n${JSON.stringify(this.thread.memory, null, 2)}\n\`\`\`\n`;
+                }
+                if (this.thread.pathway === 'complex' && this.thread.taskState) {
+                    contextBlock += `\n\n[SYSTEM INJECTION: Current Task State]\n\`\`\`json\n${JSON.stringify(this.thread.taskState, null, 2)}\n\`\`\`\n请根据此状态继续执行你的任务。\n`;
+                }
+                
+                const parts: Part[] = [{ text: "发生了意外错误，继续完成刚刚未完成的事宜。" }];
+                if (contextBlock) parts.push({ text: contextBlock });
+
                 const continueContent: Content = {
                     role: 'user',
-                    parts: [{ text: "发生了意外错误，继续完成刚刚未完成的事宜。" }] 
+                    parts 
                 };
                 apiHistory.push(continueContent);
                 currentResponseMsg.apiSequence = [...(currentResponseMsg.apiSequence || []), continueContent];
@@ -292,25 +337,7 @@ export class AgenticEngine {
                     try {
                         const aiConfig = getAIConfig();
                         
-                        // Construct context block for Prompt Caching optimization
-                        // By injecting dynamic state here instead of systemInstruction, the system prompt remains static
-                        let contextBlock = "";
-                        if (this.thread.memory && Object.keys(this.thread.memory).length > 0) {
-                            contextBlock += `\n\n[SYSTEM INJECTION: Current Memory]\n\`\`\`json\n${JSON.stringify(this.thread.memory, null, 2)}\n\`\`\`\n`;
-                        }
-                        if (this.thread.pathway === 'complex' && this.thread.taskState) {
-                            contextBlock += `\n\n[SYSTEM INJECTION: Current Task State]\n\`\`\`json\n${JSON.stringify(this.thread.taskState, null, 2)}\n\`\`\`\n请根据此状态继续执行你的任务。\n`;
-                        }
-
                         const requestHistory = JSON.parse(JSON.stringify(apiHistory));
-                        if (contextBlock && requestHistory.length > 0) {
-                            const lastMsg = requestHistory[requestHistory.length - 1];
-                            if (lastMsg.role === 'user') {
-                                lastMsg.parts.push({ text: contextBlock });
-                            } else {
-                                requestHistory.push({ role: 'user', parts: [{ text: contextBlock }] });
-                            }
-                        }
 
                         if (aiConfig.provider !== 'google') {
                             // OpenAI / DeepSeek / Custom API integration
@@ -724,6 +751,17 @@ export class AgenticEngine {
                         }
                     }
 
+                    let contextBlock = "";
+                    if (this.thread.memory && Object.keys(this.thread.memory).length > 0) {
+                        contextBlock += `\n\n[SYSTEM INJECTION: Current Memory]\n\`\`\`json\n${JSON.stringify(this.thread.memory, null, 2)}\n\`\`\`\n`;
+                    }
+                    if (this.thread.pathway === 'complex' && this.thread.taskState) {
+                        contextBlock += `\n\n[SYSTEM INJECTION: Current Task State]\n\`\`\`json\n${JSON.stringify(this.thread.taskState, null, 2)}\n\`\`\`\n请根据此状态继续执行你的任务。\n`;
+                    }
+                    if (contextBlock) {
+                        toolResponseParts.push({ text: contextBlock });
+                    }
+
                     const userContent: Content = {
                         role: 'user',
                         parts: toolResponseParts
@@ -890,25 +928,29 @@ export class AgenticEngine {
             const msg = recentMessages[i];
             
             if (msg.role === 'user') {
-                const parts: any[] = [];
-                if (msg.text) parts.push({ text: msg.text });
-                
-                if (msg.attachments && msg.attachments.length > 0) {
-                    const aiConfig = getAIConfig();
-                    for (const att of msg.attachments) {
-                        const actuallyUnsupported = !isMultimodalSupported(aiConfig.model, att.type || 'application/octet-stream');
-                        
-                        if (att.textContent) {
-                            parts.push({ text: `[Attached file: ${att.name}]\n\`\`\`\n${att.textContent}\n\`\`\`` });
-                        } else if (actuallyUnsupported || att.unsupported) {
-                            parts.push({ text: `[Attached file: ${att.name}] (Note: As an AI model not supporting multimodal inputs or this file type, you cannot see the contents of this file. Do not pretend to know its contents unless you use a tool to read the file.)` });
-                        } else if (att.base64 && att.type) {
-                            parts.push({ inlineData: { mimeType: att.type, data: att.base64 } });
+                if (msg.apiSequence && msg.apiSequence.length > 0) {
+                    history.push(...JSON.parse(JSON.stringify(msg.apiSequence)));
+                } else {
+                    const parts: any[] = [];
+                    if (msg.text) parts.push({ text: msg.text });
+                    
+                    if (msg.attachments && msg.attachments.length > 0) {
+                        const aiConfig = getAIConfig();
+                        for (const att of msg.attachments) {
+                            const actuallyUnsupported = !isMultimodalSupported(aiConfig.model, att.type || 'application/octet-stream');
+                            
+                            if (att.textContent) {
+                                parts.push({ text: `[Attached file: ${att.name}]\n\`\`\`\n${att.textContent}\n\`\`\`` });
+                            } else if (actuallyUnsupported || att.unsupported) {
+                                parts.push({ text: `[Attached file: ${att.name}] (Note: As an AI model not supporting multimodal inputs or this file type, you cannot see the contents of this file. Do not pretend to know its contents unless you use a tool to read the file.)` });
+                            } else if (att.base64 && att.type) {
+                                parts.push({ inlineData: { mimeType: att.type, data: att.base64 } });
+                            }
                         }
                     }
+                    if (parts.length === 0) parts.push({ text: "" });
+                    history.push({ role: 'user', parts });
                 }
-                if (parts.length === 0) parts.push({ text: "" });
-                history.push({ role: 'user', parts });
             } else if (msg.role === 'model') {
                 if (msg.apiSequence && msg.apiSequence.length > 0) {
                     // Do NOT post-compress old tool results in the sequence.

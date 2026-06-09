@@ -350,11 +350,15 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         };
     }, [allMatches, searchQuery, filters]);
 
+    // --- Global Stats Aggregation (Cached) ---
+    const aggregatedAllMatches = useMemo(() => {
+        return MatchAggregator.aggregate(allMatches) as PlayerMatchStats[];
+    }, [allMatches]);
+
     // --- Stats Calculation for Player List ---
     const playerStats = useMemo(() => {
-        const aggregated = MatchAggregator.aggregate(allMatches) as PlayerMatchStats[];
-        const statsMap = new Map(aggregated.map(p => [p.playerId, p]));
-        const steamMap = new Map(aggregated.filter(p => p.steamid).map(p => [p.steamid!, p]));
+        const statsMap = new Map(aggregatedAllMatches.map(p => [p.playerId, p]));
+        const steamMap = new Map(aggregatedAllMatches.filter(p => p.steamid).map(p => [p.steamid!, p]));
 
         return getAllPlayers().map(player => {
             const p = statsMap.get(player.id) || steamMap.get(player.id);
@@ -643,8 +647,7 @@ export const ReviewView: React.FC<ReviewViewProps> = ({
         if (!selectedPlayerId) return null;
         
         // Use Aggregator for consistency
-        const aggregated = MatchAggregator.aggregate(allMatches) as PlayerMatchStats[];
-        const p = aggregated.find(x => resolveName(x.playerId) === selectedPlayerId || resolveName(x.steamid) === selectedPlayerId);
+        const p = aggregatedAllMatches.find(x => resolveName(x.playerId) === selectedPlayerId || resolveName(x.steamid) === selectedPlayerId);
         
         if (!p) return null;
 
