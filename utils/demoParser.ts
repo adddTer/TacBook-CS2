@@ -1294,7 +1294,10 @@ export const parseDemoJson = (data: DemoData, fileDate?: number, keepRaw: boolea
                 const p = statsMap.get(att);
                 const r = getRoundPlayerStats(att);
                 if (p) {
-                    p.total_damage += actualDmg; 
+                    if (!pendingRoundEnd) {
+                        p.total_damage += actualDmg; 
+                        r.damage += actualDmg;
+                    }
                     const w = (anyE.weapon || "").replace("weapon_", "");
                     if (w === 'hegrenade') {
                         p.utility.heDamage += actualDmg;

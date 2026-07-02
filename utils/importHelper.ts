@@ -30,11 +30,6 @@ export const importTacticFromZip = async (file: Blob | File): Promise<Tactic> =>
       return path;
     };
 
-    // 3. Process Map Visual
-    if (tactic.map_visual) {
-      tactic.map_visual = await replaceImagePaths(tactic.map_visual);
-    }
-
     // 4. Process Action Images
     if (tactic.actions) {
       tactic.actions = await Promise.all(tactic.actions.map(async (action: Action) => {

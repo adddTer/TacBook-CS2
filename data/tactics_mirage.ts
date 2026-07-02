@@ -16,14 +16,8 @@ export const mirageTactics: Tactic[] = [
       lastUpdated: "2026-1-31",
       difficulty: "Hard"
     },
-    loadout: [
-      { role: "突破手", equipment: "半甲 (自由人发P250)" },
-      { role: "补枪辅助", equipment: "半甲" },
-      { role: "道具辅助", equipment: "烟雾弹, 闪光弹, 闪光弹, C4" },
-      { role: "狙击手", equipment: "半甲 (扮演步枪手)" },
-      { role: "自由人", equipment: "烟雾弹, P250, 闪光弹" },
-    ],
-    map_visual: "", 
+    
+     
     actions: [
       { id: generateId('setup'), time: "Freeze", who: "自由人", content: "开局发P250给突破手，自己留道具。" },
       { id: generateId('a'), time: "1:50", who: "道具辅助", content: "在出生点/下水道口附近投掷拱门慢烟。", type: 'utility' },
@@ -48,14 +42,8 @@ export const mirageTactics: Tactic[] = [
       lastUpdated: "2026-1-31",
       difficulty: "Hard"
     },
-    loadout: [
-      { role: "突破手", equipment: "半甲 (狙击手发P250)" },
-      { role: "补枪辅助", equipment: "半甲" },
-      { role: "道具辅助", equipment: "烟雾弹, 闪光弹, 闪光弹, C4" },
-      { role: "狙击手", equipment: "烟雾弹, P250, 闪光弹" },
-      { role: "自由人", equipment: "半甲" },
-    ],
-    map_visual: "", 
+    
+     
     actions: [
       { id: generateId('setup'), time: "Freeze", who: "狙击手", content: "开局发P250给突破手，自己留道具。" },
       { id: generateId('a'), time: "1:50", who: "道具辅助", content: "在出生点/下水道口附近投掷拱门慢烟。", type: 'utility' },

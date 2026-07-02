@@ -15,14 +15,6 @@ export const exportTacticToZip = async (tactic: Tactic) => {
         return await res.blob();
     };
 
-    // 1. Process Map Visual
-    if (t.map_visual && t.map_visual.startsWith('data:image')) {
-        const blob = await base64ToBlob(t.map_visual);
-        const fileName = 'map_visual.jpg';
-        zip.file(fileName, blob);
-        t.map_visual = `./${fileName}`;
-    }
-
     // 2. Process Action Images (New Array Support)
     if (t.actions) {
         for (let i = 0; i < t.actions.length; i++) {

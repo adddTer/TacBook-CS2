@@ -36,15 +36,16 @@ export interface Action {
   utilityId?: string; // Link to a utility item
 }
 
-export interface LoadoutItem {
-  role: string;
-  equipment: string;
-}
-
 export interface TacticMetadata {
   author: string;
   lastUpdated: string;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
+}
+
+export interface TacticSection {
+  id: string;
+  title: string;
+  content: string;
 }
 
 export interface Tactic {
@@ -54,9 +55,8 @@ export interface Tactic {
   side: Side;
   site: Site;
   tags: Tag[];
-  map_visual: string;
-  loadout?: LoadoutItem[];
   actions: Action[];
+  sections?: TacticSection[]; // New: flexible document sections
   metadata: TacticMetadata;
   description?: string;
   isRecommended?: boolean; // New field for recommended tactics

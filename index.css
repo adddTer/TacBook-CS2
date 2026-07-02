@@ -185,3 +185,29 @@ html.theme-liquid-glass.dark .dark\:border-neutral-800 { border-color: rgba(255,
   content: none !important;
   display: none !important;
 }
+
+@media print {
+  /* Hide the header and modal close button etc when printing */
+  .fixed.inset-0 > .border-b {
+    display: none !important;
+  }
+  
+  /* Reset background and text colors for print */
+  body, .fixed.inset-0, #tactic-view-container {
+    background-color: white !important;
+    color: black !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  /* Prevent page breaks inside sections */
+  .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Remove scrollbars and max-height constraints */
+  .overflow-y-auto, .overflow-x-auto, .overscroll-contain {
+    overflow: visible !important;
+  }
+}

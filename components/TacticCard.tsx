@@ -1,7 +1,6 @@
 
 import React, { useMemo } from 'react';
 import { Tactic } from '../types';
-import { calculateLoadoutCost } from '../utils/economyHelper';
 
 interface TacticCardProps {
   tactic: Tactic;
@@ -12,14 +11,6 @@ interface TacticCardProps {
 }
 
 export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick, onEdit, onToggleRecommended }) => {
-  // Calculate costs for preview
-  const { totalTeamCost } = useMemo(() => {
-      if (!tactic.loadout) return { totalTeamCost: 0 };
-      const costs = (tactic.loadout || []).map(item => calculateLoadoutCost(item.equipment));
-      const total = costs.reduce((a, b) => a + b, 0);
-      return { totalTeamCost: total };
-  }, [tactic.loadout]);
-
   return (
     <div 
         onClick={onClick}
@@ -44,11 +35,6 @@ export const TacticCard: React.FC<TacticCardProps> = ({ tactic, onClick, onEdit,
                     {tag.label}
                 </span>
                 ))}
-                {totalTeamCost > 0 && (
-                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700">
-                        ${totalTeamCost}
-                    </span>
-                )}
                 {tactic._isTemp && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>

@@ -14,6 +14,7 @@ import { WPAPlusTab } from './WPAPlusTab';
 import { isMyTeamMatch, getTeamNames, calculateScoreFromRounds, isPlayerInUserTeam } from '../../utils/matchHelpers';
 import { useAggregatedStats } from '../../hooks/useAggregatedStats';
 import { resolveName } from '../../utils/demo/helpers';
+import { MatchDataExporterModal } from './MatchDataExporterModal';
 
 interface MatchDetailProps {
     match: Match;
@@ -63,6 +64,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match: originalMatch, 
     const [detailTab, setDetailTab] = useState<'overview' | 'performance' | 'duels' | 'utility' | 'clutches' | 'timeline' | 'timeline_beta' | 'wpa'>('overview');
     const [sideFilter, setSideFilter] = useState<SideFilter>('ALL');
     const [showDefinitions, setShowDefinitions] = useState(false);
+    const [showExporterModal, setShowExporterModal] = useState(false);
 
     const mapName = getMapDisplayName(match.mapId);
     const startSide = match.startingSide || 'CT';
@@ -159,6 +161,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match: originalMatch, 
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => setShowExporterModal(true)}
+                            title="导出比赛多维数据"
+                            className="p-2 text-neutral-400 hover:text-blue-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+                        >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                        </button>
                         <button 
                             onClick={() => onShare(match)}
                             className="p-2 text-neutral-400 hover:text-blue-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
@@ -278,6 +289,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ match: originalMatch, 
             </div>
             
             <DataDefinitionsModal isOpen={showDefinitions} onClose={() => setShowDefinitions(false)} />
+            <MatchDataExporterModal isOpen={showExporterModal} onClose={() => setShowExporterModal(false)} match={match} />
         </div>
     );
 };

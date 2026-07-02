@@ -47,7 +47,6 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
         difficulty: 'Medium'
     },
     actions: [],
-    map_visual: '',
     title: ''
   });
 
@@ -57,12 +56,14 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
 
   // --- View State ---
 
-  // --- Image State ---
-  const [mapImagePreview, setMapImagePreview] = useState<string>('');
-  
   // --- Utility Modal State ---
   const [showUtilityModal, setShowUtilityModal] = useState<string | null>(null);
   const [utilitySearchQuery, setUtilitySearchQuery] = useState('');
+
+  // --- Editor Mode State ---
+  const [editorMode, setEditorMode] = useState<'document' | 'timeline'>(
+      initialTactic?.actions?.length && !(initialTactic?.sections && initialTactic.sections.length > 0) ? 'timeline' : 'document'
+  );
 
   // --- Share State ---
   const [showShareModal, setShowShareModal] = useState(false);
@@ -72,9 +73,6 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
   useEffect(() => {
     if (initialTactic) {
       setFormData(JSON.parse(JSON.stringify(initialTactic))); // Deep copy
-      setMapImagePreview(initialTactic.map_visual || '');
-      // If editing existing, try to keep it in the same group IF it's writable.
-      // If not writable (Read-Only group), default to the first writable group (Save Copy).
       if (initialTactic.groupId && writableGroups.some(g => g.metadata.id === initialTactic.groupId)) {
           setTargetGroupId(initialTactic.groupId);
       } else if (writableGroups.length > 0) {
@@ -88,7 +86,6 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
               const parsed = JSON.parse(draft);
               if (parsed.mapId === currentMapId) {
                  setFormData(parsed);
-                 setMapImagePreview(parsed.map_visual || '');
               }
           } catch (e) {}
       } else {
@@ -135,6 +132,16 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
   const removeAction = (id: string) => {
     updateField('actions', (formData.actions || []).filter(a => a.id !== id));
   };
+  const addSection = () => {
+    const newSection = { id: generateId('sec'), title: '新模块', content: '' };
+    updateField('sections', [...(formData.sections || []), newSection]);
+  };
+  const updateSection = (id: string, key: 'title' | 'content', value: string) => {
+    updateField('sections', (formData.sections || []).map(s => s.id === id ? { ...s, [key]: value } : s));
+  };
+  const removeSection = (id: string) => {
+    updateField('sections', (formData.sections || []).filter(s => s.id !== id));
+  };
   const handleActionAddImage = async (actionId: string, file: File) => {
       const compressed = await compressImage(file);
       const newImage: ImageAttachment = { id: generateId('img'), url: compressed, description: '' };
@@ -154,11 +161,6 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
           updateAction(actionId, 'type', 'utility');
       }
       setShowUtilityModal(null);
-  };
-  const handleMapImageUpload = async (file: File) => {
-      const compressed = await compressImage(file);
-      setMapImagePreview(compressed);
-      updateField('map_visual', compressed);
   };
 
   // --- Save Logic ---
@@ -347,7 +349,7 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
                         {/* LEFT COLUMN: Metadata (5 cols) */}
-                        <div className="lg:col-span-5 space-y-6">
+                        <div className="lg:col-span-4 space-y-6">
                             {/* Basic Info Card */}
                             <div className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm space-y-5">
                                 <div className="flex justify-between items-center">
@@ -424,64 +426,41 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                                     </div>
                                 </div>
                             </div>
-                            
-                            {/* Map Visual Card */}
-                            <div className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm">
-                                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">战术示意图</label>
-                                <label className="block w-full aspect-video bg-neutral-50 dark:bg-neutral-950 rounded-xl border-2 border-dashed border-neutral-200 dark:border-neutral-800 flex items-center justify-center cursor-pointer overflow-hidden relative group hover:border-blue-400 transition-colors">
-                                    {mapImagePreview ? (
-                                        <>
-                                            <img src={mapImagePreview} className="w-full h-full object-cover" />
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <span className="text-white text-xs font-bold bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-sm">更换图片</span>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <div className="absolute inset-0 opacity-50 grayscale group-hover:grayscale-0 transition-all bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center">
-                                            </div>
-                                            <div className="relative z-10 text-center text-neutral-400 group-hover:text-blue-500 transition-colors bg-white/80 dark:bg-black/80 p-4 rounded-xl backdrop-blur-sm shadow-sm">
-                                                <svg className="w-8 h-8 mx-auto mb-1 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                                <span className="text-xs font-bold">点击上传自定义图片</span>
-                                            </div>
-                                        </>
-                                    )}
-                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleMapImageUpload(e.target.files[0])} />
-                                </label>
-                            </div>
-
-                            {/* Loadout Card */}
-                            <div className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm">
-                                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">配装分配 (Loadout)</label>
-                                <div className="space-y-2">
-                                    {(formData.loadout && formData.loadout.length > 0 ? formData.loadout : currentRoles.map(r => ({ role: r, equipment: '' }))).map((item, idx) => (
-                                        <div key={idx} className="flex items-center gap-2 text-xs">
-                                            <span className="w-16 font-bold text-neutral-600 dark:text-neutral-400 shrink-0 text-right">{item.role}</span>
-                                            <input 
-                                                type="text" 
-                                                value={item.equipment} 
-                                                onChange={(e) => { const newLoadout = [...(formData.loadout || currentRoles.map(r => ({ role: r, equipment: '' })))]; newLoadout[idx] = { ...newLoadout[idx], equipment: e.target.value }; updateField('loadout', newLoadout); }} 
-                                                placeholder="例如: 半甲, 烟闪..." 
-                                                className="flex-1 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-2 focus:border-blue-500 outline-none dark:text-white transition-colors" 
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
                         </div>
 
                         {/* RIGHT COLUMN: Actions (7 cols) */}
-                        <div className="lg:col-span-7 space-y-4">
+                        <div className="lg:col-span-8 space-y-4">
                              <div className="bg-white dark:bg-neutral-900 p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm min-h-[600px] flex flex-col">
                                 <div className="flex justify-between items-center mb-6">
-                                    <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">战术步骤 (Timeline)</label>
-                                    <button onClick={addAction} className="text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1">
-                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                        添加步骤
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => setEditorMode('document')}
+                                            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${editorMode === 'document' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800'}`}
+                                        >
+                                            📝 战术板 (Strat Sheet)
+                                        </button>
+                                        <button 
+                                            onClick={() => setEditorMode('timeline')}
+                                            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${editorMode === 'timeline' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800'}`}
+                                        >
+                                            ⏱ 时间线 (Timeline)
+                                        </button>
+                                    </div>
+                                    {editorMode === 'timeline' ? (
+                                        <button onClick={addAction} className="text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1">
+                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                            添加步骤
+                                        </button>
+                                    ) : (
+                                        <button onClick={addSection} className="text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1">
+                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                            添加模块
+                                        </button>
+                                    )}
                                 </div>
                                 
                                 <div className="space-y-4 flex-1">
+                                    {editorMode === 'timeline' && (<>
                                     {formData.actions?.length === 0 && (
                                         <div className="flex flex-col items-center justify-center h-48 text-neutral-400 border-2 border-dashed border-neutral-100 dark:border-neutral-800 rounded-xl">
                                             <span className="text-xs">暂无步骤，点击右上角添加</span>
@@ -576,6 +555,42 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                                             )}
                                         </div>
                                     )})}
+                                    </>)}
+
+                                    {editorMode === 'document' && (
+                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {(!formData.sections || formData.sections.length === 0) && (
+                                                <div className="col-span-full flex flex-col items-center justify-center h-48 text-neutral-400 border-2 border-dashed border-neutral-100 dark:border-neutral-800 rounded-xl">
+                                                    <span className="text-xs">暂无内容，请点击右上角添加模块</span>
+                                                    <span className="text-[10px] opacity-70 mt-1">例如 "默认走位", "爆弹", "残局"等</span>
+                                                </div>
+                                            )}
+                                            {formData.sections?.map(section => (
+                                                <div key={section.id} className="bg-neutral-50 dark:bg-neutral-950 border border-neutral-100 dark:border-neutral-800 rounded-xl p-3 relative group transition-all hover:shadow-md hover:border-neutral-200 dark:hover:border-neutral-700 flex flex-col h-64">
+                                                    <button 
+                                                        onClick={() => removeSection(section.id)} 
+                                                        className="absolute top-2 right-2 text-neutral-300 hover:text-red-500 p-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                                        title="删除模块"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                    </button>
+                                                    <input 
+                                                        type="text" 
+                                                        value={section.title} 
+                                                        onChange={e => updateSection(section.id, 'title', e.target.value)} 
+                                                        placeholder="模块标题..." 
+                                                        className="w-[calc(100%-2rem)] bg-transparent font-black text-sm uppercase tracking-wider mb-2 outline-none dark:text-white"
+                                                    />
+                                                    <textarea 
+                                                        value={section.content} 
+                                                        onChange={e => updateSection(section.id, 'content', e.target.value)} 
+                                                        placeholder="支持灵活编辑内容 (例:&#10;- xxx: 封警家烟&#10;- xxx: 闪光覆盖)" 
+                                                        className="flex-1 w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg p-2.5 text-xs font-mono resize-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:text-neutral-300 transition-shadow leading-relaxed" 
+                                                    />
+                                                </div>
+                                            ))}
+                                       </div>
+                                    )}
                                 </div>
                              </div>
                         </div>
