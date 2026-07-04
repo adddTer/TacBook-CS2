@@ -23,6 +23,7 @@ export interface ImageAttachment {
   id: string;
   url: string;
   description?: string;
+  referenceLink?: string; // New field for tactic reference url
 }
 
 export interface Action {
@@ -59,6 +60,7 @@ export interface Tactic {
   sections?: TacticSection[]; // New: flexible document sections
   metadata: TacticMetadata;
   description?: string;
+  referenceLink?: string; // New field for tactic reference url
   isRecommended?: boolean; // New field for recommended tactics
   _isTemp?: boolean; // UI Flag: Indicates edited in current session (not saved to file)
   groupId?: string; // Runtime link to parent group

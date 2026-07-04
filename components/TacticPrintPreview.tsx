@@ -64,6 +64,11 @@ export const TacticPrintPreview: React.FC<TacticPrintPreviewProps> = ({
                 {tactic.title}
               </h2>
             )}
+            {tactic.referenceLink && (
+              <p className="mt-2 text-sm text-neutral-600 font-mono font-medium">
+                参考链接: {tactic.referenceLink}
+              </p>
+            )}
           </div>
 
           {/* Strat Sheet Grid */}

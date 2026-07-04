@@ -402,6 +402,16 @@ export const TacticEditor: React.FC<TacticEditorProps> = ({
                                     </div>
                                 </div>
 
+                                                                <div>
+                                    <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">战术参考 (链接)</label>
+                                    <input
+                                         type="url"
+                                         value={formData.referenceLink || ''}
+                                         onChange={e => updateField('referenceLink', e.target.value)}
+                                         className="w-full bg-neutral-50 dark:bg-neutral-800 px-3 py-2 rounded-xl text-sm font-medium dark:text-white border border-neutral-100 dark:border-neutral-700 focus:border-blue-500 outline-none transition-colors"
+                                         placeholder="https://..."
+                                    />
+                                </div>
                                 {/* Tags */}
                                 <div>
                                     <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">标签 (Tags)</label>
